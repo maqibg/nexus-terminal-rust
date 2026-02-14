@@ -6,6 +6,7 @@
     <button class="bar-btn" @click="openFocusConfigurator" title="配置焦点切换器">
       <i class="fas fa-keyboard"></i>
     </button>
+
     <input
       ref="inputEl"
       v-model="command"
@@ -16,24 +17,72 @@
       @keydown.up.prevent="historyUp"
       @keydown.down.prevent="historyDown"
     />
+
+    <button
+      v-if="!isSearching"
+      class="bar-btn"
+      title="终端搜索"
+      @click="openSearch"
+    >
+      <i class="fas fa-search"></i>
+    </button>
+
+    <div v-else class="search-controls">
+      <input
+        ref="searchInputEl"
+        v-model="searchTerm"
+        class="search-input"
+        data-focus-id="terminalSearch"
+        placeholder="在终端中搜索..."
+        @input="emitSearchUpdate"
+        @keydown.enter.prevent="findNext"
+        @keydown.shift.enter.prevent="findPrevious"
+        @keydown.up.prevent="findPrevious"
+        @keydown.down.prevent="findNext"
+        @keydown.esc.prevent="closeSearch"
+      />
+      <button class="search-btn" title="清空搜索" @click="clearSearchTerm">
+        <i class="fas fa-times"></i>
+      </button>
+      <button class="search-btn" title="上一个" @click="findPrevious">
+        <i class="fas fa-arrow-up"></i>
+      </button>
+      <button class="search-btn" title="下一个" @click="findNext">
+        <i class="fas fa-arrow-down"></i>
+      </button>
+      <button class="search-btn" title="关闭搜索" @click="closeSearch">
+        <i class="fas fa-chevron-right"></i>
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref } from 'vue';
-import { sshApi, historyApi } from '@/lib/api';
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { historyApi, sshApi } from '@/lib/api';
 import { useSessionStore } from '@/stores/session';
 import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 
 const sessionStore = useSessionStore();
 const focusSwitcherStore = useFocusSwitcherStore();
+
 const inputEl = ref<HTMLInputElement>();
+const searchInputEl = ref<HTMLInputElement>();
+
 const command = ref('');
+const searchTerm = ref('');
+const isSearching = ref(false);
+
 const history = ref<string[]>([]);
 const historyIdx = ref(-1);
 
 let unregisterCommandInput: (() => void) | null = null;
 let unregisterTerminalSearch: (() => void) | null = null;
+
+interface TerminalSearchEventDetail {
+  sessionId: string;
+  term?: string;
+}
 
 function isElementVisibleAndFocusable(el: HTMLInputElement | undefined): el is HTMLInputElement {
   if (!el || !el.isConnected || el.disabled) {
@@ -49,6 +98,17 @@ function isElementVisibleAndFocusable(el: HTMLInputElement | undefined): el is H
   return rect.width > 0 && rect.height > 0;
 }
 
+function dispatchTerminalSearchEvent(eventName: string, detail: TerminalSearchEventDetail): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.dispatchEvent(new CustomEvent<TerminalSearchEventDetail>(eventName, { detail }));
+}
+
+function getActiveSessionId(): string | null {
+  return sessionStore.activeSessionId ?? null;
+}
+
 function focusCommandInput(): boolean | undefined {
   if (!isElementVisibleAndFocusable(inputEl.value)) {
     return undefined;
@@ -57,6 +117,93 @@ function focusCommandInput(): boolean | undefined {
   inputEl.value.focus();
   inputEl.value.select();
   return document.activeElement === inputEl.value;
+}
+
+async function focusSearchInput(): Promise<boolean | undefined> {
+  if (!isSearching.value) {
+    isSearching.value = true;
+    await nextTick();
+  }
+
+  if (!isElementVisibleAndFocusable(searchInputEl.value)) {
+    return undefined;
+  }
+
+  searchInputEl.value.focus();
+  searchInputEl.value.select();
+  return document.activeElement === searchInputEl.value;
+}
+
+function emitSearchUpdate(): void {
+  const sid = getActiveSessionId();
+  if (!sid) {
+    return;
+  }
+
+  dispatchTerminalSearchEvent('nexus:terminal-search:update', {
+    sessionId: sid,
+    term: searchTerm.value,
+  });
+}
+
+function emitSearchClear(sessionId: string | null = getActiveSessionId()): void {
+  if (!sessionId) {
+    return;
+  }
+
+  dispatchTerminalSearchEvent('nexus:terminal-search:clear', {
+    sessionId,
+  });
+}
+
+function openSearch(): void {
+  isSearching.value = true;
+  void nextTick(() => {
+    searchInputEl.value?.focus();
+    searchInputEl.value?.select();
+    emitSearchUpdate();
+  });
+}
+
+function closeSearch(): void {
+  const sid = getActiveSessionId();
+  searchTerm.value = '';
+  isSearching.value = false;
+  emitSearchClear(sid);
+}
+
+function clearSearchTerm(): void {
+  searchTerm.value = '';
+  emitSearchUpdate();
+  void nextTick(() => {
+    searchInputEl.value?.focus();
+  });
+}
+
+function findNext(): void {
+  const sid = getActiveSessionId();
+  if (!sid || !searchTerm.value.trim()) {
+    void focusSearchInput();
+    return;
+  }
+
+  dispatchTerminalSearchEvent('nexus:terminal-search:next', {
+    sessionId: sid,
+    term: searchTerm.value,
+  });
+}
+
+function findPrevious(): void {
+  const sid = getActiveSessionId();
+  if (!sid || !searchTerm.value.trim()) {
+    void focusSearchInput();
+    return;
+  }
+
+  dispatchTerminalSearchEvent('nexus:terminal-search:previous', {
+    sessionId: sid,
+    term: searchTerm.value,
+  });
 }
 
 onMounted(async () => {
@@ -69,7 +216,7 @@ onMounted(async () => {
 
   await nextTick();
   unregisterCommandInput = focusSwitcherStore.registerFocusAction('commandInput', focusCommandInput);
-  unregisterTerminalSearch = focusSwitcherStore.registerFocusAction('terminalSearch', focusCommandInput);
+  unregisterTerminalSearch = focusSwitcherStore.registerFocusAction('terminalSearch', focusSearchInput);
 });
 
 onUnmounted(() => {
@@ -78,6 +225,18 @@ onUnmounted(() => {
   unregisterCommandInput = null;
   unregisterTerminalSearch = null;
 });
+
+watch(
+  () => sessionStore.activeSessionId,
+  (newSid, oldSid) => {
+    if (oldSid) {
+      emitSearchClear(oldSid);
+    }
+    if (newSid && isSearching.value && searchTerm.value.trim()) {
+      emitSearchUpdate();
+    }
+  },
+);
 
 function openFocusConfigurator() {
   focusSwitcherStore.toggleConfigurator(true);
@@ -156,6 +315,7 @@ function historyDown() {
   font-size: 13px;
   transition: all 0.15s;
 }
+
 .bar-btn:hover {
   background: var(--bg-surface1, #45475a);
   color: var(--text, #cdd6f4);
@@ -176,11 +336,66 @@ function historyDown() {
   transition: border-color 0.2s, box-shadow 0.2s;
   box-sizing: border-box;
 }
+
 .command-input:focus {
   border-color: var(--blue, #89b4fa);
   box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.2);
 }
+
 .command-input::placeholder {
   color: var(--text-dim, #6c7086);
+}
+
+.search-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.search-input {
+  width: 160px;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border, #45475a);
+  border-radius: 6px;
+  background: var(--bg-surface0, #313244);
+  color: var(--text, #cdd6f4);
+  font-size: 12px;
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: var(--blue, #89b4fa);
+  box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.2);
+}
+
+.search-input::placeholder {
+  color: var(--text-dim, #6c7086);
+}
+
+.search-btn {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border, #45475a);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-sub, #a6adc8);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.search-btn:hover {
+  background: var(--bg-surface1, #45475a);
+  color: var(--text);
+}
+
+@media (max-width: 900px) {
+  .search-input {
+    width: 130px;
+  }
 }
 </style>
