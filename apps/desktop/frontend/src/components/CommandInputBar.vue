@@ -3,13 +3,14 @@
     <button class="bar-btn" @click="clearTerminal" title="清空终端">
       <i class="fas fa-eraser"></i>
     </button>
-    <button class="bar-btn" title="配置焦点切换">
+    <button class="bar-btn" @click="openFocusConfigurator" title="配置焦点切换器">
       <i class="fas fa-keyboard"></i>
     </button>
     <input
       ref="inputEl"
       v-model="command"
       class="command-input"
+      data-focus-id="commandInput"
       placeholder="在此输入命令后按 Enter 发送到终端..."
       @keydown.enter="send"
       @keydown.up.prevent="historyUp"
@@ -19,22 +20,68 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { sshApi, historyApi } from '@/lib/api';
 import { useSessionStore } from '@/stores/session';
+import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 
 const sessionStore = useSessionStore();
+const focusSwitcherStore = useFocusSwitcherStore();
 const inputEl = ref<HTMLInputElement>();
 const command = ref('');
 const history = ref<string[]>([]);
 const historyIdx = ref(-1);
 
+let unregisterCommandInput: (() => void) | null = null;
+let unregisterTerminalSearch: (() => void) | null = null;
+
+function isElementVisibleAndFocusable(el: HTMLInputElement | undefined): el is HTMLInputElement {
+  if (!el || !el.isConnected || el.disabled) {
+    return false;
+  }
+
+  const style = window.getComputedStyle(el);
+  if (style.display === 'none' || style.visibility === 'hidden') {
+    return false;
+  }
+
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+function focusCommandInput(): boolean | undefined {
+  if (!isElementVisibleAndFocusable(inputEl.value)) {
+    return undefined;
+  }
+
+  inputEl.value.focus();
+  inputEl.value.select();
+  return document.activeElement === inputEl.value;
+}
+
 onMounted(async () => {
   try {
     const items = await historyApi.list(100);
-    history.value = items.map(h => h.command);
-  } catch { /* ignore */ }
+    history.value = items.map((h) => h.command);
+  } catch {
+    // ignore
+  }
+
+  await nextTick();
+  unregisterCommandInput = focusSwitcherStore.registerFocusAction('commandInput', focusCommandInput);
+  unregisterTerminalSearch = focusSwitcherStore.registerFocusAction('terminalSearch', focusCommandInput);
 });
+
+onUnmounted(() => {
+  unregisterCommandInput?.();
+  unregisterTerminalSearch?.();
+  unregisterCommandInput = null;
+  unregisterTerminalSearch = null;
+});
+
+function openFocusConfigurator() {
+  focusSwitcherStore.toggleConfigurator(true);
+}
 
 async function send() {
   const cmd = command.value.trim();
@@ -42,34 +89,37 @@ async function send() {
   const sid = sessionStore.activeSessionId;
   if (!sid) return;
 
-  const data = btoa(unescape(encodeURIComponent(cmd + '\n')));
+  const data = btoa(unescape(encodeURIComponent(`${cmd}\n`)));
   await sshApi.write(sid, data);
 
   history.value.unshift(cmd);
   historyIdx.value = -1;
   command.value = '';
 
-  try { await historyApi.add(cmd, sid, sessionStore.activeSession?.connectionId); } catch { /* ignore */ }
+  try {
+    await historyApi.add(cmd, sid, sessionStore.activeSession?.connectionId);
+  } catch {
+    // ignore
+  }
 }
 
 function clearTerminal() {
   const sid = sessionStore.activeSessionId;
   if (!sid) return;
-  // 发送 clear 命令
   const data = btoa(unescape(encodeURIComponent('clear\n')));
   sshApi.write(sid, data).catch(() => {});
 }
 
 function historyUp() {
   if (historyIdx.value < history.value.length - 1) {
-    historyIdx.value++;
+    historyIdx.value += 1;
     command.value = history.value[historyIdx.value];
   }
 }
 
 function historyDown() {
   if (historyIdx.value > 0) {
-    historyIdx.value--;
+    historyIdx.value -= 1;
     command.value = history.value[historyIdx.value];
   } else {
     historyIdx.value = -1;

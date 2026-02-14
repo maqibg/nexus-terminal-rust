@@ -164,7 +164,12 @@
 
         <!-- 快捷键 -->
         <section v-if="activeTab === 'shortcuts'" class="section-card">
-          <FocusSwitcherConfigurator />
+          <div class="section-header">
+            <h3 class="section-title">配置焦点切换器</h3>
+            <button class="btn-action" @click="focusSwitcherStore.toggleConfigurator(true)">打开配置器</button>
+          </div>
+          <p class="status">按下 Alt 键可按序切换焦点；按 Alt+字母/数字可快速定位到指定输入源。</p>
+          <p class="status">配置入口与原版一致，可在终端底部命令栏点击键盘图标快速打开。</p>
         </section>
 
         <!-- 关于 -->
@@ -194,8 +199,8 @@ import NotificationSettingForm from '@/components/NotificationSettingForm.vue';
 import ManageTagConnectionsModal from '@/components/ManageTagConnectionsModal.vue';
 import DataManagementSection from '@/components/DataManagementSection.vue';
 import PasskeyManagement from '@/components/PasskeyManagement.vue';
-import FocusSwitcherConfigurator from '@/components/FocusSwitcherConfigurator.vue';
 import AboutSection from '@/components/AboutSection.vue';
+import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 
 const navTabs = [
   { key: 'general', label: '通用' },
@@ -212,6 +217,7 @@ const navTabs = [
 ] as const;
 
 const activeTab = ref<string>('general');
+const focusSwitcherStore = useFocusSwitcherStore();
 
 // Modal states
 const showStyleCustomizer = ref(false);

@@ -3,10 +3,12 @@
     <div class="panel-controls">
       <div class="search-box">
         <input
+          ref="searchInputRef"
           v-model="searchTerm"
           type="text"
           placeholder="搜索历史记录..."
           class="search-input"
+          data-focus-id="commandHistorySearch"
         />
         <i class="fas fa-search search-icon"></i>
       </div>
@@ -41,37 +43,74 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { storeToRefs } from 'pinia';
-import { useSessionStore } from '@/stores/session';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useCommandHistoryStore } from '@/stores/commandHistory';
+import { useSessionStore } from '@/stores/session';
+import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 import { sshApi } from '@/lib/api';
 
 const sessionStore = useSessionStore();
 const historyStore = useCommandHistoryStore();
-const { activeSessionId } = storeToRefs(sessionStore);
+const focusSwitcherStore = useFocusSwitcherStore();
+
+const searchInputRef = ref<HTMLInputElement>();
 const searchTerm = ref('');
+let unregisterFocusAction: (() => void) | null = null;
 
 const filtered = computed(() => {
   const q = searchTerm.value.toLowerCase().trim();
   const items = historyStore.items.slice(0, 50);
   if (!q) return items;
-  return items.filter(i => i.command.toLowerCase().includes(q));
+  return items.filter((item) => item.command.toLowerCase().includes(q));
+});
+
+function isVisibleInput(input: HTMLInputElement | undefined): input is HTMLInputElement {
+  if (!input || !input.isConnected || input.disabled) {
+    return false;
+  }
+  const style = window.getComputedStyle(input);
+  if (style.display === 'none' || style.visibility === 'hidden') {
+    return false;
+  }
+  const rect = input.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+function focusSearchInput(): boolean | undefined {
+  if (!isVisibleInput(searchInputRef.value)) {
+    return undefined;
+  }
+  searchInputRef.value.focus();
+  searchInputRef.value.select();
+  return document.activeElement === searchInputRef.value;
+}
+
+onMounted(() => {
+  unregisterFocusAction = focusSwitcherStore.registerFocusAction('commandHistorySearch', focusSearchInput);
+});
+
+onUnmounted(() => {
+  unregisterFocusAction?.();
+  unregisterFocusAction = null;
 });
 
 function executeCommand(cmd: string) {
   const sid = sessionStore.activeSessionId;
   if (!sid) return;
-  const data = btoa(unescape(encodeURIComponent(cmd + '\n')));
+  const data = btoa(unescape(encodeURIComponent(`${cmd}\n`)));
   sshApi.write(sid, data).catch(() => {});
 }
 
 async function copyCommand(cmd: string) {
-  try { await navigator.clipboard.writeText(cmd); } catch { /* ignore */ }
+  try {
+    await navigator.clipboard.writeText(cmd);
+  } catch {
+    // ignore
+  }
 }
 
 function deleteEntry(id: number) {
-  historyStore.items = historyStore.items.filter(i => i.id !== id);
+  historyStore.items = historyStore.items.filter((item) => item.id !== id);
 }
 
 function confirmClearAll() {
@@ -120,7 +159,9 @@ function confirmClearAll() {
   border-color: var(--blue, #89b4fa);
   box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.2);
 }
-.search-input::placeholder { color: var(--text-dim, #6c7086); }
+.search-input::placeholder {
+  color: var(--text-dim, #6c7086);
+}
 .search-icon {
   position: absolute;
   right: 10px;
@@ -147,9 +188,9 @@ function confirmClearAll() {
   font-size: 12px;
 }
 .clear-btn:hover {
-  background: rgba(243,139,168,0.1);
+  background: rgba(243, 139, 168, 0.1);
   color: var(--red, #f38ba8);
-  border-color: rgba(243,139,168,0.3);
+  border-color: rgba(243, 139, 168, 0.3);
 }
 
 .history-list {

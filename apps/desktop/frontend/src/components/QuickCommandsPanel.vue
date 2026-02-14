@@ -3,10 +3,12 @@
     <div class="panel-controls">
       <div class="search-box">
         <input
+          ref="searchInputRef"
           v-model="searchTerm"
           type="text"
           placeholder="搜索名称或指令..."
           class="search-input"
+          data-focus-id="quickCommandsSearch"
         />
       </div>
       <button class="ctrl-btn" @click="toggleSort" :title="sortAlpha ? '按名称排序' : '按最近使用排序'">
@@ -60,20 +62,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useSessionStore } from '@/stores/session';
 import { useQuickCommandsStore } from '@/stores/quickCommands';
+import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 import { sshApi } from '@/lib/api';
 
 const sessionStore = useSessionStore();
 const quickCommandsStore = useQuickCommandsStore();
-const { activeSessionId } = storeToRefs(sessionStore);
+const focusSwitcherStore = useFocusSwitcherStore();
+
 const { items: quickCommands } = storeToRefs(quickCommandsStore);
+const searchInputRef = ref<HTMLInputElement>();
 const searchTerm = ref('');
 const expandedGroups = reactive<Record<string, boolean>>({});
 const sortAlpha = ref(true);
 const isCompact = ref(false);
+
+let unregisterFocusAction: (() => void) | null = null;
 
 interface GroupedCmds {
   name: string;
@@ -84,8 +91,8 @@ const filtered = computed(() => {
   const q = searchTerm.value.toLowerCase().trim();
   let items = quickCommands.value.slice();
   if (q) {
-    items = items.filter(c =>
-      c.name?.toLowerCase().includes(q) || c.command?.toLowerCase().includes(q)
+    items = items.filter(
+      (item) => item.name?.toLowerCase().includes(q) || item.command?.toLowerCase().includes(q),
     );
   }
   if (sortAlpha.value) {
@@ -97,14 +104,47 @@ const filtered = computed(() => {
 const groupedCommands = computed<GroupedCmds[]>(() => {
   const groups: Record<string, any[]> = {};
   for (const cmd of filtered.value) {
-    const tag = (cmd.tags && cmd.tags.length > 0 ? cmd.tags[0] : '未标记');
+    const tag = cmd.tags && cmd.tags.length > 0 ? cmd.tags[0] : '未标记';
     if (!groups[tag]) {
       groups[tag] = [];
-      if (!(tag in expandedGroups)) expandedGroups[tag] = true;
+      if (!(tag in expandedGroups)) {
+        expandedGroups[tag] = true;
+      }
     }
     groups[tag].push(cmd);
   }
   return Object.entries(groups).map(([name, commands]) => ({ name, commands }));
+});
+
+function isVisibleInput(input: HTMLInputElement | undefined): input is HTMLInputElement {
+  if (!input || !input.isConnected || input.disabled) {
+    return false;
+  }
+  const style = window.getComputedStyle(input);
+  if (style.display === 'none' || style.visibility === 'hidden') {
+    return false;
+  }
+  const rect = input.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+function focusSearchInput(): boolean | undefined {
+  if (!isVisibleInput(searchInputRef.value)) {
+    return undefined;
+  }
+
+  searchInputRef.value.focus();
+  searchInputRef.value.select();
+  return document.activeElement === searchInputRef.value;
+}
+
+onMounted(() => {
+  unregisterFocusAction = focusSwitcherStore.registerFocusAction('quickCommandsSearch', focusSearchInput);
+});
+
+onUnmounted(() => {
+  unregisterFocusAction?.();
+  unregisterFocusAction = null;
 });
 
 function toggleGroup(name: string) {
@@ -118,12 +158,16 @@ function toggleSort() {
 function executeCommand(cmd: any) {
   const sid = sessionStore.activeSessionId;
   if (!sid) return;
-  const data = btoa(unescape(encodeURIComponent(cmd.command + '\n')));
+  const data = btoa(unescape(encodeURIComponent(`${cmd.command}\n`)));
   sshApi.write(sid, data).catch(() => {});
 }
 
 async function copyCommand(cmd: string) {
-  try { await navigator.clipboard.writeText(cmd); } catch { /* ignore */ }
+  try {
+    await navigator.clipboard.writeText(cmd);
+  } catch {
+    // ignore
+  }
 }
 </script>
 
@@ -165,7 +209,9 @@ async function copyCommand(cmd: string) {
   border-color: var(--blue, #89b4fa);
   box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.2);
 }
-.search-input::placeholder { color: var(--text-dim, #6c7086); }
+.search-input::placeholder {
+  color: var(--text-dim, #6c7086);
+}
 
 .ctrl-btn {
   width: 30px;
@@ -337,8 +383,14 @@ async function copyCommand(cmd: string) {
   opacity: 0.5;
 }
 
-/* Compact mode */
-.compact-mode .command-item { padding: 3px 8px; }
-.compact-mode .cmd-name { font-size: 11px; }
-.compact-mode .group-header { padding: 4px 8px; font-size: 11px; }
+.compact-mode .command-item {
+  padding: 3px 8px;
+}
+.compact-mode .cmd-name {
+  font-size: 11px;
+}
+.compact-mode .group-header {
+  padding: 4px 8px;
+  font-size: 11px;
+}
 </style>

@@ -15,7 +15,7 @@
         <button class="tb-btn" @click="refresh" title="刷新">
           <i class="fas fa-sync-alt"></i>
         </button>
-        <input class="path-input" v-model="pathInput" @keydown.enter="navigateTo(pathInput)" placeholder="/" />
+        <input ref="pathInputRef" class="path-input" v-model="pathInput" data-focus-id="fileManagerPathInput" @keydown.enter="navigateTo(pathInput)" placeholder="/" />
         <button class="tb-btn" @click="showMkdir = true" title="新建文件夹">
           <i class="fas fa-folder-plus"></i>
         </button>
@@ -129,13 +129,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { sftpApi, type FileEntry } from '@/lib/api';
 import { save } from '@tauri-apps/plugin-dialog';
 import { useFileEditorStore } from '@/stores/fileEditor';
 import { useUINotificationStore } from '@/stores/uiNotifications';
 import { useSessionStore } from '@/stores/session';
+import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 import FavoritePaths from '@/components/FavoritePaths.vue';
 import FileUploadPopup from '@/components/FileUploadPopup.vue';
 import PathHistoryDropdown from '@/components/PathHistoryDropdown.vue';
@@ -148,9 +149,11 @@ const activeSftpSessionId = computed(() => activeSession.value?.sftpSessionId ??
 
 const fileEditorStore = useFileEditorStore();
 const notify = useUINotificationStore();
+const focusSwitcherStore = useFocusSwitcherStore();
 
 const currentPath = ref('/');
 const pathInput = ref('/');
+const pathInputRef = ref<HTMLInputElement>();
 const entries = ref<FileEntry[]>([]);
 const loading = ref(false);
 const error = ref('');
@@ -162,6 +165,30 @@ const ctxEntry = ref<FileEntry | null>(null);
 const ctxPos = ref({ x: 0, y: 0 });
 const showMkdir = ref(false);
 const mkdirName = ref('');
+
+let unregisterFileManagerSearch: (() => void) | null = null;
+let unregisterFileManagerPathInput: (() => void) | null = null;
+
+function isVisibleInput(input: HTMLInputElement | undefined): input is HTMLInputElement {
+  if (!input || !input.isConnected || input.disabled) {
+    return false;
+  }
+  const style = window.getComputedStyle(input);
+  if (style.display === 'none' || style.visibility === 'hidden') {
+    return false;
+  }
+  const rect = input.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+function focusPathInput(): boolean | undefined {
+  if (!isVisibleInput(pathInputRef.value)) {
+    return undefined;
+  }
+  pathInputRef.value.focus();
+  pathInputRef.value.select();
+  return document.activeElement === pathInputRef.value;
+}
 
 function resetBrowserState() {
   entries.value = [];
@@ -412,6 +439,18 @@ function formatSize(bytes: number): string {
   if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(1)} MB`;
   return `${(bytes / 1073741824).toFixed(1)} GB`;
 }
+
+onMounted(() => {
+  unregisterFileManagerSearch = focusSwitcherStore.registerFocusAction('fileManagerSearch', focusPathInput);
+  unregisterFileManagerPathInput = focusSwitcherStore.registerFocusAction('fileManagerPathInput', focusPathInput);
+});
+
+onUnmounted(() => {
+  unregisterFileManagerSearch?.();
+  unregisterFileManagerPathInput?.();
+  unregisterFileManagerSearch = null;
+  unregisterFileManagerPathInput = null;
+});
 
 watch(
   sshSessionId,

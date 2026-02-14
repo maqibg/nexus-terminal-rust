@@ -30,7 +30,7 @@ html, body, #app {
 }
 
 body {
-  font-family: 'Inter', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
   background: var(--bg-base);
   color: var(--text);
   -webkit-font-smoothing: antialiased;

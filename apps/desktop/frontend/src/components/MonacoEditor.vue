@@ -79,6 +79,18 @@ watch(() => props.readOnly, (ro) => {
   editor?.updateOptions({ readOnly: ro });
 });
 
+function focusEditor(): boolean {
+  if (!editor) {
+    return false;
+  }
+  editor.focus();
+  return true;
+}
+
+defineExpose({
+  focusEditor,
+});
+
 onBeforeUnmount(() => { editor?.dispose(); });
 </script>
 
