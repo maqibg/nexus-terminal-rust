@@ -1,0 +1,12 @@
+/target
+**/target
+**/*.rs.bk
+Cargo.lock
+.env
+*.log
+apps/desktop/src-tauri/gen/
+apps/desktop/frontend/node_modules/
+apps/desktop/frontend/dist/
+
+/target-build
+**/target-build

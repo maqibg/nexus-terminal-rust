@@ -1,0 +1,122 @@
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+
+export interface SessionInfo {
+  id: string;
+  connectionId: number;
+  connectionName: string;
+  status: 'connecting' | 'connected' | 'disconnected';
+  createdAt: string;
+  sftpReady: boolean;
+  sftpSessionId: string | null;
+  currentPath: string;
+}
+
+export const useSessionStore = defineStore('session', () => {
+  const sessions = ref<Map<string, SessionInfo>>(new Map());
+  const activeSessionId = ref<string | null>(null);
+
+  const activeSession = computed(() =>
+    activeSessionId.value ? sessions.value.get(activeSessionId.value) : undefined
+  );
+
+  const sessionList = computed(() => Array.from(sessions.value.values()));
+
+  function addSession(info: SessionInfo) {
+    const next = new Map(sessions.value);
+    next.set(info.id, info);
+    sessions.value = next;
+    if (!activeSessionId.value) activeSessionId.value = info.id;
+  }
+
+  function removeSession(id: string) {
+    const next = new Map(sessions.value);
+    next.delete(id);
+    sessions.value = next;
+
+    if (activeSessionId.value === id) {
+      const remaining = Array.from(next.keys());
+      activeSessionId.value = remaining.length > 0 ? remaining[remaining.length - 1] : null;
+    }
+  }
+
+  function setActive(id: string) {
+    if (sessions.value.has(id)) activeSessionId.value = id;
+  }
+
+  function getSession(id: string) {
+    return sessions.value.get(id);
+  }
+
+  function updateStatus(id: string, status: SessionInfo['status']) {
+    const current = sessions.value.get(id);
+    if (!current) return;
+
+    const next = new Map(sessions.value);
+    next.set(id, { ...current, status });
+    sessions.value = next;
+  }
+
+  function setSftpReady(id: string, ready: boolean) {
+    const current = sessions.value.get(id);
+    if (!current) return;
+
+    const next = new Map(sessions.value);
+    next.set(id, { ...current, sftpReady: ready });
+    sessions.value = next;
+  }
+
+  function setSftpSession(id: string, sftpSessionId: string | null) {
+    const current = sessions.value.get(id);
+    if (!current) return;
+
+    const next = new Map(sessions.value);
+    next.set(id, {
+      ...current,
+      sftpSessionId,
+      sftpReady: !!sftpSessionId,
+    });
+    sessions.value = next;
+  }
+
+  function setCurrentPath(id: string, path: string) {
+    const current = sessions.value.get(id);
+    if (!current) return;
+
+    const next = new Map(sessions.value);
+    next.set(id, { ...current, currentPath: path });
+    sessions.value = next;
+  }
+
+  /** Convenience: create session entry from connectionId + name, returns generated id */
+  function createSession(connectionId: number, connectionName: string): string {
+    const id = `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    addSession({
+      id,
+      connectionId,
+      connectionName,
+      status: 'connecting',
+      createdAt: new Date().toISOString(),
+      sftpReady: false,
+      sftpSessionId: null,
+      currentPath: '/',
+    });
+    return id;
+  }
+
+  return {
+    sessions,
+    activeSessionId,
+    activeSession,
+    sessionList,
+    addSession,
+    removeSession,
+    setActive,
+    getSession,
+    updateStatus,
+    setSftpReady,
+    setSftpSession,
+    setCurrentPath,
+    createSession,
+  };
+});

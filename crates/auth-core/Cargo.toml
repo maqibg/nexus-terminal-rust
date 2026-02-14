@@ -1,0 +1,19 @@
+[package]
+name = "auth-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+argon2 = { workspace = true }
+bcrypt = { workspace = true }
+totp-rs = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
+session-core = { path = "../session-core" }
+api-contract = { path = "../api-contract" }
+shared-utils = { path = "../shared-utils" }

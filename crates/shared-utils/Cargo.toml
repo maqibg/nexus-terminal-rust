@@ -1,0 +1,14 @@
+[package]
+name = "shared-utils"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+base64 = { workspace = true }
+aes-gcm = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
+hex = "0.4"

@@ -1,0 +1,24 @@
+[package]
+name = "storage-sqlite"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+auth-core = { path = "../auth-core" }
+connection-core = { path = "../connection-core" }
+proxy-core = { path = "../proxy-core" }
+tag-core = { path = "../tag-core" }
+quick-command-core = { path = "../quick-command-core" }
+settings-core = { path = "../settings-core" }
+history-core = { path = "../history-core" }
+notifications-core = { path = "../notifications-core" }
+audit-core = { path = "../audit-core" }
+transfer-core = { path = "../transfer-core" }
+ssh-suspend-core = { path = "../ssh-suspend-core" }
+shared-utils = { path = "../shared-utils" }

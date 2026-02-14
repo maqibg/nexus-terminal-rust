@@ -1,0 +1,21 @@
+[package]
+name = "ssh-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+russh = { workspace = true }
+russh-keys = "0.49"
+bytes = { workspace = true }
+base64 = { workspace = true }
+tauri = { workspace = true }
+connection-core = { path = "../connection-core" }
+proxy-core = { path = "../proxy-core" }
+session-core = { path = "../session-core" }
+shared-utils = { path = "../shared-utils" }
+russh-sftp = { workspace = true }

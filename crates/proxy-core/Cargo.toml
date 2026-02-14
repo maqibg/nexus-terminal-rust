@@ -1,0 +1,12 @@
+[package]
+name = "proxy-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true, features = ["net", "io-util"] }
+api-contract = { path = "../api-contract" }
+shared-utils = { path = "../shared-utils" }

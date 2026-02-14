@@ -1,0 +1,9 @@
+pub mod auth;
+pub mod auxiliary;
+pub mod connections;
+pub mod desktop;
+pub mod settings;
+pub mod sftp;
+pub mod ssh;
+pub mod status;
+pub mod transfer;

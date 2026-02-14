@@ -1,0 +1,49 @@
+[package]
+name = "nexus-terminal"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "nexus_terminal_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { workspace = true }
+
+[dependencies]
+tauri = { workspace = true, features = ["tray-icon"] }
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-opener = "2"
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+api-contract = { path = "../../../crates/api-contract" }
+auth-core = { path = "../../../crates/auth-core" }
+connection-core = { path = "../../../crates/connection-core" }
+session-core = { path = "../../../crates/session-core" }
+ssh-core = { path = "../../../crates/ssh-core" }
+sftp-core = { path = "../../../crates/sftp-core" }
+ssh-suspend-core = { path = "../../../crates/ssh-suspend-core" }
+proxy-core = { path = "../../../crates/proxy-core" }
+tag-core = { path = "../../../crates/tag-core" }
+quick-command-core = { path = "../../../crates/quick-command-core" }
+notifications-core = { path = "../../../crates/notifications-core" }
+audit-core = { path = "../../../crates/audit-core" }
+settings-core = { path = "../../../crates/settings-core" }
+history-core = { path = "../../../crates/history-core" }
+transfer-core = { path = "../../../crates/transfer-core" }
+ws-gateway = { path = "../../../crates/ws-gateway" }
+storage-sqlite = { path = "../../../crates/storage-sqlite" }
+shared-utils = { path = "../../../crates/shared-utils" }
+uuid = { workspace = true }
+base64 = { workspace = true }
+russh = { workspace = true }
+walkdir = "2"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+

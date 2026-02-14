@@ -1,0 +1,12 @@
+[package]
+name = "session-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+dashmap = { workspace = true }
+uuid = { workspace = true }
+shared-utils = { path = "../shared-utils" }
