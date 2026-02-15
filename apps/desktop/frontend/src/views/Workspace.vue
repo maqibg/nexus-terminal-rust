@@ -3,32 +3,93 @@
     <TerminalTabBar
       :sessions="sessionList"
       :active-session-id="activeSessionId"
+      :header-visible="headerVisible"
       @activate="sessionStore.setActive($event)"
       @close="closeSession"
       @close-others="closeOthers"
       @close-right="closeRight"
       @close-left="closeLeft"
+      @toggle-header="layoutStore.toggleHeaderVisibility()"
       @open-transfers="showTransferModal = true"
+      @open-layout-configurator="showLayoutConfigurator = true"
       @add="showConnList = true"
     />
 
-    <Splitpanes
-      class="workspace-layout"
-      @resize="handleWorkspacePaneResize"
-      @resized="handleWorkspacePaneResize"
-    >
-      <Pane v-if="leftSidebarVisible" :size="leftSidebarSize" :min-size="10" :max-size="30">
-        <LayoutRenderer v-if="layoutConfig.leftSidebar" :node="layoutConfig.leftSidebar" />
-      </Pane>
+    <div class="workspace-body">
+      <div class="workspace-left-tools">
+        <button
+          class="workspace-left-tool-btn"
+          :class="{ 'workspace-left-tool-btn-active': activeLeftToolPane === 'connections' }"
+          title="连接列表"
+          @click="toggleLeftToolPane('connections')"
+        >
+          <i class="fas fa-network-wired"></i>
+        </button>
+        <button
+          class="workspace-left-tool-btn"
+          :class="{ 'workspace-left-tool-btn-active': activeLeftToolPane === 'docker' }"
+          title="Docker 管理器"
+          @click="toggleLeftToolPane('docker')"
+        >
+          <i class="fab fa-docker"></i>
+        </button>
+      </div>
 
-      <Pane :size="mainSize" :min-size="40">
-        <LayoutRenderer :node="layoutConfig.root" />
-      </Pane>
+      <div v-if="activeLeftToolPane" class="workspace-left-panel">
+        <div class="workspace-left-panel-header">
+          <div class="workspace-left-panel-title">
+            {{ activeLeftToolPane === 'connections' ? '连接列表' : 'Docker 管理器' }}
+          </div>
+          <div class="workspace-left-panel-actions">
+            <button
+              v-if="activeLeftToolPane === 'connections'"
+              class="workspace-left-panel-action-btn"
+              title="新增连接"
+              @click="showConnList = true"
+            >
+              <i class="fas fa-plus"></i>
+            </button>
+            <button
+              class="workspace-left-panel-action-btn"
+              title="关闭"
+              @click="closeLeftToolPane"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
 
-      <Pane v-if="rightSidebarVisible" :size="rightSidebarSize" :min-size="15" :max-size="40">
-        <LayoutRenderer v-if="layoutConfig.rightSidebar" :node="layoutConfig.rightSidebar" />
-      </Pane>
-    </Splitpanes>
+        <WorkspaceConnectionList
+          v-if="activeLeftToolPane === 'connections'"
+          class="workspace-left-panel-content"
+          @select="handleConnect"
+        />
+
+        <div v-else class="workspace-left-panel-content workspace-docker-empty">
+          <i class="fab fa-docker workspace-docker-icon"></i>
+          <div class="workspace-docker-title">远程主机 Docker 不可用</div>
+          <div class="workspace-docker-desc">请确保远程主机上已安装并运行 Docker。</div>
+        </div>
+      </div>
+
+      <Splitpanes
+        :class="['workspace-layout', { 'workspace-layout-locked': layoutLocked }]"
+        @resize="handleWorkspacePaneResize"
+        @resized="handleWorkspacePaneResize"
+      >
+        <Pane v-if="effectiveLeftSidebarVisible" :size="leftSidebarSize" :min-size="10" :max-size="30">
+          <LayoutRenderer v-if="layoutConfig.leftSidebar" :node="layoutConfig.leftSidebar" />
+        </Pane>
+
+        <Pane :size="mainSize" :min-size="40">
+          <LayoutRenderer :node="layoutConfig.root" />
+        </Pane>
+
+        <Pane v-if="rightSidebarVisible" :size="rightSidebarSize" :min-size="15" :max-size="40">
+          <LayoutRenderer v-if="layoutConfig.rightSidebar" :node="layoutConfig.rightSidebar" />
+        </Pane>
+      </Splitpanes>
+    </div>
 
     <Teleport to="body">
       <div v-if="showConnList" class="dialog-backdrop" @click.self="showConnList = false">
@@ -44,6 +105,11 @@
       :tasks="taskList"
       @close="showTransferModal = false"
       @cancel="cancelTask"
+    />
+
+    <LayoutConfigurator
+      :visible="showLayoutConfigurator"
+      @close="showLayoutConfigurator = false"
     />
   </div>
 </template>
@@ -61,14 +127,18 @@ import LayoutRenderer from '@/components/LayoutRenderer.vue';
 import TerminalTabBar from '@/components/TerminalTabBar.vue';
 import WorkspaceConnectionList from '@/components/WorkspaceConnectionList.vue';
 import TransferProgressModal from '@/components/TransferProgressModal.vue';
+import LayoutConfigurator from '@/components/LayoutConfigurator.vue';
 
 const sessionStore = useSessionStore();
 const layoutStore = useLayoutStore();
 const { activeSessionId, sessionList } = storeToRefs(sessionStore);
-const { layoutConfig, leftSidebarVisible, rightSidebarVisible, leftSidebarSize, rightSidebarSize } =
+const { layoutConfig, leftSidebarVisible, rightSidebarVisible, leftSidebarSize, rightSidebarSize, headerVisible, layoutLocked } =
   storeToRefs(layoutStore);
 const showConnList = ref(false);
 const showTransferModal = ref(false);
+const showLayoutConfigurator = ref(false);
+type LeftToolPane = 'connections' | 'docker';
+const activeLeftToolPane = ref<LeftToolPane | null>(null);
 const { taskList, startListening, cancelTask, cleanup } = useTransferProgress();
 
 let workspaceResizeDispatchRaf = 0;
@@ -113,12 +183,17 @@ function notifyWorkspaceLayoutResized() {
 }
 
 function handleWorkspacePaneResize(payload?: unknown) {
+  if (layoutLocked.value) {
+    notifyWorkspaceLayoutResized();
+    return;
+  }
+
   const sizes = extractPaneSizes(payload);
 
   if (sizes.length > 0) {
     let cursor = 0;
 
-    if (leftSidebarVisible.value && sizes[cursor] !== undefined) {
+    if (effectiveLeftSidebarVisible.value && sizes[cursor] !== undefined) {
       layoutStore.setLeftSidebarSize(clampSize(sizes[cursor], 10, 30));
       cursor += 1;
     }
@@ -135,9 +210,19 @@ function handleWorkspacePaneResize(payload?: unknown) {
   notifyWorkspaceLayoutResized();
 }
 
+function toggleLeftToolPane(pane: LeftToolPane) {
+  activeLeftToolPane.value = activeLeftToolPane.value === pane ? null : pane;
+}
+
+function closeLeftToolPane() {
+  activeLeftToolPane.value = null;
+}
+
+const effectiveLeftSidebarVisible = computed(() => leftSidebarVisible.value && !activeLeftToolPane.value);
+
 const mainSize = computed(() => {
   let size = 100;
-  if (leftSidebarVisible.value) size -= leftSidebarSize.value;
+  if (effectiveLeftSidebarVisible.value) size -= leftSidebarSize.value;
   if (rightSidebarVisible.value) size -= rightSidebarSize.value;
   return size;
 });
@@ -234,6 +319,7 @@ function handleTransferCreated() {
 }
 
 onMounted(() => {
+  void layoutStore.loadLayout();
   void startListening();
   window.addEventListener('transfer-created', handleTransferCreated);
 });
@@ -254,6 +340,130 @@ onUnmounted(() => {
   flex-direction: column;
   height: 100%;
   background: var(--bg-base);
+}
+
+.workspace-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.workspace-left-tools {
+  width: 42px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg-mantle);
+}
+
+.workspace-left-tool-btn {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 15px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.workspace-left-tool-btn:hover {
+  color: var(--text);
+  background: var(--bg-surface0);
+}
+
+.workspace-left-tool-btn-active,
+.workspace-left-tool-btn-active:hover {
+  color: #fff;
+  background: var(--blue);
+}
+
+.workspace-left-panel {
+  width: 300px;
+  min-width: 260px;
+  max-width: 420px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--bg-mantle);
+}
+
+.workspace-left-panel-header {
+  height: 38px;
+  padding: 0 6px 0 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.workspace-left-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.workspace-left-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.workspace-left-panel-action-btn {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.workspace-left-panel-action-btn:hover {
+  color: var(--text);
+  background: var(--bg-surface0);
+}
+
+.workspace-left-panel-content {
+  flex: 1;
+  min-height: 0;
+}
+
+.workspace-docker-empty {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 20px;
+  gap: 10px;
+}
+
+.workspace-docker-icon {
+  font-size: 42px;
+  color: var(--text-dim);
+}
+
+.workspace-docker-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.workspace-docker-desc {
+  max-width: 220px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-sub);
 }
 
 .workspace-layout {
@@ -280,6 +490,11 @@ onUnmounted(() => {
 
 .workspace-layout :deep(.splitpanes__splitter:hover) {
   background: var(--blue, #89b4fa);
+}
+
+.workspace-layout-locked :deep(.splitpanes__splitter) {
+  pointer-events: none;
+  opacity: 0.45;
 }
 
 .dialog-backdrop {

@@ -7,6 +7,10 @@ edition = "2021"
 name = "nexus_terminal_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
 [build-dependencies]
 tauri-build = { workspace = true }
 

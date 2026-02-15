@@ -5,7 +5,7 @@
   <Splitpanes
     v-else
     :horizontal="node.direction === 'vertical'"
-    class="layout-splitpanes"
+    :class="['layout-splitpanes', { 'layout-locked': layoutLocked }]"
     @resize="notifyLayoutResized"
     @resized="notifyLayoutResized"
   >
@@ -22,9 +22,11 @@
 
 <script lang="ts">
 import { defineComponent, computed, onBeforeUnmount } from 'vue';
+import { storeToRefs } from 'pinia';
 import { Splitpanes, Pane } from 'splitpanes';
 import 'splitpanes/dist/splitpanes.css';
 import type { LayoutNode, PaneName } from '@/stores/layout';
+import { useLayoutStore } from '@/stores/layout';
 import TerminalView from '@/components/TerminalView.vue';
 import SftpBrowser from '@/components/SftpBrowser.vue';
 import FileEditorContainer from '@/components/FileEditorContainer.vue';
@@ -50,6 +52,9 @@ export default defineComponent({
     node: { type: Object as () => LayoutNode, required: true },
   },
   setup(props) {
+    const layoutStore = useLayoutStore();
+    const { layoutLocked } = storeToRefs(layoutStore);
+
     const paneComponent = computed(() =>
       props.node.pane ? componentMap[props.node.pane] ?? 'div' : 'div'
     );
@@ -79,7 +84,7 @@ export default defineComponent({
       }
     });
 
-    return { paneComponent, notifyLayoutResized };
+    return { paneComponent, notifyLayoutResized, layoutLocked };
   },
 });
 </script>
@@ -95,5 +100,10 @@ export default defineComponent({
 :deep(.splitpanes--horizontal > .splitpanes__splitter) { height: 4px; margin: -2px 0; }
 :deep(.splitpanes--vertical > .splitpanes__splitter) { width: 4px; margin: 0 -2px; }
 :deep(.splitpanes__splitter:hover) { background: var(--blue); }
+
+.layout-locked :deep(.splitpanes__splitter) {
+  pointer-events: none;
+  opacity: 0.45;
+}
 </style>
 

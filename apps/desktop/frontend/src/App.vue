@@ -77,6 +77,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useAuthStore } from '@/stores/auth';
+import { useLayoutStore } from '@/stores/layout';
 import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 import { statusApi } from '@/lib/api';
 import UINotificationDisplay from '@/components/UINotificationDisplay.vue';
@@ -87,13 +88,25 @@ import FocusSwitcherConfigurator from '@/components/FocusSwitcherConfigurator.vu
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const layoutStore = useLayoutStore();
 const focusSwitcherStore = useFocusSwitcherStore();
 const { isAuthenticated } = storeToRefs(authStore);
+const { headerVisible } = storeToRefs(layoutStore);
 const { isConfiguratorVisible: isFocusSwitcherVisible } = storeToRefs(focusSwitcherStore);
 const appWindow = getCurrentWindow();
 
 const noHeaderPaths = ['/login', '/setup'];
-const showHeader = computed(() => !noHeaderPaths.includes(route.path));
+const showHeader = computed(() => {
+  if (noHeaderPaths.includes(route.path)) {
+    return false;
+  }
+
+  if (route.path === '/workspace') {
+    return headerVisible.value;
+  }
+
+  return true;
+});
 const isWorkspaceRoute = computed(() => route.path === '/workspace');
 
 const startupState = ref<'starting' | 'ready' | 'error'>('starting');
@@ -243,6 +256,7 @@ function preventBrowserContextMenu(event: MouseEvent): void {
 }
 
 onMounted(() => {
+  void layoutStore.loadLayout().catch(() => undefined);
   void checkBackendStartup();
   void focusSwitcherStore.loadConfigurationFromBackend();
   window.addEventListener('keydown', handleAltKeyDown);

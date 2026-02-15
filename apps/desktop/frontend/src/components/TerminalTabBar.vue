@@ -15,10 +15,21 @@
       </div>
     </div>
 
-    <button class="tab-action" @click="emit('openTransfers')" title="传输进度">
-      <i class="fas fa-exchange-alt"></i>
-    </button>
-    <button class="tab-add" @click="emit('add')" title="新建连接">+</button>
+    <div class="tab-actions">
+      <button class="tab-action" :title="headerToggleTitle" @click="emit('toggleHeader')">
+        <i :class="headerToggleIconClass"></i>
+      </button>
+
+      <button class="tab-action" title="查看传输进度" @click="emit('openTransfers')">
+        <i class="fas fa-tasks"></i>
+      </button>
+
+      <button class="tab-action" title="配置布局" @click="emit('openLayoutConfigurator')">
+        <i class="fas fa-th-large"></i>
+      </button>
+
+      <button class="tab-add" title="新建连接" @click="emit('add')">+</button>
+    </div>
 
     <TabBarContextMenu
       :visible="ctx.visible"
@@ -32,11 +43,16 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue';
+import { computed, reactive } from 'vue';
 import type { SessionInfo } from '@/stores/session';
 import TabBarContextMenu from './TabBarContextMenu.vue';
 
-defineProps<{ sessions: SessionInfo[]; activeSessionId: string | null }>();
+const props = defineProps<{
+  sessions: SessionInfo[];
+  activeSessionId: string | null;
+  headerVisible?: boolean;
+}>();
+
 const emit = defineEmits<{
   activate: [id: string];
   close: [id: string];
@@ -45,9 +61,15 @@ const emit = defineEmits<{
   closeRight: [id: string];
   closeLeft: [id: string];
   openTransfers: [];
+  toggleHeader: [];
+  openLayoutConfigurator: [];
 }>();
 
 const ctx = reactive({ visible: false, x: 0, y: 0, sessionId: '' });
+
+const isHeaderVisible = computed(() => props.headerVisible !== false);
+const headerToggleIconClass = computed(() => (isHeaderVisible.value ? 'fas fa-eye' : 'fas fa-eye-slash'));
+const headerToggleTitle = computed(() => (isHeaderVisible.value ? '隐藏顶部导航' : '显示顶部导航'));
 
 function onContext(e: MouseEvent, id: string) {
   ctx.visible = true;
@@ -79,6 +101,7 @@ function handleContextAction(type: string) {
   padding: 0 4px;
   flex-shrink: 0;
 }
+
 .tabs {
   display: flex;
   flex: 1;
@@ -86,7 +109,11 @@ function handleContextAction(type: string) {
   gap: 2px;
   scrollbar-width: none;
 }
-.tabs::-webkit-scrollbar { display: none; }
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
 .tab {
   display: flex;
   align-items: center;
@@ -99,20 +126,35 @@ function handleContextAction(type: string) {
   white-space: nowrap;
   transition: background 0.15s;
 }
-.tab:hover { background: var(--bg-surface0, #313244); }
+
+.tab:hover {
+  background: var(--bg-surface0, #313244);
+}
+
 .tab.active {
   background: var(--bg-surface0, #313244);
   color: var(--text, #cdd6f4);
 }
+
 .tab-status {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
-.tab-status.connected { background: #a6e3a1; }
-.tab-status.connecting { background: #f9e2af; }
-.tab-status.disconnected { background: #f38ba8; }
+
+.tab-status.connected {
+  background: #a6e3a1;
+}
+
+.tab-status.connecting {
+  background: #f9e2af;
+}
+
+.tab-status.disconnected {
+  background: #f38ba8;
+}
+
 .tab-close {
   background: none;
   border: none;
@@ -122,18 +164,45 @@ function handleContextAction(type: string) {
   padding: 0 2px;
   line-height: 1;
 }
-.tab-close:hover { color: var(--red, #f38ba8); }
+
+.tab-close:hover {
+  color: var(--red, #f38ba8);
+}
+
+.tab-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .tab-action,
 .tab-add {
   background: none;
   border: none;
+  border-left: 1px solid var(--border, #313244);
   color: var(--text-dim, #6c7086);
   cursor: pointer;
   font-size: 14px;
   padding: 4px 10px;
-  flex-shrink: 0;
+  height: 36px;
+  min-width: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-.tab-add { font-size: 18px; }
+
 .tab-action:hover,
-.tab-add:hover { color: var(--blue, #89b4fa); }
+.tab-add:hover {
+  color: var(--blue, #89b4fa);
+  background: rgba(137, 180, 250, 0.08);
+}
+
+.tab-action i {
+  font-size: 13px;
+}
+
+.tab-add {
+  font-size: 18px;
+  line-height: 1;
+}
 </style>

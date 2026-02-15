@@ -25,6 +25,29 @@ export interface LayoutConfig {
   rightSidebar?: LayoutNode;
 }
 
+const ALL_POSSIBLE_PANES: PaneName[] = [
+  'terminal',
+  'commandBar',
+  'fileManager',
+  'editor',
+  'statusMonitor',
+  'commandHistory',
+  'quickCommands',
+];
+
+const SETTINGS_KEYS = {
+  layoutConfig: 'layout_config',
+  leftVisible: 'layout_left_visible',
+  rightVisible: 'layout_right_visible',
+  leftSize: 'layout_left_size',
+  rightSize: 'layout_right_size',
+  headerVisible: 'layout_header_visible',
+  layoutLocked: 'layoutLocked',
+} as const;
+
+const DEFAULT_LEFT_SIZE = 14.6;
+const DEFAULT_RIGHT_SIZE = 27.4;
+
 const DEFAULT_LAYOUT: LayoutConfig = {
   leftSidebar: {
     type: 'split',
@@ -50,33 +73,105 @@ const DEFAULT_LAYOUT: LayoutConfig = {
   },
 };
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function parseBoolean(raw: string, fallback: boolean): boolean {
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  return fallback;
+}
+
+function parseNumber(raw: string, fallback: number, min: number, max: number): number {
+  const value = Number.parseFloat(raw);
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return clamp(value, min, max);
+}
+
+function deepCloneLayoutConfig(config: LayoutConfig): LayoutConfig {
+  return JSON.parse(JSON.stringify(config)) as LayoutConfig;
+}
+
 export const useLayoutStore = defineStore('layout', () => {
-  const layoutConfig = ref<LayoutConfig>(structuredClone(DEFAULT_LAYOUT));
+  const layoutConfig = ref<LayoutConfig>(deepCloneLayoutConfig(DEFAULT_LAYOUT));
   const leftSidebarVisible = ref(true);
   const rightSidebarVisible = ref(true);
-  const leftSidebarSize = ref(14.6);
-  const rightSidebarSize = ref(27.4);
+  const leftSidebarSize = ref(DEFAULT_LEFT_SIZE);
+  const rightSidebarSize = ref(DEFAULT_RIGHT_SIZE);
+  const headerVisible = ref(true);
+  const layoutLocked = ref(false);
+
+  async function ensureSettingsLoaded() {
+    const settings = useSettingsStore();
+    if (!settings.loaded) {
+      await settings.loadAll();
+    }
+    return settings;
+  }
+
+  async function persistHeaderVisibility() {
+    const settings = await ensureSettingsLoaded();
+    await settings.set(SETTINGS_KEYS.headerVisible, String(headerVisible.value));
+  }
+
+  async function persistLayoutLocked() {
+    const settings = await ensureSettingsLoaded();
+    await settings.set(SETTINGS_KEYS.layoutLocked, String(layoutLocked.value));
+  }
 
   async function loadLayout() {
-    const settings = useSettingsStore();
-    const json = settings.get('layout_config');
+    const settings = await ensureSettingsLoaded();
+
+    const json = settings.get(SETTINGS_KEYS.layoutConfig);
     if (json) {
-      try { layoutConfig.value = JSON.parse(json); } catch { /* keep default */ }
+      try {
+        layoutConfig.value = JSON.parse(json);
+      } catch {
+        layoutConfig.value = deepCloneLayoutConfig(DEFAULT_LAYOUT);
+      }
     }
+
+    leftSidebarVisible.value = parseBoolean(settings.get(SETTINGS_KEYS.leftVisible, 'true'), true);
+    rightSidebarVisible.value = parseBoolean(settings.get(SETTINGS_KEYS.rightVisible, 'true'), true);
+    leftSidebarSize.value = parseNumber(
+      settings.get(SETTINGS_KEYS.leftSize, String(DEFAULT_LEFT_SIZE)),
+      DEFAULT_LEFT_SIZE,
+      10,
+      30,
+    );
+    rightSidebarSize.value = parseNumber(
+      settings.get(SETTINGS_KEYS.rightSize, String(DEFAULT_RIGHT_SIZE)),
+      DEFAULT_RIGHT_SIZE,
+      15,
+      40,
+    );
+    headerVisible.value = parseBoolean(settings.get(SETTINGS_KEYS.headerVisible, 'true'), true);
+    layoutLocked.value = parseBoolean(settings.get(SETTINGS_KEYS.layoutLocked, 'false'), false);
   }
 
   async function saveLayout() {
-    const settings = useSettingsStore();
-    await settings.set('layout_config', JSON.stringify(layoutConfig.value));
+    const settings = await ensureSettingsLoaded();
+    await settings.set(SETTINGS_KEYS.layoutConfig, JSON.stringify(layoutConfig.value));
+    await settings.set(SETTINGS_KEYS.leftVisible, String(leftSidebarVisible.value));
+    await settings.set(SETTINGS_KEYS.rightVisible, String(rightSidebarVisible.value));
+    await settings.set(SETTINGS_KEYS.leftSize, String(leftSidebarSize.value));
+    await settings.set(SETTINGS_KEYS.rightSize, String(rightSidebarSize.value));
+    await settings.set(SETTINGS_KEYS.headerVisible, String(headerVisible.value));
+    await settings.set(SETTINGS_KEYS.layoutLocked, String(layoutLocked.value));
   }
 
   function resetLayout() {
-    layoutConfig.value = structuredClone(DEFAULT_LAYOUT);
+    layoutConfig.value = deepCloneLayoutConfig(DEFAULT_LAYOUT);
     leftSidebarVisible.value = true;
     rightSidebarVisible.value = true;
-    leftSidebarSize.value = 14.6;
-    rightSidebarSize.value = 27.4;
-    saveLayout();
+    leftSidebarSize.value = DEFAULT_LEFT_SIZE;
+    rightSidebarSize.value = DEFAULT_RIGHT_SIZE;
+    headerVisible.value = true;
+    layoutLocked.value = false;
+    void saveLayout();
   }
 
   function toggleLeftSidebar() {
@@ -88,19 +183,56 @@ export const useLayoutStore = defineStore('layout', () => {
   }
 
   function setLeftSidebarSize(size: number) {
-    leftSidebarSize.value = size;
+    leftSidebarSize.value = clamp(size, 10, 30);
   }
 
   function setRightSidebarSize(size: number) {
-    rightSidebarSize.value = size;
+    rightSidebarSize.value = clamp(size, 15, 40);
+  }
+
+  function setHeaderVisibility(visible: boolean) {
+    if (headerVisible.value === visible) {
+      return;
+    }
+
+    headerVisible.value = visible;
+    void persistHeaderVisibility();
+  }
+
+  function toggleHeaderVisibility() {
+    setHeaderVisibility(!headerVisible.value);
+  }
+
+  function setLayoutLocked(locked: boolean) {
+    if (layoutLocked.value === locked) {
+      return;
+    }
+
+    layoutLocked.value = locked;
+    void persistLayoutLocked();
+  }
+
+  function toggleLayoutLocked() {
+    setLayoutLocked(!layoutLocked.value);
+  }
+
+  function generateId(): string {
+    return Math.random().toString(36).slice(2, 11);
+  }
+
+  function getSystemDefaultLayoutConfig(): LayoutConfig {
+    return deepCloneLayoutConfig(DEFAULT_LAYOUT);
   }
 
   return {
+    allPossiblePanes: ALL_POSSIBLE_PANES,
     layoutConfig,
     leftSidebarVisible,
     rightSidebarVisible,
     leftSidebarSize,
     rightSidebarSize,
+    headerVisible,
+    layoutLocked,
     loadLayout,
     saveLayout,
     resetLayout,
@@ -108,5 +240,11 @@ export const useLayoutStore = defineStore('layout', () => {
     toggleRightSidebar,
     setLeftSidebarSize,
     setRightSidebarSize,
+    setHeaderVisibility,
+    toggleHeaderVisibility,
+    setLayoutLocked,
+    toggleLayoutLocked,
+    generateId,
+    getSystemDefaultLayoutConfig,
   };
 });

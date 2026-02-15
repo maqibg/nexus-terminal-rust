@@ -1508,10 +1508,16 @@ async function openEditor(entry: FileEntry) {
   const sid = activeSftpSessionId.value;
   if (!sid) return;
 
+  const tabId = `${sid}:${entry.path}`;
+  if (fileEditorStore.openFiles.has(tabId)) {
+    fileEditorStore.setActive(tabId);
+    return;
+  }
+
   try {
     const base64 = await sftpApi.readFile(sid, entry.path);
     const content = decodeURIComponent(escape(atob(base64)));
-    const ext = entry.name.split('.').pop() ?? '';
+    const ext = entry.name.split('.').pop()?.toLowerCase() ?? '';
     const langMap: Record<string, string> = {
       js: 'javascript',
       ts: 'typescript',
@@ -1533,12 +1539,22 @@ async function openEditor(entry: FileEntry) {
     };
 
     fileEditorStore.openFile({
-      id: `${sid}:${entry.path}`,
+      id: tabId,
       sessionId: sid,
       path: entry.path,
+      filename: entry.name,
       content,
       originalContent: content,
+      rawContentBase64: base64,
+      selectedEncoding: 'utf-8',
       isDirty: false,
+      isLoading: false,
+      loadingError: null,
+      isSaving: false,
+      saveStatus: 'idle',
+      saveError: null,
+      scrollTop: 0,
+      scrollLeft: 0,
       language: langMap[ext] ?? 'plaintext',
     });
   } catch (e: any) {

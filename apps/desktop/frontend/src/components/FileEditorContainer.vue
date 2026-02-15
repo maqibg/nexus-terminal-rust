@@ -1,138 +1,551 @@
 <template>
   <div class="file-editor-container">
     <FileEditorTabs />
-    <div class="editor-toolbar" v-if="activeFile">
-      <span class="file-path">{{ activeFile.path }}</span>
-      <div class="toolbar-actions">
-        <button class="btn" @click="save" :disabled="!activeFile.isDirty">保存</button>
-        <button class="btn" @click="store.closeFile(activeFile.id)">关闭</button>
+
+    <div v-if="activeFile" class="editor-header">
+      <span class="editor-file-meta" :title="activeFile.path">
+        正在编辑({{ activeSessionName }}): {{ activeFile.path }}
+        <span v-if="activeFile.isDirty" class="modified-indicator">*</span>
+      </span>
+
+      <div class="editor-actions">
+        <div v-if="!activeFile.isLoading" class="encoding-select-wrapper">
+          <select
+            ref="encodingSelectRef"
+            :value="activeFile.selectedEncoding || 'utf-8'"
+            class="encoding-select"
+            title="更改文件编码"
+            @change="handleEncodingChange"
+          >
+            <option v-for="option in encodingOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
+        <span v-else class="encoding-select-placeholder">加载中...</span>
+
+        <span v-if="activeFile.saveStatus === 'saving'" class="save-status saving">保存中...</span>
+        <span v-if="activeFile.saveStatus === 'success'" class="save-status success">✅ 已保存</span>
+        <span v-if="activeFile.saveStatus === 'error'" class="save-status error">❌ 保存失败: {{ activeFile.saveError || '未知错误' }}</span>
+
+        <button
+          class="save-btn"
+          :disabled="activeFile.isSaving || activeFile.isLoading || !!activeFile.loadingError || !activeFile.isDirty"
+          @click="save"
+        >
+          保存
+        </button>
       </div>
     </div>
-    <div class="editor-body" data-focus-id="fileEditorActive">
+
+    <div v-else class="editor-header editor-header-placeholder">
+      <span>未打开文件</span>
+    </div>
+
+    <div class="editor-content-area" data-focus-id="fileEditorActive">
+      <div v-if="activeFile?.isLoading" class="editor-loading">文件加载中...</div>
+      <div v-else-if="activeFile?.loadingError" class="editor-error">{{ activeFile.loadingError }}</div>
+
       <MonacoEditor
-        v-if="activeFile"
+        v-else-if="activeFile"
         ref="monacoEditorRef"
-        :modelValue="activeFile.content"
+        :key="activeFile.id"
+        :model-value="activeFile.content"
         :language="activeFile.language"
+        :font-family="editorFontFamily"
+        :font-size="editorFontSize"
+        theme="vs-dark"
+        class="editor-instance"
+        :initial-scroll-top="activeFile.scrollTop ?? 0"
+        :initial-scroll-left="activeFile.scrollLeft ?? 0"
         @update:modelValue="onContentChange"
+        @request-save="save"
+        @update:scrollPosition="handleEditorScroll"
+        @update:fontSize="handleEditorFontSizeUpdate"
       />
-      <div v-else class="empty-state">无打开的文件</div>
+
+      <div v-else class="editor-placeholder">请从文件管理器中选择文件以开始编辑</div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { Buffer } from 'buffer';
+import * as iconv from '@vscode/iconv-lite-umd';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
-import { useFileEditorStore } from '@/stores/fileEditor';
-import { useUINotificationStore } from '@/stores/uiNotifications';
-import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 import { sftpApi } from '@/lib/api';
-import FileEditorTabs from './FileEditorTabs.vue';
 import MonacoEditor from './MonacoEditor.vue';
+import FileEditorTabs from './FileEditorTabs.vue';
+import { useAppearanceStore } from '@/stores/appearance';
+import { useFileEditorStore } from '@/stores/fileEditor';
+import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
+import { useSessionStore } from '@/stores/session';
+import { useUINotificationStore } from '@/stores/uiNotifications';
 
 const store = useFileEditorStore();
 const notify = useUINotificationStore();
 const focusSwitcherStore = useFocusSwitcherStore();
-const { activeFile } = storeToRefs(store);
+const sessionStore = useSessionStore();
+const appearanceStore = useAppearanceStore();
+const { activeFile, fileList, activeFileId } = storeToRefs(store);
 
 const monacoEditorRef = ref<{ focusEditor: () => boolean } | null>(null);
+const encodingSelectRef = ref<HTMLSelectElement | null>(null);
+
 let unregisterFocusAction: (() => void) | null = null;
+let clearSaveStatusTimer: number | null = null;
+
+const encodingOptions = [
+  { value: 'utf-8', label: 'UTF-8' },
+  { value: 'utf-16le', label: 'UTF-16 LE' },
+  { value: 'utf-16be', label: 'UTF-16 BE' },
+  { value: 'gbk', label: 'GBK' },
+  { value: 'gb2312', label: 'GB2312' },
+  { value: 'gb18030', label: 'GB18030' },
+  { value: 'big5', label: 'Big5 (繁体中文)' },
+  { value: 'shift_jis', label: 'Shift-JIS' },
+  { value: 'euc-jp', label: 'EUC-JP' },
+  { value: 'euc-kr', label: 'EUC-KR' },
+  { value: 'iso-8859-1', label: 'ISO-8859-1 (Latin-1)' },
+  { value: 'iso-8859-2', label: 'ISO-8859-2 (Latin-2)' },
+  { value: 'iso-8859-5', label: 'ISO-8859-5 (Cyrillic)' },
+  { value: 'iso-8859-6', label: 'ISO-8859-6 (Arabic)' },
+  { value: 'iso-8859-7', label: 'ISO-8859-7 (Greek)' },
+  { value: 'iso-8859-8', label: 'ISO-8859-8 (Hebrew)' },
+  { value: 'iso-8859-9', label: 'ISO-8859-9 (Turkish)' },
+  { value: 'cp1250', label: 'Windows-1250' },
+  { value: 'cp1251', label: 'Windows-1251' },
+  { value: 'cp1252', label: 'Windows-1252' },
+  { value: 'cp1253', label: 'Windows-1253' },
+  { value: 'cp1254', label: 'Windows-1254' },
+  { value: 'cp1255', label: 'Windows-1255' },
+  { value: 'cp1256', label: 'Windows-1256' },
+  { value: 'cp1257', label: 'Windows-1257' },
+  { value: 'cp1258', label: 'Windows-1258' },
+  { value: 'koi8-r', label: 'KOI8-R' },
+  { value: 'koi8-u', label: 'KOI8-U' },
+  { value: 'tis-620', label: 'TIS-620' },
+  { value: 'cp874', label: 'Windows-874' },
+];
+
+const activeSessionName = computed(() => {
+  const file = activeFile.value;
+  if (!file) {
+    return '无会话';
+  }
+
+  return sessionStore.getSession(file.sessionId)?.connectionName ?? '未知会话';
+});
+
+const editorFontFamily = computed(() =>
+  appearanceStore.get('editor_font_family', 'Consolas, "Courier New", monospace'),
+);
+
+const editorFontSize = computed(() => {
+  const raw = Number.parseInt(appearanceStore.get('editor_font_size', '14'), 10);
+  if (Number.isNaN(raw)) {
+    return 14;
+  }
+
+  return Math.min(40, Math.max(8, raw));
+});
+
+function normalizeEncoding(encoding: string): string {
+  return encoding.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function decodeBase64Content(rawContentBase64: string, encoding: string): string {
+  const normalized = normalizeEncoding(encoding);
+  const binary = Buffer.from(rawContentBase64, 'base64');
+
+  try {
+    if (normalized === 'utf8') {
+      return new TextDecoder('utf-8').decode(binary);
+    }
+
+    if (normalized === 'utf16le') {
+      return new TextDecoder('utf-16le').decode(binary);
+    }
+
+    if (normalized === 'utf16be') {
+      return new TextDecoder('utf-16be').decode(binary);
+    }
+
+    if (iconv.encodingExists(normalized)) {
+      return iconv.decode(binary, normalized);
+    }
+  } catch (error) {
+    console.warn('[FileEditor] Decode failed with selected encoding, fallback to UTF-8.', error);
+  }
+
+  return new TextDecoder('utf-8').decode(binary);
+}
+
+function encodeContentToBase64(content: string, encoding: string): string {
+  const normalized = normalizeEncoding(encoding);
+
+  try {
+    if (iconv.encodingExists(normalized)) {
+      const encoded = iconv.encode(content, normalized);
+      return Buffer.from(encoded).toString('base64');
+    }
+  } catch (error) {
+    console.warn('[FileEditor] Encode failed with selected encoding, fallback to UTF-8.', error);
+  }
+
+  return Buffer.from(content, 'utf-8').toString('base64');
+}
+
+function updateEncodingSelectWidth() {
+  nextTick(() => {
+    const select = encodingSelectRef.value;
+    if (!select) {
+      return;
+    }
+
+    const option = select.options[select.selectedIndex];
+    if (!option) {
+      return;
+    }
+
+    const temp = document.createElement('span');
+    const style = getComputedStyle(select);
+    temp.style.position = 'absolute';
+    temp.style.left = '-9999px';
+    temp.style.visibility = 'hidden';
+    temp.style.fontFamily = style.fontFamily;
+    temp.style.fontSize = style.fontSize;
+    temp.style.fontWeight = style.fontWeight;
+    temp.style.letterSpacing = style.letterSpacing;
+    temp.style.paddingLeft = style.paddingLeft;
+    temp.style.paddingRight = style.paddingRight;
+    temp.style.whiteSpace = 'nowrap';
+    temp.textContent = option.text || 'UTF-8';
+    document.body.appendChild(temp);
+
+    const width = temp.getBoundingClientRect().width;
+    document.body.removeChild(temp);
+    select.style.width = `${Math.ceil(width + 25)}px`;
+  });
+}
 
 function focusActiveEditor(): boolean | undefined {
   if (!activeFile.value) {
     return undefined;
   }
+
   return monacoEditorRef.value?.focusEditor() ?? false;
 }
 
+function onContentChange(value: string) {
+  const file = activeFile.value;
+  if (!file) {
+    return;
+  }
+
+  store.updateContent(file.id, value);
+}
+
+function handleEditorScroll(position: { scrollTop: number; scrollLeft: number }) {
+  const file = activeFile.value;
+  if (!file) {
+    return;
+  }
+
+  store.updateScrollPosition(file.id, position.scrollTop, position.scrollLeft);
+}
+
+async function handleEditorFontSizeUpdate(size: number) {
+  try {
+    await appearanceStore.set('editor_font_size', String(size));
+  } catch {
+    // ignore appearance save failure
+  }
+}
+
+function handleEncodingChange(event: Event) {
+  const file = activeFile.value;
+  if (!file) {
+    return;
+  }
+
+  const nextEncoding = (event.target as HTMLSelectElement).value;
+  if (nextEncoding === (file.selectedEncoding || 'utf-8')) {
+    return;
+  }
+
+  if (!file.rawContentBase64) {
+    notify.addNotification('warning', '缺少原始文件数据，无法切换编码');
+    return;
+  }
+
+  try {
+    const decoded = decodeBase64Content(file.rawContentBase64, nextEncoding);
+    store.setDecodedContent(file.id, decoded, nextEncoding);
+    updateEncodingSelectWidth();
+  } catch (error: any) {
+    notify.addNotification('error', `切换编码失败: ${error?.message ?? '未知错误'}`);
+  }
+}
+
+function switchTabByOffset(offset: number) {
+  if (fileList.value.length <= 1 || !activeFileId.value) {
+    return;
+  }
+
+  const currentIndex = fileList.value.findIndex((item) => item.id === activeFileId.value);
+  if (currentIndex < 0) {
+    return;
+  }
+
+  const nextIndex = (currentIndex + offset + fileList.value.length) % fileList.value.length;
+  if (nextIndex !== currentIndex) {
+    store.setActive(fileList.value[nextIndex].id);
+  }
+}
+
+function handleKeyDown(event: KeyboardEvent) {
+  if (!event.altKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  switchTabByOffset(event.key === 'ArrowLeft' ? -1 : 1);
+}
+
+async function save() {
+  const file = activeFile.value;
+  if (!file || !file.isDirty || file.isSaving) {
+    return;
+  }
+
+  store.setSaveStatus(file.id, 'saving');
+
+  try {
+    const encoded = encodeContentToBase64(file.content, file.selectedEncoding || 'utf-8');
+    await sftpApi.writeFile(file.sessionId, file.path, encoded);
+    store.setRawContentBase64(file.id, encoded);
+    store.markSaved(file.id);
+    notify.addNotification('success', '文件已保存');
+
+    if (clearSaveStatusTimer) {
+      window.clearTimeout(clearSaveStatusTimer);
+    }
+    clearSaveStatusTimer = window.setTimeout(() => {
+      store.clearSaveStatus(file.id);
+      clearSaveStatusTimer = null;
+    }, 1400);
+  } catch (error: any) {
+    const message = error?.message ?? '未知错误';
+    store.setSaveStatus(file.id, 'error', message);
+    notify.addNotification('error', `保存失败: ${message}`);
+  }
+}
+
+watch(
+  () => activeFile.value?.id,
+  () => {
+    updateEncodingSelectWidth();
+  },
+  { immediate: true },
+);
+
+watch(
+  () => activeFile.value?.selectedEncoding,
+  () => {
+    updateEncodingSelectWidth();
+  },
+);
+
 onMounted(() => {
   unregisterFocusAction = focusSwitcherStore.registerFocusAction('fileEditorActive', focusActiveEditor);
+  window.addEventListener('keydown', handleKeyDown);
 });
 
 onUnmounted(() => {
   unregisterFocusAction?.();
   unregisterFocusAction = null;
-});
+  window.removeEventListener('keydown', handleKeyDown);
 
-function onContentChange(value: string) {
-  if (activeFile.value) store.updateContent(activeFile.value.id, value);
-}
-
-async function save() {
-  const file = activeFile.value;
-  if (!file || !file.isDirty) return;
-  try {
-    const encoded = btoa(unescape(encodeURIComponent(file.content)));
-    await sftpApi.writeFile(file.sessionId, file.path, encoded);
-    store.markSaved(file.id);
-    notify.addNotification('success', '文件已保存');
-  } catch (e: any) {
-    notify.addNotification('error', `保存失败: ${e.message}`);
+  if (clearSaveStatusTimer) {
+    window.clearTimeout(clearSaveStatusTimer);
+    clearSaveStatusTimer = null;
   }
-}
+});
 </script>
 
 <style scoped>
 .file-editor-container {
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  background-color: #2d2d2d;
+  color: #f0f0f0;
+  overflow: hidden;
 }
 
-.editor-toolbar {
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 0.5rem 1rem;
+  background-color: #333;
+  border-bottom: 1px solid #555;
+  font-size: 0.9em;
+  flex-shrink: 0;
+}
+
+.editor-header-placeholder {
+  justify-content: flex-start;
+  color: #888;
+}
+
+.editor-file-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  white-space: normal;
+  line-height: 1.35;
+  color: #f0f0f0;
+}
+
+.modified-indicator {
+  color: #ffeb3b;
+  margin-left: 4px;
+  font-weight: bold;
+}
+
+.editor-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 4px 8px;
-  background: var(--bg-surface0);
-  border-bottom: 1px solid var(--border);
+  gap: 0.8rem;
+  flex-shrink: 0;
+  align-self: flex-start;
 }
 
-.file-path {
-  font-size: 12px;
-  color: var(--text-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
+.encoding-select-wrapper {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.encoding-select {
+  background-color: #444;
+  color: #f0f0f0;
+  border: 1px solid #666;
+  padding: 0.3rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.85em;
+  cursor: pointer;
+  outline: none;
+}
+
+.encoding-select:hover {
+  background-color: #555;
+}
+
+.encoding-select:focus {
+  border-color: #888;
+}
+
+.encoding-select-placeholder {
+  font-size: 0.85em;
+  color: #888;
+  padding: 0.3rem 0.5rem;
+  display: inline-block;
+  min-width: 80px;
+  text-align: center;
+}
+
+.save-btn {
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.save-btn:disabled {
+  background-color: #aaa;
+  cursor: not-allowed;
+}
+
+.save-btn:hover:not(:disabled) {
+  background-color: #45a049;
+}
+
+.save-status {
+  font-size: 0.9em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
   white-space: nowrap;
 }
 
-.toolbar-actions {
+.save-status.saving {
+  color: #888;
+}
+
+.save-status.success {
+  color: #4caf50;
+  background-color: #e8f5e9;
+}
+
+.save-status.error {
+  color: #f44336;
+  background-color: #ffebee;
+}
+
+.editor-content-area {
+  flex-grow: 1;
+  min-height: 0;
   display: flex;
-  gap: 4px;
-}
-
-.btn {
-  padding: 3px 10px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: var(--bg-surface1);
-  color: var(--text);
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.btn:hover {
-  background: var(--blue);
-  color: var(--bg-base);
-}
-
-.btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.editor-body {
-  flex: 1;
+  flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
-.empty-state {
+.editor-instance {
+  flex-grow: 1;
+  min-height: 0;
+}
+
+.editor-loading,
+.editor-error,
+.editor-placeholder {
+  padding: 2rem;
+  text-align: center;
+  font-size: 1.1em;
+  flex-grow: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
-  color: var(--text-dim);
-  font-size: 13px;
+  color: #888;
+}
+
+.editor-error {
+  color: #ff8a8a;
+}
+
+.editor-placeholder {
+  color: #666;
+}
+
+@media (max-width: 768px) {
+  .editor-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .editor-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 </style>
