@@ -74,6 +74,7 @@ export const historyApi = {
   add: (command: string, sessionId?: string, connectionId?: number) =>
     tauriInvoke<number>('command_history_add', { req: { command, session_id: sessionId, connection_id: connectionId } }),
   clear: () => tauriInvoke<void>('command_history_clear'),
+  delete: (id: number) => tauriInvoke<boolean>('command_history_delete', { id }),
 };
 
 export const pathHistoryApi = {
@@ -96,6 +97,7 @@ export const favoritePathApi = {
       req: { id, name, path, connection_id: connectionId },
     }),
   delete: (id: number) => tauriInvoke<boolean>('favorite_path_delete', { id }),
+  markUsed: (id: number) => tauriInvoke<boolean>('favorite_path_mark_used', { id }),
 };
 
 export const quickCommandApi = {

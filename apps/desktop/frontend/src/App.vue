@@ -4,8 +4,8 @@
   <GlobalConfirmDialog />
 
   <div id="app-container">
-    <header v-if="showHeader" class="app-header">
-      <nav class="app-nav">
+    <header v-if="showHeader" class="app-header" data-tauri-drag-region>
+      <nav class="app-nav" data-tauri-drag-region>
         <div class="nav-left no-drag">
           <div class="brand-mark" title="Nexus Terminal">
             <i class="fas fa-angle-left"></i>
@@ -16,7 +16,7 @@
           <router-link to="/settings" class="nav-link" active-class="nav-link-active">设置</router-link>
         </div>
 
-        <div class="nav-drag-region" data-tauri-drag-region @mousedown.left="startDrag"></div>
+        <div class="nav-drag-region" data-tauri-drag-region></div>
 
         <div class="nav-right no-drag">
           <a
@@ -233,17 +233,13 @@ async function closeWindow() {
   await appWindow.close();
 }
 
-async function startDrag() {
-  try {
-    await appWindow.startDragging();
-  } catch {
-    // ignore
-  }
-}
-
 async function handleLogout() {
   await authStore.logout();
   router.push('/login');
+}
+
+function preventBrowserContextMenu(event: MouseEvent): void {
+  event.preventDefault();
 }
 
 onMounted(() => {
@@ -251,11 +247,13 @@ onMounted(() => {
   void focusSwitcherStore.loadConfigurationFromBackend();
   window.addEventListener('keydown', handleAltKeyDown);
   window.addEventListener('keyup', handleAltKeyUp);
+  window.addEventListener('contextmenu', preventBrowserContextMenu);
 });
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleAltKeyDown);
   window.removeEventListener('keyup', handleAltKeyUp);
+  window.removeEventListener('contextmenu', preventBrowserContextMenu);
 });
 </script>
 
@@ -269,6 +267,7 @@ onUnmounted(() => {
 }
 
 .app-header {
+  -webkit-app-region: drag;
   position: sticky;
   top: 0;
   z-index: 10;
@@ -278,6 +277,7 @@ onUnmounted(() => {
 }
 
 .app-nav {
+  -webkit-app-region: drag;
   display: flex;
   align-items: center;
   height: 100%;

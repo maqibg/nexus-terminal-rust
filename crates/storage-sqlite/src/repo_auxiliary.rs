@@ -112,6 +112,15 @@ impl HistoryRepository for SqliteHistoryRepo {
         Ok(())
     }
 
+    async fn delete_command_history_entry(&self, id: i64) -> Result<bool, String> {
+        let r = sqlx::query("DELETE FROM command_history WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(r.rows_affected() > 0)
+    }
+
     async fn list_path_history(
         &self,
         connection_id: Option<i64>,
@@ -226,6 +235,15 @@ impl HistoryRepository for SqliteHistoryRepo {
 
     async fn delete_favorite_path(&self, id: i64) -> Result<bool, String> {
         let r = sqlx::query("DELETE FROM favorite_paths WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(r.rows_affected() > 0)
+    }
+
+    async fn mark_favorite_path_used(&self, id: i64) -> Result<bool, String> {
+        let r = sqlx::query("UPDATE favorite_paths SET last_used_at = datetime('now') WHERE id = ?")
             .bind(id)
             .execute(&self.pool)
             .await

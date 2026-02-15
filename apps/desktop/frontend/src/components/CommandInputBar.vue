@@ -257,6 +257,7 @@ async function send() {
 
   try {
     await historyApi.add(cmd, sid, sessionStore.activeSession?.connectionId);
+    window.dispatchEvent(new Event('nexus:command-history-updated'));
   } catch {
     // ignore
   }

@@ -16,6 +16,7 @@ pub trait HistoryRepository: Send + Sync {
         connection_id: Option<i64>,
     ) -> Result<i64, String>;
     async fn clear_command_history(&self) -> Result<(), String>;
+    async fn delete_command_history_entry(&self, id: i64) -> Result<bool, String>;
 
     // Path history
     async fn list_path_history(
@@ -45,4 +46,5 @@ pub trait HistoryRepository: Send + Sync {
         connection_id: Option<i64>,
     ) -> Result<bool, String>;
     async fn delete_favorite_path(&self, id: i64) -> Result<bool, String>;
+    async fn mark_favorite_path_used(&self, id: i64) -> Result<bool, String>;
 }

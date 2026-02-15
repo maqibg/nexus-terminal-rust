@@ -8,12 +8,23 @@ export const useCommandHistoryStore = defineStore('commandHistory', () => {
 
   async function fetchAll(limit?: number, offset?: number) {
     loading.value = true;
-    try { items.value = await historyApi.list(limit, offset); }
-    finally { loading.value = false; }
+    try {
+      items.value = await historyApi.list(limit, offset);
+    } finally {
+      loading.value = false;
+    }
   }
 
   async function add(command: string, sessionId?: string, connectionId?: number) {
     await historyApi.add(command, sessionId, connectionId);
+  }
+
+  async function remove(id: number) {
+    const deleted = await historyApi.delete(id);
+    if (deleted) {
+      items.value = items.value.filter((item) => item.id !== id);
+    }
+    return deleted;
   }
 
   async function clear() {
@@ -21,5 +32,5 @@ export const useCommandHistoryStore = defineStore('commandHistory', () => {
     items.value = [];
   }
 
-  return { items, loading, fetchAll, add, clear };
+  return { items, loading, fetchAll, add, remove, clear };
 });

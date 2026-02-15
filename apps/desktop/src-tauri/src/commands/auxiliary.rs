@@ -80,6 +80,16 @@ pub async fn command_history_clear(state: State<'_, AppState>) -> CmdResult<()> 
         .map_err(AppError::Database)
 }
 
+#[tauri::command]
+pub async fn command_history_delete(state: State<'_, AppState>, id: i64) -> CmdResult<bool> {
+    state.auth.require_auth().await?;
+    state
+        .history_repo
+        .delete_command_history_entry(id)
+        .await
+        .map_err(AppError::Database)
+}
+
 // ── Command History Add ──
 
 #[derive(Deserialize)]
@@ -193,6 +203,16 @@ pub async fn favorite_path_delete(state: State<'_, AppState>, id: i64) -> CmdRes
     state
         .history_repo
         .delete_favorite_path(id)
+        .await
+        .map_err(AppError::Database)
+}
+
+#[tauri::command]
+pub async fn favorite_path_mark_used(state: State<'_, AppState>, id: i64) -> CmdResult<bool> {
+    state.auth.require_auth().await?;
+    state
+        .history_repo
+        .mark_favorite_path_used(id)
         .await
         .map_err(AppError::Database)
 }

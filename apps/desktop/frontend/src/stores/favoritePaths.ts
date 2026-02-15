@@ -8,8 +8,11 @@ export const useFavoritePathsStore = defineStore('favoritePaths', () => {
 
   async function fetchAll(connectionId?: number) {
     loading.value = true;
-    try { items.value = await favoritePathApi.list(connectionId); }
-    finally { loading.value = false; }
+    try {
+      items.value = await favoritePathApi.list(connectionId);
+    } finally {
+      loading.value = false;
+    }
   }
 
   async function create(name: string, path: string, connectionId?: number) {
@@ -24,8 +27,17 @@ export const useFavoritePathsStore = defineStore('favoritePaths', () => {
 
   async function remove(id: number) {
     await favoritePathApi.delete(id);
-    items.value = items.value.filter(f => f.id !== id);
+    items.value = items.value.filter((f) => f.id !== id);
   }
 
-  return { items, loading, fetchAll, create, update, remove };
+  async function markUsed(id: number) {
+    const ok = await favoritePathApi.markUsed(id);
+    if (ok) {
+      const now = new Date().toISOString();
+      items.value = items.value.map((f) => (f.id === id ? { ...f, last_used_at: now } : f));
+    }
+    return ok;
+  }
+
+  return { items, loading, fetchAll, create, update, remove, markUsed };
 });
