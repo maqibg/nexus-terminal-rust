@@ -156,7 +156,12 @@
           class="favorite-popover"
           :style="favoritePopoverStyle"
         >
-          <FavoritePaths :connection-id="connectionId" @navigate="navigateFromFavorite" />
+          <FavoritePaths
+            :connection-id="connectionId"
+            @navigate="navigateFromFavorite"
+            @close="showFavoritePathsPopover = false"
+            @modal-visibility-change="handleFavoriteDialogVisibility"
+          />
         </div>
       </Teleport>
 
@@ -383,6 +388,7 @@ const filteredPathHistory = computed(() => {
 const favoriteButtonRef = ref<HTMLButtonElement>();
 const favoritePopoverRef = ref<HTMLDivElement>();
 const showFavoritePathsPopover = ref(false);
+const isFavoriteDialogOpen = ref(false);
 const favoritePopoverStyle = ref<Record<string, string>>({ left: '0px', top: '0px' });
 
 const VIEWPORT_PADDING = 8;
@@ -598,8 +604,8 @@ function updateFavoritePopoverPosition(): void {
   const triggerRect = favoriteButtonRef.value.getBoundingClientRect();
   const popoverRect = favoritePopoverRef.value.getBoundingClientRect();
 
-  let left = triggerRect.right - popoverRect.width;
-  let top = triggerRect.bottom + 6;
+  let left = triggerRect.left;
+  let top = triggerRect.bottom + 2;
 
   const maxLeft = window.innerWidth - popoverRect.width - VIEWPORT_PADDING;
   if (left > maxLeft) {
@@ -608,7 +614,7 @@ function updateFavoritePopoverPosition(): void {
   left = Math.max(VIEWPORT_PADDING, left);
 
   if (top + popoverRect.height + VIEWPORT_PADDING > window.innerHeight) {
-    const topAbove = triggerRect.top - popoverRect.height - 6;
+    const topAbove = triggerRect.top - popoverRect.height - 2;
     top = topAbove >= VIEWPORT_PADDING
       ? topAbove
       : Math.max(VIEWPORT_PADDING, window.innerHeight - popoverRect.height - VIEWPORT_PADDING);
@@ -623,6 +629,7 @@ function updateFavoritePopoverPosition(): void {
 function toggleFavoritePopover(): void {
   if (showFavoritePathsPopover.value) {
     showFavoritePathsPopover.value = false;
+    isFavoriteDialogOpen.value = false;
     return;
   }
 
@@ -632,7 +639,12 @@ function toggleFavoritePopover(): void {
 
 function navigateFromFavorite(path: string): void {
   showFavoritePathsPopover.value = false;
+  isFavoriteDialogOpen.value = false;
   void navigateTo(path);
+}
+
+function handleFavoriteDialogVisibility(visible: boolean): void {
+  isFavoriteDialogOpen.value = visible;
 }
 
 function startPathEdit(): void {
@@ -1643,8 +1655,9 @@ function handleDocumentMouseDown(event: MouseEvent): void {
   if (showFavoritePathsPopover.value) {
     const clickInFavoriteButton = favoriteButtonRef.value?.contains(target);
     const clickInFavoritePopover = favoritePopoverRef.value?.contains(target);
-    if (!clickInFavoriteButton && !clickInFavoritePopover) {
+    if (!clickInFavoriteButton && !clickInFavoritePopover && !isFavoriteDialogOpen.value) {
       showFavoritePathsPopover.value = false;
+      isFavoriteDialogOpen.value = false;
     }
   }
 
@@ -1676,7 +1689,10 @@ function handleWindowResize(): void {
 watch(showFavoritePathsPopover, (visible) => {
   if (visible) {
     void nextTick(updateFavoritePopoverPosition);
+    return;
   }
+
+  isFavoriteDialogOpen.value = false;
 });
 
 watch(ctxVisible, (visible) => {
@@ -1890,8 +1906,8 @@ watch(
 
 .favorite-popover {
   position: fixed;
-  width: min(340px, 70vw);
-  max-height: 360px;
+  width: min(320px, 72vw);
+  max-height: 320px;
   overflow: hidden;
   background: var(--bg-surface0, #313244);
   border: 1px solid var(--border, #45475a);
@@ -1901,7 +1917,7 @@ watch(
 }
 
 .favorite-popover :deep(.favorite-paths-dropdown) {
-  max-height: 360px;
+  max-height: 320px;
 }
 
 .path-wrapper {

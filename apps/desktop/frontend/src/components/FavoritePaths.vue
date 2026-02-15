@@ -68,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import AddEditFavoritePathForm from '@/components/AddEditFavoritePathForm.vue';
 import { sshApi, type FavoritePath } from '@/lib/api';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
@@ -77,7 +77,7 @@ import { useSessionStore } from '@/stores/session';
 import { useUINotificationStore } from '@/stores/uiNotifications';
 
 const props = defineProps<{ connectionId?: number }>();
-const emit = defineEmits<{ navigate: [path: string] }>();
+const emit = defineEmits<{ navigate: [path: string]; close: []; modalVisibilityChange: [visible: boolean] }>();
 
 const favoritePathsStore = useFavoritePathsStore();
 const sessionStore = useSessionStore();
@@ -113,7 +113,6 @@ const filteredPaths = computed(() => {
 
     const timeA = a.last_used_at ? new Date(a.last_used_at).getTime() : 0;
     const timeB = b.last_used_at ? new Date(b.last_used_at).getTime() : 0;
-
     if (timeA !== timeB) {
       return timeB - timeA;
     }
@@ -150,16 +149,17 @@ async function handleDelete(item: FavoritePath) {
 }
 
 async function handleFormSave(payload: { name: string; path: string }) {
-  const name = payload.name.trim();
   const path = payload.path.trim();
-  if (!name || !path) {
+  if (!path) {
     return;
   }
 
+  const normalizedName = payload.name.trim() || path;
+
   if (editingPathItem.value) {
-    await favoritePathsStore.update(editingPathItem.value.id, name, path, props.connectionId);
+    await favoritePathsStore.update(editingPathItem.value.id, normalizedName, path, props.connectionId);
   } else {
-    await favoritePathsStore.create(name, path, props.connectionId);
+    await favoritePathsStore.create(normalizedName, path, props.connectionId);
   }
 
   showAddEditModal.value = false;
@@ -194,20 +194,37 @@ async function handleSendToTerminal(item: FavoritePath) {
     await sshApi.write(sessionId, data);
     await markUsed(item.id);
     notificationsStore.addNotification('success', '已发送到终端');
+    emit('close');
   } catch {
     notificationsStore.addNotification('error', '发送失败，请稍后重试');
   }
 }
 
-watch(() => props.connectionId, load);
+watch(
+  () => props.connectionId,
+  () => {
+    void load();
+  },
+  { immediate: true },
+);
 
-onMounted(load);
+watch(
+  () => showAddEditModal.value,
+  (visible) => {
+    emit('modalVisibilityChange', visible);
+  },
+  { immediate: true },
+);
+
+onBeforeUnmount(() => {
+  emit('modalVisibilityChange', false);
+});
 </script>
 
 <style scoped>
 .favorite-paths-dropdown {
   width: 100%;
-  max-height: 360px;
+  max-height: 320px;
   display: flex;
   flex-direction: column;
   background: var(--bg-surface0, #313244);
@@ -216,28 +233,29 @@ onMounted(load);
 .favorite-toolbar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 8px;
-  border-bottom: 1px solid var(--border, #45475a);
+  border-bottom: 1px solid rgba(69, 71, 90, 0.7);
 }
 
 .favorite-search {
   flex: 1;
   min-width: 0;
-  height: 30px;
+  height: 32px;
   border: 1px solid var(--border, #45475a);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--bg-base, #1e1e2e);
   color: var(--text, #cdd6f4);
-  font-size: 12px;
+  font-size: 13px;
   padding: 0 10px;
   outline: none;
   box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .favorite-search:focus {
   border-color: var(--blue, #89b4fa);
-  box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.2);
+  box-shadow: 0 0 0 1px rgba(137, 180, 250, 0.28);
 }
 
 .favorite-search::placeholder {
@@ -245,8 +263,8 @@ onMounted(load);
 }
 
 .toolbar-btn {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -271,7 +289,7 @@ onMounted(load);
 }
 
 .toolbar-btn.add-btn:hover {
-  opacity: 0.9;
+  opacity: 0.88;
 }
 
 .favorite-list {
@@ -281,19 +299,19 @@ onMounted(load);
 }
 
 .favorite-state {
-  min-height: 120px;
+  min-height: 112px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
   color: var(--text-dim, #6c7086);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .favorite-state i {
-  font-size: 18px;
-  opacity: 0.7;
+  font-size: 15px;
+  opacity: 0.8;
 }
 
 .favorite-items {
@@ -306,8 +324,8 @@ onMounted(load);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  padding: 6px 8px;
+  gap: 8px;
+  padding: 8px;
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s;
@@ -332,14 +350,14 @@ onMounted(load);
 
 .favorite-name {
   color: var(--text, #cdd6f4);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .favorite-path {
-  margin-top: 1px;
+  margin-top: 2px;
   color: var(--text-dim, #6c7086);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .favorite-actions {
@@ -356,8 +374,8 @@ onMounted(load);
 }
 
 .item-btn {
-  width: 24px;
-  height: 24px;
+  width: 25px;
+  height: 25px;
   border: none;
   border-radius: 6px;
   background: transparent;
