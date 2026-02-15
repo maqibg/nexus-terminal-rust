@@ -28,7 +28,6 @@
         <i class="fas fa-th-large"></i>
       </button>
 
-      <button class="tab-add" title="新建连接" @click="emit('add')">+</button>
     </div>
 
     <TabBarContextMenu
@@ -95,7 +94,7 @@ function handleContextAction(type: string) {
 .tab-bar {
   display: flex;
   align-items: center;
-  background: var(--bg-mantle, #181825);
+  background: var(--bg-mantle);
   border-bottom: 1px solid var(--border);
   height: 36px;
   padding: 0 4px;
@@ -120,7 +119,7 @@ function handleContextAction(type: string) {
   gap: 6px;
   padding: 4px 12px;
   font-size: 12px;
-  color: var(--text-sub, #a6adc8);
+  color: var(--text-sub);
   cursor: pointer;
   border-radius: 4px 4px 0 0;
   white-space: nowrap;
@@ -128,12 +127,12 @@ function handleContextAction(type: string) {
 }
 
 .tab:hover {
-  background: var(--bg-surface0, #313244);
+  background: var(--bg-surface1);
 }
 
 .tab.active {
-  background: var(--bg-surface0, #313244);
-  color: var(--text, #cdd6f4);
+  background: var(--bg-surface0);
+  color: var(--text);
 }
 
 .tab-status {
@@ -144,21 +143,21 @@ function handleContextAction(type: string) {
 }
 
 .tab-status.connected {
-  background: #a6e3a1;
+  background: var(--color-success);
 }
 
 .tab-status.connecting {
-  background: #f9e2af;
+  background: var(--color-warning);
 }
 
 .tab-status.disconnected {
-  background: #f38ba8;
+  background: var(--color-error);
 }
 
 .tab-close {
   background: none;
   border: none;
-  color: var(--text-dim, #6c7086);
+  color: var(--text-sub);
   cursor: pointer;
   font-size: 14px;
   padding: 0 2px;
@@ -166,7 +165,7 @@ function handleContextAction(type: string) {
 }
 
 .tab-close:hover {
-  color: var(--red, #f38ba8);
+  color: var(--text);
 }
 
 .tab-actions {
@@ -175,12 +174,11 @@ function handleContextAction(type: string) {
   flex-shrink: 0;
 }
 
-.tab-action,
-.tab-add {
+.tab-action {
   background: none;
   border: none;
-  border-left: 1px solid var(--border, #313244);
-  color: var(--text-dim, #6c7086);
+  border-left: 1px solid var(--border);
+  color: var(--text-sub);
   cursor: pointer;
   font-size: 14px;
   padding: 4px 10px;
@@ -191,18 +189,12 @@ function handleContextAction(type: string) {
   justify-content: center;
 }
 
-.tab-action:hover,
-.tab-add:hover {
-  color: var(--blue, #89b4fa);
-  background: rgba(137, 180, 250, 0.08);
+.tab-action:hover {
+  color: var(--text);
+  background: var(--link-active-bg-color);
 }
 
 .tab-action i {
   font-size: 13px;
-}
-
-.tab-add {
-  font-size: 18px;
-  line-height: 1;
 }
 </style>

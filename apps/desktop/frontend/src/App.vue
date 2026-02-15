@@ -286,7 +286,7 @@ onUnmounted(() => {
   top: 0;
   z-index: 10;
   height: 52px;
-  background: var(--bg-surface0);
+  background: var(--header-bg-color);
   border-bottom: 1px solid var(--border);
 }
 
@@ -310,11 +310,12 @@ onUnmounted(() => {
   height: 26px;
   margin-right: 4px;
   border-radius: 6px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(137, 180, 250, 0.18));
+  background: var(--link-active-bg-color);
+  border: 1px solid var(--border);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #d9e2ff;
+  color: var(--link-hover-color);
   font-size: 15px;
 }
 
@@ -347,7 +348,7 @@ onUnmounted(() => {
 
 .nav-link-active {
   color: var(--blue);
-  background: rgba(137, 180, 250, 0.12);
+  background: var(--link-active-bg-color);
 }
 
 .nav-link-ghost {
@@ -375,7 +376,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   margin-left: 4px;
-  border-left: 1px solid rgba(205, 214, 244, 0.14);
+  border-left: 1px solid var(--border);
   padding-left: 6px;
   gap: 2px;
 }
@@ -400,8 +401,8 @@ onUnmounted(() => {
 }
 
 .window-btn.close:hover {
-  color: #fff;
-  background: #dc2626;
+  color: var(--button-text-color);
+  background: var(--color-error);
 }
 
 .window-btn svg {
@@ -415,7 +416,7 @@ onUnmounted(() => {
 }
 
 .window-btn:focus-visible {
-  outline: 1px solid rgba(137, 180, 250, 0.8);
+  outline: 1px solid var(--link-active-color);
   outline-offset: 1px;
 }
 
@@ -430,13 +431,13 @@ onUnmounted(() => {
 }
 
 .startup-banner.starting {
-  background: rgba(59, 130, 246, 0.12);
-  color: #60a5fa;
+  background: var(--link-active-bg-color);
+  color: var(--link-hover-color);
 }
 
 .startup-banner.error {
-  background: rgba(220, 38, 38, 0.14);
-  color: #f87171;
+  background: var(--ui-danger-hover);
+  color: var(--color-error);
 }
 
 .app-main {

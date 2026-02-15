@@ -36,6 +36,7 @@ const isModified = computed(() => {
 });
 
 const paneLabels = computed<Record<PaneName, string>>(() => ({
+  connections: '连接列表',
   terminal: '终端',
   commandBar: '命令栏',
   fileManager: '文件管理器',
@@ -43,6 +44,7 @@ const paneLabels = computed<Record<PaneName, string>>(() => ({
   statusMonitor: '状态监视器',
   commandHistory: '命令历史',
   quickCommands: '快捷指令',
+  dockerManager: 'Docker 管理器',
 }));
 
 watch(
@@ -187,6 +189,15 @@ function buildSidebarNode(panes: PaneName[]): StoreLayoutNode | undefined {
   };
 }
 
+function normalizeSidebarPanes(sidebars: { left: PaneName[]; right: PaneName[] }): { left: PaneName[]; right: PaneName[] } {
+  const normalize = (list: PaneName[]) =>
+    [...new Set(list)].filter((pane) => layoutStore.allPossiblePanes.includes(pane));
+  return {
+    left: normalize(sidebars.left),
+    right: normalize(sidebars.right),
+  };
+}
+
 function addPaneToAvailableList(paneName: PaneName) {
   if (paneName !== 'terminal') {
     return;
@@ -217,7 +228,7 @@ function removePaneFromAvailableList(paneName: PaneName) {
   }
 
   const index = localAvailablePanes.value.indexOf('terminal');
-  if (index >= 0) {
+  if (index > -1) {
     localAvailablePanes.value.splice(index, 1);
   }
 }
@@ -234,10 +245,10 @@ function initializeAvailablePanes() {
 
 function openWithSnapshot() {
   const nextTree = toEditorNode(layoutStore.layoutConfig.root);
-  const nextSidebars = {
+  const nextSidebars = normalizeSidebarPanes({
     left: extractSidebarPanes(layoutStore.layoutConfig.leftSidebar),
     right: extractSidebarPanes(layoutStore.layoutConfig.rightSidebar),
-  };
+  });
 
   localLayoutTree.value = nextTree;
   originalLayoutTree.value = deepClone(nextTree);
@@ -283,8 +294,8 @@ async function saveLayout() {
   };
 
   layoutStore.layoutConfig = nextConfig;
-  layoutStore.leftSidebarVisible = !!nextConfig.leftSidebar;
-  layoutStore.rightSidebarVisible = !!nextConfig.rightSidebar;
+  layoutStore.leftSidebarVisible = false;
+  layoutStore.rightSidebarVisible = false;
   await layoutStore.saveLayout();
   emit('close');
 }
@@ -297,10 +308,10 @@ async function resetToDefault() {
 
   const defaults = layoutStore.getSystemDefaultLayoutConfig();
   localLayoutTree.value = toEditorNode(defaults.root);
-  localSidebarPanes.value = {
+  localSidebarPanes.value = normalizeSidebarPanes({
     left: extractSidebarPanes(defaults.leftSidebar),
     right: extractSidebarPanes(defaults.rightSidebar),
-  };
+  });
   initializeAvailablePanes();
 }
 
@@ -357,7 +368,7 @@ async function handleNodeRemove(payload: { parentNodeId: string | undefined; nod
     const confirmed = await confirm('确认清空', '确定要清空整个布局吗？所有面板将返回可用列表。');
     if (confirmed) {
       localLayoutTree.value = null;
-      addPaneToAvailableList('terminal');
+      initializeAvailablePanes();
     }
     return;
   }
@@ -569,45 +580,48 @@ function handleAvailablePaneDragEnd(event: any) {
   position: fixed;
   inset: 0;
   z-index: 9500;
-  background: rgba(8, 10, 17, 0.55);
+  background: var(--ui-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 18px;
+  padding: 16px;
 }
 
 .layout-configurator-dialog {
-  width: min(980px, 95vw);
-  max-height: 90vh;
+  width: clamp(980px, 92vw, 1280px);
+  height: 850px;
+  max-width: calc(100vw - 36px);
+  max-height: calc(100vh - 36px);
   border-radius: 10px;
-  border: 1px solid rgba(126, 131, 168, 0.45);
-  background: #2c2f43;
-  color: #d7dcf5;
+  border: 1px solid var(--ui-dialog-border);
+  background: var(--ui-dialog-bg);
+  color: var(--ui-text-primary);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
+  font-size: 14px;
+  box-shadow: 0 12px 48px var(--ui-dialog-shadow);
 }
 
 .dialog-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid rgba(126, 131, 168, 0.35);
+  padding: 16px;
+  border-bottom: 1px solid var(--ui-divider);
 }
 
 .dialog-header h2 {
   margin: 0;
-  font-size: 34px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 600;
   letter-spacing: 0.2px;
 }
 
 .dialog-close {
   border: none;
   background: transparent;
-  color: #aeb6da;
+  color: var(--ui-text-muted);
   cursor: pointer;
   font-size: 24px;
   line-height: 1;
@@ -617,40 +631,45 @@ function handleAvailablePaneDragEnd(event: any) {
 }
 
 .dialog-close:hover {
-  color: #eff2ff;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--ui-text-strong);
+  background: var(--ui-hover-mask);
 }
 
 .dialog-main-grid {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: 14px 16px;
+  min-width: 0;
+  min-height: 450px;
+  overflow-y: auto;
+  padding: 24px;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 24px;
 }
 
 .available-pane-section,
 .layout-preview-section,
 .sidebar-panel-section {
-  border: 1px solid rgba(126, 131, 168, 0.35);
-  border-radius: 8px;
-  background: rgba(32, 36, 55, 0.78);
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .available-pane-section {
-  padding: 12px;
+  min-width: 200px;
+  padding-right: 24px;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  border-right: 1px solid var(--ui-divider);
 }
 
 .available-pane-section h3,
 .layout-preview-section h3,
 .sidebar-panel-section h3 {
-  margin: 0 0 10px;
+  margin: 0 0 16px;
   font-size: 16px;
-  color: #e6ebff;
+  color: var(--ui-text-strong);
   font-weight: 600;
 }
 
@@ -672,13 +691,12 @@ function handleAvailablePaneDragEnd(event: any) {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 34px;
-  border: 1px solid rgba(132, 139, 179, 0.45);
+  border: 1px solid var(--ui-item-border);
   border-radius: 6px;
-  background: rgba(66, 72, 101, 0.62);
-  color: #d8ddf5;
-  font-size: 13px;
-  padding: 0 10px;
+  background: var(--ui-item-bg);
+  color: var(--ui-text-chip);
+  font-size: 14px;
+  padding: 8px;
   margin-bottom: 8px;
 }
 
@@ -689,20 +707,23 @@ function handleAvailablePaneDragEnd(event: any) {
 
 .available-pane-item i,
 .sidebar-pane-label-wrap i {
-  color: #9aa3c8;
+  color: var(--ui-item-icon);
   margin-right: 8px;
 }
 
 .layout-preview-and-sidebars {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   gap: 12px;
+  padding-left: 0;
 }
 
 .layout-preview-section {
   flex: 1;
+  min-width: 350px;
   min-height: 0;
-  padding: 12px;
+  padding: 0;
   display: flex;
   flex-direction: column;
 }
@@ -712,7 +733,7 @@ function handleAvailablePaneDragEnd(event: any) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
 }
 
 .layout-preview-title-row h3 {
@@ -726,8 +747,8 @@ function handleAvailablePaneDragEnd(event: any) {
 }
 
 .layout-lock-label {
-  font-size: 13px;
-  color: #c0c8ea;
+  font-size: 14px;
+  color: var(--ui-text-soft);
   cursor: pointer;
   user-select: none;
 }
@@ -737,7 +758,7 @@ function handleAvailablePaneDragEnd(event: any) {
   width: 44px;
   height: 24px;
   border-radius: 999px;
-  background: rgba(133, 139, 171, 0.6);
+  background: var(--ui-switch-off);
   cursor: pointer;
   padding: 0 2px;
   display: inline-flex;
@@ -746,14 +767,14 @@ function handleAvailablePaneDragEnd(event: any) {
 }
 
 .layout-lock-switch.active {
-  background: #b489ff;
+  background: var(--ui-switch-on);
 }
 
 .layout-lock-switch-knob {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--ui-switch-knob);
   transform: translateX(0);
   transition: transform 0.2s ease;
 }
@@ -764,20 +785,25 @@ function handleAvailablePaneDragEnd(event: any) {
 
 .layout-preview-body {
   flex: 1;
-  min-height: 240px;
-  border: 2px dashed rgba(132, 139, 179, 0.52);
+  min-height: 250px;
+  min-width: 0;
+  border: 2px dashed var(--ui-preview-border);
   border-radius: 8px;
-  background: rgba(50, 55, 80, 0.86);
-  padding: 10px;
+  background: var(--ui-preview-bg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
   overflow: auto;
 }
 
 .layout-editor-root {
-  min-height: 210px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
 }
 
 .layout-preview-actions {
-  margin-top: 10px;
+  margin-top: 16px;
   display: flex;
   justify-content: flex-start;
 }
@@ -785,12 +811,15 @@ function handleAvailablePaneDragEnd(event: any) {
 .sidebar-sections-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 24px;
+  margin-top: 16px;
+  border-top: 1px solid var(--ui-divider);
+  padding-top: 16px;
 }
 
 .sidebar-panel-section {
-  padding: 10px;
-  min-height: 190px;
+  padding: 0;
+  min-height: 210px;
   display: flex;
   flex-direction: column;
 }
@@ -798,10 +827,11 @@ function handleAvailablePaneDragEnd(event: any) {
 .sidebar-pane-list {
   flex: 1;
   min-height: 120px;
-  border: 1px dashed rgba(132, 139, 179, 0.45);
+  border: 1px dashed var(--ui-item-border);
   border-radius: 8px;
-  background: rgba(27, 30, 47, 0.6);
+  background: var(--ui-sidebar-bg);
   padding: 8px;
+  overflow-y: auto;
 }
 
 .sidebar-pane-item {
@@ -823,8 +853,8 @@ function handleAvailablePaneDragEnd(event: any) {
 
 .sidebar-item-remove {
   border: none;
-  background: rgba(132, 139, 179, 0.28);
-  color: #bfc7ea;
+  background: var(--ui-chip-action-bg);
+  color: var(--ui-text-soft);
   width: 20px;
   height: 20px;
   border-radius: 4px;
@@ -833,16 +863,17 @@ function handleAvailablePaneDragEnd(event: any) {
 }
 
 .sidebar-item-remove:hover {
-  color: #ffffff;
-  background: rgba(243, 139, 168, 0.55);
+  color: var(--ui-switch-knob);
+  background: var(--ui-danger-strong-hover);
 }
 
 .dialog-footer {
-  border-top: 1px solid rgba(126, 131, 168, 0.35);
-  padding: 12px 16px;
+  border-top: 1px solid var(--ui-divider);
+  padding: 16px;
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
+  background: var(--ui-footer-bg);
 }
 
 .secondary-btn,
@@ -850,29 +881,30 @@ function handleAvailablePaneDragEnd(event: any) {
   min-width: 84px;
   height: 32px;
   border-radius: 6px;
-  border: 1px solid rgba(132, 139, 179, 0.48);
+  border: 1px solid var(--ui-item-border-strong);
   font-size: 13px;
   cursor: pointer;
   padding: 0 14px;
 }
 
 .secondary-btn {
-  background: rgba(86, 92, 124, 0.7);
-  color: #e3e8ff;
+  background: var(--ui-btn-secondary-bg);
+  border-color: var(--ui-btn-secondary-border);
+  color: var(--ui-btn-secondary-text);
 }
 
 .secondary-btn:hover {
-  background: rgba(98, 104, 140, 0.85);
+  background: var(--ui-btn-secondary-hover);
 }
 
 .primary-btn {
-  background: rgba(180, 137, 255, 0.9);
-  border-color: rgba(180, 137, 255, 0.95);
-  color: #f7f2ff;
+  background: var(--ui-btn-primary-bg);
+  border-color: var(--ui-item-border-strong);
+  color: var(--ui-btn-primary-text);
 }
 
 .primary-btn:hover:not(:disabled) {
-  background: rgba(190, 149, 255, 0.98);
+  background: var(--ui-btn-primary-hover);
 }
 
 .primary-btn:disabled {
@@ -887,8 +919,8 @@ function handleAvailablePaneDragEnd(event: any) {
   justify-content: center;
   text-align: center;
   font-size: 12px;
-  color: #8f98bf;
-  border: 1px dashed rgba(132, 139, 179, 0.45);
+  color: var(--ui-text-dim);
+  border: 1px dashed var(--ui-item-border);
   border-radius: 8px;
   padding: 10px;
 }

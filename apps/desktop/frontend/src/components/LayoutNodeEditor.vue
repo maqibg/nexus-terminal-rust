@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, type PropType } from 'vue';
+import { computed, ref, type PropType } from 'vue';
 import draggable from 'vuedraggable';
 import { useLayoutStore, type PaneName } from '@/stores/layout';
 
@@ -61,6 +61,15 @@ const nodeTitle = computed(() => {
   return props.node.direction === 'horizontal' ? '容器(水平)' : '容器(垂直)';
 });
 
+const contextMenuVisible = ref(false);
+const contextMenuX = ref(0);
+const contextMenuY = ref(0);
+
+const contextMenuStyle = computed(() => ({
+  left: `${contextMenuX.value}px`,
+  top: `${contextMenuY.value}px`,
+}));
+
 function addHorizontalContainer() {
   const nextChild: LayoutEditorNode = {
     id: layoutStore.generateId(),
@@ -102,6 +111,28 @@ function removeSelf() {
   emit('removeNode', { parentNodeId: props.parentNode?.id, nodeIndex: props.nodeIndex });
 }
 
+function openContextMenu(event: MouseEvent) {
+  const menuWidth = props.node.type === 'container' ? 196 : 168;
+  const menuHeight = props.node.type === 'container' ? 154 : 50;
+  const viewportPadding = 8;
+
+  const x = Math.min(event.clientX, window.innerWidth - menuWidth - viewportPadding);
+  const y = Math.min(event.clientY, window.innerHeight - menuHeight - viewportPadding);
+
+  contextMenuX.value = Math.max(viewportPadding, x);
+  contextMenuY.value = Math.max(viewportPadding, y);
+  contextMenuVisible.value = true;
+}
+
+function closeContextMenu() {
+  contextMenuVisible.value = false;
+}
+
+function runContextAction(action: () => void) {
+  action();
+  closeContextMenu();
+}
+
 function handleChildUpdate(updatedChildNode: LayoutEditorNode, index: number) {
   if (!props.node.children) {
     return;
@@ -125,6 +156,7 @@ function handleChildRemove(payload: { parentNodeId: string | undefined; nodeInde
       node.direction ? `direction-${node.direction}` : '',
     ]"
     :data-node-id="node.id"
+    @contextmenu.stop.prevent="openContextMenu"
   >
     <div class="node-controls">
       <span class="node-info">{{ nodeTitle }}</span>
@@ -202,12 +234,61 @@ function handleChildRemove(payload: { parentNodeId: string | undefined; nodeInde
 
       <template #footer>
         <div v-if="childrenList.length === 0" class="empty-container-placeholder">
-          从可用面板拖拽到此处
+          将面板或者容器拖拽到此处
         </div>
       </template>
     </draggable>
 
     <div v-else class="pane-node-content"></div>
+
+    <teleport to="body">
+      <div
+        v-if="contextMenuVisible"
+        class="node-context-menu-mask"
+        @click="closeContextMenu"
+        @contextmenu.prevent="closeContextMenu"
+      >
+        <div class="node-context-menu" :style="contextMenuStyle" @click.stop @contextmenu.prevent>
+          <button
+            v-if="node.type === 'container'"
+            class="node-context-menu-item"
+            @click="runContextAction(toggleDirection)"
+          >
+            <i class="fas fa-sync-alt"></i>
+            <span>切换方向</span>
+          </button>
+
+          <button
+            v-if="node.type === 'container'"
+            class="node-context-menu-item"
+            @click="runContextAction(addHorizontalContainer)"
+          >
+            <i class="fas fa-columns"></i>
+            <span>添加水平容器</span>
+          </button>
+
+          <button
+            v-if="node.type === 'container'"
+            class="node-context-menu-item"
+            @click="runContextAction(addVerticalContainer)"
+          >
+            <i class="fas fa-bars"></i>
+            <span>添加垂直容器</span>
+          </button>
+
+          <div v-if="node.type === 'container'" class="node-context-menu-separator"></div>
+
+          <button
+            class="node-context-menu-item danger"
+            :disabled="!parentNode"
+            @click="runContextAction(removeSelf)"
+          >
+            <i class="fas fa-trash-alt"></i>
+            <span>移除当前节点</span>
+          </button>
+        </div>
+      </div>
+    </teleport>
   </div>
 </template>
 
@@ -215,58 +296,57 @@ function handleChildRemove(payload: { parentNodeId: string | undefined; nodeInde
 .layout-node-editor {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: rgba(22, 25, 39, 0.55);
-  min-height: 44px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .node-controls {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  background: rgba(45, 50, 73, 0.9);
-  border-bottom: 1px solid var(--border);
-  padding: 4px 8px;
-  min-height: 28px;
+  align-items: center;
+  background: var(--ui-control-bg);
+  padding: 3px 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  min-height: 24px;
+  border-radius: 4px;
+  min-width: 0;
 }
 
 .node-info {
+  flex: 1 1 auto;
+  min-width: 0;
   color: var(--text);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  margin-right: 10px;
 }
 
 .node-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  flex-shrink: 0;
+  gap: 3px;
 }
 
 .action-button {
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-sub);
-  border-radius: 4px;
-  padding: 2px 5px;
-  min-width: 22px;
-  height: 22px;
+  border-radius: 3px;
+  padding: 1px 4px;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
   font-size: 11px;
+  line-height: 1;
 }
 
 .action-button:hover:not(:disabled) {
   color: var(--text);
   border-color: var(--blue);
-  background: rgba(137, 180, 250, 0.12);
+  background: var(--ui-action-hover);
 }
 
 .action-button:disabled {
@@ -275,23 +355,24 @@ function handleChildRemove(payload: { parentNodeId: string | undefined; nodeInde
 }
 
 .remove-button {
-  border-color: rgba(243, 139, 168, 0.7);
-  color: #f38ba8;
+  border-color: var(--ui-danger-border);
+  color: var(--ui-danger);
 }
 
 .remove-button:hover:not(:disabled) {
-  background: rgba(243, 139, 168, 0.18);
+  background: var(--ui-danger-hover);
 }
 
 .node-children-container {
-  flex: 1;
+  flex-grow: 1;
+  padding: 8px;
+  border: 1px dashed var(--ui-item-border);
+  min-height: 40px;
+  min-width: 0;
   display: flex;
+  align-items: stretch;
   gap: 6px;
-  border: 1px dashed rgba(132, 139, 179, 0.45);
   border-radius: 6px;
-  margin: 6px;
-  padding: 6px;
-  min-height: 44px;
 }
 
 .children-direction-horizontal {
@@ -303,67 +384,152 @@ function handleChildRemove(payload: { parentNodeId: string | undefined; nodeInde
 }
 
 .child-node-wrapper {
+  border: 1px solid transparent;
+  position: relative;
   display: flex;
   align-items: stretch;
-  gap: 0;
   min-width: 0;
-  flex: 1 1 auto;
+}
+
+.children-direction-horizontal > .child-node-wrapper {
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .children-direction-vertical > .child-node-wrapper {
   width: 100%;
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.children-direction-horizontal > .child-node-wrapper > .drag-handle-node {
+  width: 100%;
+  height: 14px;
+  border-right: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 4px 4px 0 0;
 }
 
 .drag-handle-node {
-  width: 16px;
+  width: 14px;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  padding-left: 3px;
   color: var(--text-dim);
-  background: rgba(45, 50, 73, 0.85);
+  background: var(--ui-handle-bg);
   border: 1px solid var(--border);
   border-right: none;
-  border-radius: 6px 0 0 6px;
+  border-radius: 4px 0 0 4px;
   cursor: grab;
 }
 
-.children-direction-vertical > .child-node-wrapper > .drag-handle-node {
-  width: 100%;
-  height: 16px;
-  border-right: 1px solid var(--border);
-  border-bottom: none;
-  border-radius: 6px 6px 0 0;
-}
-
 .child-node-wrapper > .layout-node-editor {
-  flex: 1;
+  flex-grow: 1;
   min-width: 0;
+  margin: 0;
+  border: none;
+  padding: 0;
+  overflow: hidden;
 }
 
 .pane-node-content {
-  min-height: 4px;
+  min-height: 30px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 12px;
+  padding-top: 8px;
 }
 
 .empty-container-placeholder {
-  flex: 1;
-  min-height: 36px;
+  flex-grow: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px dashed rgba(132, 139, 179, 0.45);
+  min-width: 0;
+  min-height: 30px;
+  margin: 8px;
+  border: 1px dashed var(--ui-item-border);
   border-radius: 6px;
   color: var(--text-dim);
   font-size: 12px;
   text-align: center;
+  overflow-wrap: anywhere;
   padding: 8px;
 }
 
 .sortable-ghost {
   opacity: 0.45;
+  background: var(--ui-ghost-bg) !important;
+  border: 1px dashed var(--ui-ghost-border) !important;
 }
 
 .sortable-chosen,
 .sortable-drag {
   opacity: 0.92;
+}
+
+.node-context-menu-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  background: transparent;
+}
+
+.node-context-menu {
+  position: fixed;
+  min-width: 176px;
+  border: 1px solid var(--ui-menu-border);
+  border-radius: 8px;
+  background: var(--ui-menu-bg);
+  box-shadow: 0 10px 24px var(--ui-dialog-shadow);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.node-context-menu-item {
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-text-primary);
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.node-context-menu-item:hover:not(:disabled) {
+  background: var(--ui-menu-hover);
+}
+
+.node-context-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.node-context-menu-item i {
+  width: 12px;
+  text-align: center;
+}
+
+.node-context-menu-item.danger {
+  color: var(--ui-menu-danger-text);
+}
+
+.node-context-menu-item.danger:hover:not(:disabled) {
+  background: var(--ui-menu-danger-hover);
+}
+
+.node-context-menu-separator {
+  height: 1px;
+  background: var(--ui-divider);
+  margin: 3px 2px;
 }
 </style>

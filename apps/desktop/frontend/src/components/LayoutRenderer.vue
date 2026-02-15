@@ -21,7 +21,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, computed, onBeforeUnmount } from 'vue';
+import { defineComponent, computed, onBeforeUnmount, h } from 'vue';
 import { storeToRefs } from 'pinia';
 import { Splitpanes, Pane } from 'splitpanes';
 import 'splitpanes/dist/splitpanes.css';
@@ -34,8 +34,22 @@ import CommandInputBar from '@/components/CommandInputBar.vue';
 import StatusMonitor from '@/components/StatusMonitor.vue';
 import CommandHistoryPanel from '@/components/CommandHistoryPanel.vue';
 import QuickCommandsPanel from '@/components/QuickCommandsPanel.vue';
+import WorkspaceConnectionList from '@/components/WorkspaceConnectionList.vue';
+
+const DockerManagerPlaceholder = defineComponent({
+  name: 'DockerManagerPlaceholder',
+  setup() {
+    return () =>
+      h('div', { class: 'docker-manager-placeholder' }, [
+        h('i', { class: 'fab fa-docker docker-manager-icon' }),
+        h('div', { class: 'docker-manager-title' }, '远程主机 Docker 不可用'),
+        h('div', { class: 'docker-manager-desc' }, '请确保远程主机上已安装并运行 Docker。'),
+      ]);
+  },
+});
 
 const componentMap: Record<PaneName, unknown> = {
+  connections: WorkspaceConnectionList,
   terminal: TerminalView,
   fileManager: SftpBrowser,
   editor: FileEditorContainer,
@@ -43,6 +57,7 @@ const componentMap: Record<PaneName, unknown> = {
   statusMonitor: StatusMonitor,
   commandHistory: CommandHistoryPanel,
   quickCommands: QuickCommandsPanel,
+  dockerManager: DockerManagerPlaceholder,
 };
 
 export default defineComponent({
@@ -104,6 +119,37 @@ export default defineComponent({
 .layout-locked :deep(.splitpanes__splitter) {
   pointer-events: none;
   opacity: 0.45;
+}
+
+.docker-manager-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  padding: 20px;
+  background: var(--bg-base);
+}
+
+.docker-manager-icon {
+  font-size: 38px;
+  color: var(--text-dim);
+}
+
+.docker-manager-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.docker-manager-desc {
+  max-width: 260px;
+  line-height: 1.6;
+  font-size: 12px;
+  color: var(--text-sub);
 }
 </style>
 

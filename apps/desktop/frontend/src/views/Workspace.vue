@@ -42,14 +42,6 @@
           </div>
           <div class="workspace-left-panel-actions">
             <button
-              v-if="activeLeftToolPane === 'connections'"
-              class="workspace-left-panel-action-btn"
-              title="新增连接"
-              @click="showConnList = true"
-            >
-              <i class="fas fa-plus"></i>
-            </button>
-            <button
               class="workspace-left-panel-action-btn"
               title="关闭"
               @click="closeLeftToolPane"
@@ -380,7 +372,7 @@ onUnmounted(() => {
 
 .workspace-left-tool-btn-active,
 .workspace-left-tool-btn-active:hover {
-  color: #fff;
+  color: var(--button-text-color);
   background: var(--blue);
 }
 
@@ -478,7 +470,7 @@ onUnmounted(() => {
 }
 
 .workspace-layout :deep(.splitpanes__splitter) {
-  background: var(--border, #313244);
+  background: var(--border);
   position: relative;
   z-index: 1;
 }
@@ -489,7 +481,7 @@ onUnmounted(() => {
 }
 
 .workspace-layout :deep(.splitpanes__splitter:hover) {
-  background: var(--blue, #89b4fa);
+  background: var(--blue);
 }
 
 .workspace-layout-locked :deep(.splitpanes__splitter) {
@@ -501,7 +493,7 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   z-index: 9000;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--ui-overlay);
   display: flex;
   align-items: center;
   justify-content: center;

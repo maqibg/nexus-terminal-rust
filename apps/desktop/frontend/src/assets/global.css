@@ -1,18 +1,104 @@
 :root {
-  --bg-base: #1e1e2e;
-  --bg-mantle: #181825;
-  --bg-surface0: #313244;
-  --bg-surface1: #45475a;
-  --text: #cdd6f4;
-  --text-sub: #a6adc8;
-  --text-dim: #6c7086;
-  --blue: #89b4fa;
+  --app-bg-color: #212529;
+  --text-color: #e9ecef;
+  --text-color-secondary: #adb5bd;
+  --border-color: #495057;
+  --link-color: #BB86FC;
+  --link-hover-color: #D1A9FF;
+  --link-active-color: #A06CD5;
+  --link-active-bg-color: rgba(160, 108, 213, 0.2);
+  --nav-item-active-bg-color: var(--link-active-bg-color);
+  --header-bg-color: #343a40;
+  --footer-bg-color: #343a40;
+  --button-bg-color: var(--link-active-color);
+  --button-text-color: #ffffff;
+  --button-hover-bg-color: #8E44AD;
+  --icon-color: var(--text-color-secondary);
+  --icon-hover-color: var(--link-hover-color);
+  --split-line-color: var(--border-color);
+  --split-line-hover-color: var(--border-color);
+  --input-focus-border-color: var(--link-active-color);
+  --input-focus-glow: var(--link-active-color);
+  --overlay-bg-color: rgba(0, 0, 0, 0.8);
+  --color-success: #5cb85c;
+  --color-error: #d9534f;
+  --color-warning: #f0ad4e;
+  --font-family-sans-serif: sans-serif;
+  --base-padding: 1rem;
+  --base-margin: 0.5rem;
+
+  --bg-base: var(--app-bg-color);
+  --bg-mantle: var(--header-bg-color);
+  --bg-surface0: #2b3035;
+  --bg-surface1: #343a40;
+  --text: var(--text-color);
+  --text-sub: var(--text-color-secondary);
+  --text-dim: #8e98a0;
+  --blue: var(--link-active-color);
   --teal: #94e2d5;
-  --red: #f38ba8;
-  --green: #a6e3a1;
-  --yellow: #f9e2af;
-  --mauve: #cba6f7;
-  --border: #313244;
+  --red: var(--color-error);
+  --green: var(--color-success);
+  --yellow: var(--color-warning);
+  --mauve: var(--link-hover-color);
+  --border: var(--border-color);
+
+  --ui-overlay: var(--overlay-bg-color);
+  --ui-dialog-bg: var(--bg-surface0);
+  --ui-dialog-border: var(--border);
+  --ui-dialog-shadow: rgba(0, 0, 0, 0.45);
+  --ui-divider: var(--border);
+
+  --ui-text-primary: var(--text);
+  --ui-text-strong: var(--text);
+  --ui-text-muted: var(--text-sub);
+  --ui-text-soft: var(--text-sub);
+  --ui-text-dim: var(--text-dim);
+  --ui-text-chip: var(--text);
+
+  --ui-item-bg: var(--bg-mantle);
+  --ui-item-border: var(--border);
+  --ui-item-border-strong: var(--border);
+  --ui-item-icon: var(--text-sub);
+  --ui-chip-action-bg: var(--bg-surface1);
+  --ui-action-hover: var(--link-active-bg-color);
+
+  --ui-control-bg: var(--header-bg-color);
+  --ui-handle-bg: var(--bg-surface1);
+
+  --ui-switch-off: var(--bg-surface1);
+  --ui-switch-on: var(--link-active-color);
+  --ui-switch-knob: var(--button-text-color);
+
+  --ui-preview-bg: var(--bg-base);
+  --ui-preview-border: var(--border);
+  --ui-sidebar-bg: var(--bg-base);
+  --ui-footer-bg: var(--header-bg-color);
+
+  --ui-hover-mask: var(--link-active-bg-color);
+
+  --ui-btn-secondary-bg: var(--button-bg-color);
+  --ui-btn-secondary-border: var(--button-bg-color);
+  --ui-btn-secondary-text: var(--button-text-color);
+  --ui-btn-secondary-hover: var(--button-hover-bg-color);
+
+  --ui-btn-primary-bg: var(--bg-surface1);
+  --ui-btn-primary-border: var(--border);
+  --ui-btn-primary-text: var(--text);
+  --ui-btn-primary-hover: var(--bg-mantle);
+
+  --ui-danger: var(--color-error);
+  --ui-danger-border: var(--color-error);
+  --ui-danger-hover: rgba(217, 83, 79, 0.18);
+  --ui-danger-strong-hover: rgba(217, 83, 79, 0.35);
+
+  --ui-ghost-bg: var(--link-active-bg-color);
+  --ui-ghost-border: var(--link-active-color);
+
+  --ui-menu-bg: var(--bg-surface0);
+  --ui-menu-border: var(--border);
+  --ui-menu-hover: var(--link-active-bg-color);
+  --ui-menu-danger-text: var(--color-error);
+  --ui-menu-danger-hover: rgba(217, 83, 79, 0.2);
 }
 
 *,
@@ -30,7 +116,7 @@ html, body, #app {
 }
 
 body {
-  font-family: 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--font-family-sans-serif);
   background: var(--bg-base);
   color: var(--text);
   -webkit-font-smoothing: antialiased;

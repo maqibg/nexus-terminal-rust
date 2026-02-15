@@ -3,13 +3,15 @@ import { ref } from 'vue';
 import { useSettingsStore } from './settings';
 
 export type PaneName =
+  | 'connections'
   | 'terminal'
   | 'fileManager'
   | 'editor'
   | 'commandBar'
   | 'statusMonitor'
   | 'commandHistory'
-  | 'quickCommands';
+  | 'quickCommands'
+  | 'dockerManager';
 
 export interface LayoutNode {
   type: 'split' | 'pane';
@@ -26,6 +28,7 @@ export interface LayoutConfig {
 }
 
 const ALL_POSSIBLE_PANES: PaneName[] = [
+  'connections',
   'terminal',
   'commandBar',
   'fileManager',
@@ -33,6 +36,7 @@ const ALL_POSSIBLE_PANES: PaneName[] = [
   'statusMonitor',
   'commandHistory',
   'quickCommands',
+  'dockerManager',
 ];
 
 const SETTINGS_KEYS = {
@@ -49,28 +53,47 @@ const DEFAULT_LEFT_SIZE = 14.6;
 const DEFAULT_RIGHT_SIZE = 27.4;
 
 const DEFAULT_LAYOUT: LayoutConfig = {
+  root: {
+    type: 'split',
+    direction: 'horizontal',
+    children: [
+      {
+        type: 'split',
+        direction: 'vertical',
+        size: 14.6,
+        children: [
+          { type: 'pane', pane: 'statusMonitor', size: 44.6 },
+          { type: 'pane', pane: 'commandHistory', size: 26.2 },
+          { type: 'pane', pane: 'quickCommands', size: 29.2 },
+        ],
+      },
+      {
+        type: 'split',
+        direction: 'vertical',
+        size: 58,
+        children: [
+          { type: 'pane', pane: 'terminal', size: 59.9 },
+          { type: 'pane', pane: 'commandBar', size: 5 },
+          { type: 'pane', pane: 'fileManager', size: 35.1 },
+        ],
+      },
+      {
+        type: 'split',
+        direction: 'vertical',
+        size: 27.4,
+        children: [{ type: 'pane', pane: 'editor', size: 100 }],
+      },
+    ],
+  },
   leftSidebar: {
     type: 'split',
     direction: 'vertical',
     children: [
-      { type: 'pane', pane: 'statusMonitor', size: 44.6 },
-      { type: 'pane', pane: 'commandHistory', size: 26.2 },
-      { type: 'pane', pane: 'quickCommands', size: 29.2 },
+      { type: 'pane', pane: 'connections', size: 50 },
+      { type: 'pane', pane: 'dockerManager', size: 50 },
     ],
   },
-  root: {
-    type: 'split',
-    direction: 'vertical',
-    children: [
-      { type: 'pane', pane: 'terminal', size: 59.9 },
-      { type: 'pane', pane: 'commandBar', size: 5 },
-      { type: 'pane', pane: 'fileManager', size: 35.1 },
-    ],
-  },
-  rightSidebar: {
-    type: 'pane',
-    pane: 'editor',
-  },
+  rightSidebar: undefined,
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -97,8 +120,8 @@ function deepCloneLayoutConfig(config: LayoutConfig): LayoutConfig {
 
 export const useLayoutStore = defineStore('layout', () => {
   const layoutConfig = ref<LayoutConfig>(deepCloneLayoutConfig(DEFAULT_LAYOUT));
-  const leftSidebarVisible = ref(true);
-  const rightSidebarVisible = ref(true);
+  const leftSidebarVisible = ref(false);
+  const rightSidebarVisible = ref(false);
   const leftSidebarSize = ref(DEFAULT_LEFT_SIZE);
   const rightSidebarSize = ref(DEFAULT_RIGHT_SIZE);
   const headerVisible = ref(true);
@@ -134,8 +157,8 @@ export const useLayoutStore = defineStore('layout', () => {
       }
     }
 
-    leftSidebarVisible.value = parseBoolean(settings.get(SETTINGS_KEYS.leftVisible, 'true'), true);
-    rightSidebarVisible.value = parseBoolean(settings.get(SETTINGS_KEYS.rightVisible, 'true'), true);
+    leftSidebarVisible.value = parseBoolean(settings.get(SETTINGS_KEYS.leftVisible, 'false'), false);
+    rightSidebarVisible.value = parseBoolean(settings.get(SETTINGS_KEYS.rightVisible, 'false'), false);
     leftSidebarSize.value = parseNumber(
       settings.get(SETTINGS_KEYS.leftSize, String(DEFAULT_LEFT_SIZE)),
       DEFAULT_LEFT_SIZE,
@@ -165,8 +188,8 @@ export const useLayoutStore = defineStore('layout', () => {
 
   function resetLayout() {
     layoutConfig.value = deepCloneLayoutConfig(DEFAULT_LAYOUT);
-    leftSidebarVisible.value = true;
-    rightSidebarVisible.value = true;
+    leftSidebarVisible.value = false;
+    rightSidebarVisible.value = false;
     leftSidebarSize.value = DEFAULT_LEFT_SIZE;
     rightSidebarSize.value = DEFAULT_RIGHT_SIZE;
     headerVisible.value = true;

@@ -22,6 +22,7 @@ import { defineComponent } from 'vue';
 import type { LayoutNode, PaneName } from '@/stores/layout';
 
 const paneLabels: Record<PaneName, string> = {
+  connections: '连接',
   terminal: '终端',
   fileManager: '文件',
   editor: '编辑器',
@@ -29,6 +30,7 @@ const paneLabels: Record<PaneName, string> = {
   statusMonitor: '状态',
   commandHistory: '历史',
   quickCommands: '快捷',
+  dockerManager: 'Docker',
 };
 
 export default defineComponent({
