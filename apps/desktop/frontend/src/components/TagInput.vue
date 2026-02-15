@@ -9,54 +9,146 @@
         ref="inputEl"
         v-model="input"
         class="tag-field"
-        placeholder="输入标签..."
+        :placeholder="placeholderText"
         @keydown.enter.prevent="add"
         @focus="showDropdown = true"
         @blur="hideDropdown"
       />
     </div>
     <div v-if="showDropdown && filtered.length" class="dropdown">
-      <div v-for="t in filtered" :key="t" class="dropdown-item" @mousedown.prevent="select(t)">{{ t }}</div>
+      <div
+        v-for="tagOption in filtered"
+        :key="tagOption"
+        class="dropdown-item"
+        @mousedown.prevent="select(tagOption)"
+      >
+        {{ tagOption }}
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { computed, ref } from 'vue';
 
-const props = defineProps<{ modelValue: string[]; availableTags: string[] }>();
+const props = defineProps<{ modelValue: string[]; availableTags: string[]; placeholder?: string }>();
 const emit = defineEmits<{ 'update:modelValue': [tags: string[]] }>();
 
 const input = ref('');
 const inputEl = ref<HTMLInputElement>();
 const showDropdown = ref(false);
 
+const placeholderText = computed(() => props.placeholder || '输入搜索或创建标签...');
+
 const filtered = computed(() =>
-  props.availableTags.filter(t => !props.modelValue.includes(t) && t.toLowerCase().includes(input.value.toLowerCase()))
+  props.availableTags.filter(
+    (tag) => !props.modelValue.includes(tag) && tag.toLowerCase().includes(input.value.toLowerCase()),
+  ),
 );
 
 function add() {
-  const v = input.value.trim();
-  if (v && !props.modelValue.includes(v)) emit('update:modelValue', [...props.modelValue, v]);
+  const value = input.value.trim();
+  if (value && !props.modelValue.includes(value)) {
+    emit('update:modelValue', [...props.modelValue, value]);
+  }
   input.value = '';
 }
 
 function select(tag: string) {
-  if (!props.modelValue.includes(tag)) emit('update:modelValue', [...props.modelValue, tag]);
+  if (!props.modelValue.includes(tag)) {
+    emit('update:modelValue', [...props.modelValue, tag]);
+  }
   input.value = '';
 }
 
-function remove(tag: string) { emit('update:modelValue', props.modelValue.filter(t => t !== tag)); }
-function hideDropdown() { setTimeout(() => showDropdown.value = false, 150); }
+function remove(tag: string) {
+  emit('update:modelValue', props.modelValue.filter((item) => item !== tag));
+}
+
+function hideDropdown() {
+  setTimeout(() => {
+    showDropdown.value = false;
+  }, 150);
+}
 </script>
 
 <style scoped>
-.tag-input { position: relative; }
-.chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--bg-mantle); border: 1px solid var(--border); border-radius: 4px; min-height: 32px; align-items: center; }
-.chip { display: flex; align-items: center; gap: 2px; padding: 1px 6px; border-radius: 3px; background: rgba(137,180,250,0.15); color: var(--blue); font-size: 12px; }
-.chip-del { background: none; border: none; color: var(--blue); cursor: pointer; font-size: 14px; padding: 0; line-height: 1; }
-.tag-field { flex: 1; min-width: 60px; background: transparent; border: none; outline: none; color: var(--text); font-size: 13px; }
-.dropdown { position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-surface0); border: 1px solid var(--border); border-radius: 4px; max-height: 120px; overflow-y: auto; z-index: 10; margin-top: 2px; }
-.dropdown-item { padding: 4px 8px; font-size: 12px; cursor: pointer; color: var(--text); }
-.dropdown-item:hover { background: var(--bg-surface1); }
+.tag-input {
+  position: relative;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-height: 38px;
+  padding: 5px 6px;
+  border: 1px solid var(--border, #45475a);
+  border-radius: 8px;
+  background: var(--bg-base, #1e1e2e);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(203, 166, 247, 0.2);
+  color: var(--mauve, #cba6f7);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.chip-del {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.tag-field {
+  flex: 1;
+  min-width: 120px;
+  border: none;
+  background: transparent;
+  color: var(--text, #cdd6f4);
+  font-size: 13px;
+  line-height: 1.5;
+  outline: none;
+}
+
+.tag-field::placeholder {
+  color: var(--text-dim, #6c7086);
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 180px;
+  overflow-y: auto;
+  background: var(--bg-surface0, #313244);
+  border: 1px solid var(--border, #45475a);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
+  z-index: 3400;
+}
+
+.dropdown-item {
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--text, #cdd6f4);
+  cursor: pointer;
+}
+
+.dropdown-item:hover {
+  background: rgba(137, 180, 250, 0.12);
+}
 </style>

@@ -356,7 +356,7 @@ onBeforeUnmount(() => {
 
 .favorite-path {
   margin-top: 2px;
-  color: var(--text-dim, #6c7086);
+  color: var(--text, #cdd6f4);
   font-size: 12px;
 }
 

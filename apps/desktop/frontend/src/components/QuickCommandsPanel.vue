@@ -507,28 +507,29 @@ onUnmounted(() => {
 .panel-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border, #313244);
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid rgba(69, 71, 90, 0.7);
 }
 
 .search-input {
   flex: 1;
   min-width: 0;
-  height: 30px;
+  height: 32px;
   border: 1px solid var(--border, #45475a);
   border-radius: 8px;
-  background: var(--bg-surface0, #313244);
+  background: var(--bg-base, #1e1e2e);
   color: var(--text, #cdd6f4);
   padding: 0 10px;
-  font-size: 12px;
+  font-size: 13px;
   outline: none;
   box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .search-input:focus {
   border-color: var(--blue, #89b4fa);
-  box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.2);
+  box-shadow: 0 0 0 1px rgba(137, 180, 250, 0.28);
 }
 
 .search-input::placeholder {
@@ -536,8 +537,8 @@ onUnmounted(() => {
 }
 
 .ctrl-btn {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border: 1px solid var(--border, #45475a);
   border-radius: 8px;
   background: transparent;
@@ -556,19 +557,21 @@ onUnmounted(() => {
 }
 
 .ctrl-btn.active {
-  background: rgba(137, 180, 250, 0.2);
+  background: rgba(137, 180, 250, 0.18);
   color: var(--blue, #89b4fa);
   border-color: rgba(137, 180, 250, 0.4);
 }
 
 .ctrl-btn.add-btn {
-  background: var(--blue, #89b4fa);
-  color: var(--bg-base, #1e1e2e);
-  border-color: var(--blue, #89b4fa);
+  background: var(--mauve, #cba6f7);
+  color: #f5f1ff;
+  border-color: var(--mauve, #cba6f7);
+  box-shadow: 0 2px 10px rgba(203, 166, 247, 0.25);
 }
 
 .ctrl-btn.add-btn:hover {
-  opacity: 0.9;
+  background: var(--mauve, #cba6f7);
+  filter: brightness(1.04);
 }
 
 .commands-list {
