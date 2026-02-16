@@ -12,6 +12,65 @@ const editableUiTheme = ref<Record<string, string>>({});
 const editableUiThemeString = ref('');
 const themeParseError = ref<string | null>(null);
 
+const UI_THEME_LABELS: Record<string, string> = {
+  '--app-bg-color': '应用背景色',
+  '--text-color': '主文本颜色',
+  '--text-color-secondary': '次文本颜色',
+  '--border-color': '边框颜色',
+  '--link-color': '链接颜色',
+  '--link-hover-color': '链接悬停颜色',
+  '--link-active-color': '链接激活颜色',
+  '--link-active-bg-color': '链接激活背景色',
+  '--nav-item-active-bg-color': '导航项激活背景色',
+  '--header-bg-color': '顶栏背景色',
+  '--footer-bg-color': '底栏背景色',
+  '--button-bg-color': '按钮背景色',
+  '--button-text-color': '按钮文字颜色',
+  '--button-hover-bg-color': '按钮悬停背景色',
+  '--icon-color': '图标颜色',
+  '--icon-hover-color': '图标悬停颜色',
+  '--split-line-color': '分割线颜色',
+  '--split-line-hover-color': '分割线悬停颜色',
+  '--input-focus-border-color': '输入框聚焦边框色',
+  '--input-focus-glow': '输入框聚焦光晕色',
+  '--overlay-bg-color': '遮罩背景色',
+  '--color-success': '成功色',
+  '--color-error': '错误色',
+  '--color-warning': '警告色',
+  '--font-family-sans-serif': '无衬线字体',
+  '--base-padding': '基础内边距',
+  '--base-margin': '基础外边距',
+};
+
+const UI_THEME_FIELD_ORDER: string[] = [
+  '--app-bg-color',
+  '--text-color',
+  '--text-color-secondary',
+  '--border-color',
+  '--link-color',
+  '--link-hover-color',
+  '--link-active-color',
+  '--link-active-bg-color',
+  '--nav-item-active-bg-color',
+  '--header-bg-color',
+  '--footer-bg-color',
+  '--button-bg-color',
+  '--button-text-color',
+  '--button-hover-bg-color',
+  '--icon-color',
+  '--icon-hover-color',
+  '--split-line-color',
+  '--split-line-hover-color',
+  '--input-focus-border-color',
+  '--input-focus-glow',
+  '--overlay-bg-color',
+  '--font-family-sans-serif',
+  '--base-padding',
+  '--base-margin',
+  '--color-success',
+  '--color-error',
+  '--color-warning',
+];
 const darkModeTheme: Record<string, string> = {
   '--app-bg-color': '#212529',
   '--text-color': '#e9ecef',
@@ -62,6 +121,27 @@ watch(
   { deep: true },
 );
 
+
+const orderedUiThemeEntries = computed<Array<[string, string]>>(() => {
+  const theme = editableUiTheme.value ?? {};
+  const orderedKeys: string[] = [];
+  const knownKeys = new Set<string>();
+
+  for (const key of UI_THEME_FIELD_ORDER) {
+    if (Object.prototype.hasOwnProperty.call(theme, key)) {
+      orderedKeys.push(key);
+      knownKeys.add(key);
+    }
+  }
+
+  for (const key of Object.keys(theme)) {
+    if (!knownKeys.has(key)) {
+      orderedKeys.push(key);
+    }
+  }
+
+  return orderedKeys.map(key => [key, theme[key] ?? '']);
+});
 const formattedEditableUiThemeJson = computed(() => {
   const themeObject = editableUiTheme.value;
   if (!themeObject || typeof themeObject !== 'object' || Object.keys(themeObject).length === 0) {
@@ -179,11 +259,10 @@ const handleUiThemeStringChange = () => {
 };
 
 const formatLabel = (key: string): string => {
-  return key
-    .replace(/^--/, '')
-    .replace(/-/g, ' ')
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, str => str.toUpperCase());
+  if (UI_THEME_LABELS[key]) {
+    return UI_THEME_LABELS[key];
+  }
+  return key;
 };
 
 const handleFocusAndSelect = (event: FocusEvent) => {
@@ -214,7 +293,7 @@ defineExpose({
     <p class="section-desc">调整程序界面的颜色、边框和交互视觉风格。</p>
 
     <div class="theme-rows">
-      <div v-for="(value, key) in editableUiTheme" :key="key" class="theme-row">
+      <div v-for="[key, value] in orderedUiThemeEntries" :key="key" class="theme-row">
         <label :for="`ui-${key}`" class="theme-label">{{ formatLabel(key) }}:</label>
         <div class="theme-input-wrap">
           <input
@@ -284,7 +363,7 @@ defineExpose({
 
 .mode-row {
   display: grid;
-  grid-template-columns: 110px 1fr;
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   margin-top: 2px;
@@ -332,7 +411,7 @@ defineExpose({
 
 .theme-row {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: 10px;
   align-items: center;
 }
