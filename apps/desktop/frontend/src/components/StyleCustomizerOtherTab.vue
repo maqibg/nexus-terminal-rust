@@ -1,79 +1,168 @@
+<script setup lang="ts">
+import { onMounted, ref, watch } from 'vue';
+import { storeToRefs } from 'pinia';
+import { useAppearanceStore } from '@/stores/appearance';
+import { useUiNotificationsStore } from '@/stores/uiNotifications';
+
+const appearanceStore = useAppearanceStore();
+const notificationsStore = useUiNotificationsStore();
+
+const {
+  appearanceSettings,
+  currentEditorFontSize,
+  currentEditorFontFamily,
+} = storeToRefs(appearanceStore);
+
+const editableEditorFontSize = ref(14);
+const editableEditorFontFamily = ref('');
+
+const initializeEditableState = () => {
+  editableEditorFontSize.value = currentEditorFontSize.value;
+  editableEditorFontFamily.value = currentEditorFontFamily.value;
+};
+
+onMounted(initializeEditableState);
+
+watch(
+  () => appearanceSettings.value,
+  (newSettings, oldSettings) => {
+    const fontSizeChanged = newSettings?.editorFontSize !== oldSettings?.editorFontSize;
+    const fontFamilyChanged = newSettings?.editorFontFamily !== oldSettings?.editorFontFamily;
+
+    if (fontSizeChanged) {
+      editableEditorFontSize.value = newSettings?.editorFontSize || 14;
+    }
+    if (fontFamilyChanged) {
+      editableEditorFontFamily.value = newSettings?.editorFontFamily || `Consolas, 'Noto Sans SC', 'Microsoft YaHei'`;
+    }
+  },
+  { deep: true },
+);
+
+const handleSaveEditorFontSize = async () => {
+  try {
+    const size = Number(editableEditorFontSize.value);
+    if (Number.isNaN(size) || size <= 0) {
+      notificationsStore.addNotification({ type: 'error', message: '编辑器字号必须大于 0' });
+      return;
+    }
+    await appearanceStore.setEditorFontSize(size);
+    notificationsStore.addNotification({ type: 'success', message: '编辑器字体大小已保存' });
+  } catch (error: any) {
+    notificationsStore.addNotification({ type: 'error', message: error?.message ?? '保存编辑器字体大小失败' });
+  }
+};
+
+const handleSaveEditorFontFamily = async () => {
+  try {
+    await appearanceStore.setEditorFontFamily(editableEditorFontFamily.value);
+    notificationsStore.addNotification({ type: 'success', message: '编辑器字体已保存' });
+  } catch (error: any) {
+    notificationsStore.addNotification({ type: 'error', message: error?.message ?? '保存编辑器字体失败' });
+  }
+};
+</script>
+
 <template>
-  <section class="tab-section">
+  <section class="other-tab">
     <h3 class="section-title">其他设置</h3>
 
-    <div class="field-row">
-      <label>编辑器字体大小</label>
-      <div class="inline-save">
-        <input class="input num" type="number" v-model.number="editorFontSize" min="8" max="36" />
-        <button class="btn-save" @click="save('editor_font_size', String(editorFontSize))">保存</button>
-      </div>
+    <div class="field-grid">
+      <label for="editorFontSizeOther" class="field-label">编辑器字体大小:</label>
+      <input
+        id="editorFontSizeOther"
+        v-model.number="editableEditorFontSize"
+        type="number"
+        min="1"
+        class="field-input number-input"
+      />
+      <button class="save-btn" @click="handleSaveEditorFontSize">保存</button>
     </div>
 
-    <div class="field-row">
-      <label>编辑器字体族</label>
-      <div class="inline-save">
-        <input class="input" v-model="editorFontFamily" />
-        <button class="btn-save" @click="save('editor_font_family', editorFontFamily)">保存</button>
-      </div>
-    </div>
-
-    <div class="field-row">
-      <label>侧边栏宽度 (px)</label>
-      <div class="inline-save">
-        <input class="input num" type="number" v-model.number="sidebarWidth" min="150" max="500" />
-        <button class="btn-save" @click="save('sidebar_width', String(sidebarWidth))">保存</button>
-      </div>
-    </div>
-
-    <div class="field-row">
-      <label class="checkbox-row">
-        <input type="checkbox" v-model="animationEnabled" @change="save('animation_enabled', String(animationEnabled))" />
-        启用动画
-      </label>
+    <div class="field-grid">
+      <label for="editorFontFamilyOther" class="field-label">编辑器字体:</label>
+      <input
+        id="editorFontFamilyOther"
+        v-model="editableEditorFontFamily"
+        type="text"
+        class="field-input"
+      />
+      <button class="save-btn" @click="handleSaveEditorFontFamily">保存</button>
     </div>
   </section>
 </template>
 
-<script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useAppearanceStore } from '@/stores/appearance';
-import { useUINotificationStore } from '@/stores/uiNotifications';
-
-const appearance = useAppearanceStore();
-const notify = useUINotificationStore();
-
-const editorFontSize = ref(14);
-const editorFontFamily = ref('monospace');
-const sidebarWidth = ref(240);
-const animationEnabled = ref(true);
-
-onMounted(() => {
-  editorFontSize.value = parseInt(appearance.get('editor_font_size', '14'));
-  editorFontFamily.value = appearance.get('editor_font_family', 'monospace');
-  sidebarWidth.value = parseInt(appearance.get('sidebar_width', '240'));
-  animationEnabled.value = appearance.get('animation_enabled', 'true') === 'true';
-});
-
-async function save(key: string, value: string) {
-  try {
-    await appearance.set(key, value);
-    notify.addNotification('success', '已保存');
-  } catch (e: any) { notify.addNotification('error', e.message); }
-}
-</script>
-
 <style scoped>
-.tab-section { display: flex; flex-direction: column; gap: 12px; }
-.section-title { font-size: 15px; font-weight: 600; margin: 0 0 4px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-.field-row { display: flex; flex-direction: column; gap: 4px; }
-.field-row label { font-size: 12px; color: var(--text-sub); }
-.input { background: var(--bg-mantle); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; color: var(--text); font-size: 13px; outline: none; }
-.input:focus { border-color: var(--blue); }
-.input.num { width: 80px; }
-.inline-save { display: flex; gap: 6px; align-items: center; }
-.inline-save .input { flex: 1; }
-.checkbox-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-sub); cursor: pointer; }
-.btn-save { padding: 4px 14px; border-radius: 4px; border: none; background: var(--blue); color: var(--bg-base); cursor: pointer; font-size: 13px; font-weight: 600; flex-shrink: 0; }
-.btn-save:hover { opacity: 0.9; }
+.other-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-title {
+  margin: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 19px;
+  line-height: 1.2;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.field-label {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.field-input {
+  height: 34px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--app-bg-color);
+  color: var(--text);
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.field-input:focus {
+  outline: none;
+  border-color: var(--input-focus-border-color);
+}
+
+.number-input {
+  max-width: 120px;
+}
+
+.save-btn {
+  height: 34px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--header-bg-color);
+  color: var(--text);
+  padding: 0 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.save-btn:hover {
+  background: var(--bg-surface1);
+}
+
+@media (max-width: 860px) {
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .number-input {
+    max-width: 100%;
+  }
+}
 </style>

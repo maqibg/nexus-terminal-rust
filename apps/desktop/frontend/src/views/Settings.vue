@@ -49,7 +49,7 @@
           <div v-if="loadingThemes" class="status">加载中...</div>
           <div v-else class="theme-list">
             <div v-for="t in themes" :key="t.id" class="theme-card">
-              <div class="theme-preview" :style="{ background: t.background, color: t.foreground }">
+              <div class="theme-preview" :style="{ background: t.background ?? '#1e1e1e', color: t.foreground ?? '#d4d4d4' }">
                 <span>{{ t.name }}</span>
                 <span class="theme-type">{{ t.theme_type }}</span>
               </div>
@@ -261,7 +261,8 @@ async function loadThemes() {
   finally { loadingThemes.value = false; }
 }
 function themeColors(t: TerminalTheme): string[] {
-  return [t.black, t.red, t.green, t.yellow, t.blue, t.magenta, t.cyan, t.white];
+  return [t.black, t.red, t.green, t.yellow, t.blue, t.magenta, t.cyan, t.white]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0);
 }
 
 // Security

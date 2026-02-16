@@ -9,14 +9,39 @@ export interface UINotification {
 
 let nextId = 0;
 
-export const useUINotificationStore = defineStore('uiNotifications', () => {
+type NotificationInput =
+  | UINotification['type']
+  | {
+      type: UINotification['type'];
+      message: string;
+      duration?: number;
+    };
+
+export const useUiNotificationsStore = defineStore('uiNotifications', () => {
   const notifications = ref<UINotification[]>([]);
 
-  function addNotification(type: UINotification['type'], message: string, duration = 3000) {
+  function addNotification(input: NotificationInput, message?: string, duration = 3000) {
+    let finalType: UINotification['type'];
+    let finalMessage: string;
+    let finalDuration = duration;
+
+    if (typeof input === 'string') {
+      finalType = input;
+      finalMessage = message ?? '';
+    } else {
+      finalType = input.type;
+      finalMessage = input.message;
+      finalDuration = input.duration ?? duration;
+    }
+
+    if (!finalMessage.trim()) {
+      return;
+    }
+
     const id = ++nextId;
-    notifications.value.push({ id, type, message });
-    if (duration > 0) {
-      setTimeout(() => removeNotification(id), duration);
+    notifications.value.push({ id, type: finalType, message: finalMessage });
+    if (finalDuration > 0) {
+      setTimeout(() => removeNotification(id), finalDuration);
     }
   }
 
@@ -26,3 +51,5 @@ export const useUINotificationStore = defineStore('uiNotifications', () => {
 
   return { notifications, addNotification, removeNotification };
 });
+
+export const useUINotificationStore = useUiNotificationsStore;

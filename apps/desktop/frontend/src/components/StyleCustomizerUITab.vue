@@ -1,78 +1,446 @@
-<template>
-  <section class="tab-section">
-    <h3 class="section-title">UI 颜色变量</h3>
-    <p class="desc">编辑 CSS 变量以自定义界面颜色，修改后点击保存生效。</p>
-
-    <div v-for="(value, key) in vars" :key="key" class="var-row">
-      <label class="var-label">{{ key }}</label>
-      <div class="var-input">
-        <input v-if="isColor(value)" type="color" :value="value" @change="vars[key] = ($event.target as HTMLInputElement).value" class="color-picker" />
-        <input class="input" v-model="vars[key]" />
-      </div>
-    </div>
-
-    <div class="actions">
-      <button class="btn-reset" @click="reset">重置默认</button>
-      <button class="btn-save" @click="saveAll">保存</button>
-    </div>
-  </section>
-</template>
-
 <script setup lang="ts">
-import { reactive, onMounted } from 'vue';
-import { useAppearanceStore } from '@/stores/appearance';
-import { useUINotificationStore } from '@/stores/uiNotifications';
+import { computed, onMounted, ref, watch } from 'vue';
+import { storeToRefs } from 'pinia';
+import { defaultUiTheme, safeJsonParse, useAppearanceStore } from '@/stores/appearance';
+import { useUiNotificationsStore } from '@/stores/uiNotifications';
 
-const appearance = useAppearanceStore();
-const notify = useUINotificationStore();
+const appearanceStore = useAppearanceStore();
+const notificationsStore = useUiNotificationsStore();
+const { appearanceSettings } = storeToRefs(appearanceStore);
 
-const DEFAULT_VARS: Record<string, string> = {
-  '--bg-base': '#1e1e2e', '--bg-mantle': '#181825', '--bg-surface0': '#313244',
-  '--bg-surface1': '#45475a', '--text': '#cdd6f4', '--text-sub': '#a6adc8',
-  '--text-dim': '#6c7086', '--border': '#45475a', '--blue': '#89b4fa',
-  '--green': '#a6e3a1', '--red': '#f38ba8', '--yellow': '#f9e2af',
-  '--peach': '#fab387', '--mauve': '#cba6f7',
+const editableUiTheme = ref<Record<string, string>>({});
+const editableUiThemeString = ref('');
+const themeParseError = ref<string | null>(null);
+
+const darkModeTheme: Record<string, string> = {
+  '--app-bg-color': '#212529',
+  '--text-color': '#e9ecef',
+  '--text-color-secondary': '#adb5bd',
+  '--border-color': '#495057',
+  '--link-color': '#BB86FC',
+  '--link-hover-color': '#D1A9FF',
+  '--link-active-color': '#A06CD5',
+  '--link-active-bg-color': 'rgba(160, 108, 213, 0.2)',
+  '--nav-item-active-bg-color': 'var(--link-active-bg-color)',
+  '--header-bg-color': '#343a40',
+  '--footer-bg-color': '#343a40',
+  '--button-bg-color': 'var(--link-active-color)',
+  '--button-text-color': '#ffffff',
+  '--button-hover-bg-color': '#8E44AD',
+  '--icon-color': 'var(--text-color-secondary)',
+  '--icon-hover-color': 'var(--link-hover-color)',
+  '--split-line-color': 'var(--border-color)',
+  '--split-line-hover-color': 'var(--border-color)',
+  '--input-focus-border-color': 'var(--link-active-color)',
+  '--input-focus-glow': 'var(--link-active-color)',
+  '--overlay-bg-color': 'rgba(0, 0, 0, 0.8)',
+  '--color-success': '#5cb85c',
+  '--color-error': '#d9534f',
+  '--color-warning': '#f0ad4e',
+  '--font-family-sans-serif': 'sans-serif',
+  '--base-padding': '1rem',
+  '--base-margin': '0.5rem',
 };
 
-const vars = reactive<Record<string, string>>({});
+const initializeEditableState = () => {
+  const userTheme = safeJsonParse<Record<string, string>>(appearanceSettings.value.customUiTheme, {});
+  const mergedTheme = { ...defaultUiTheme, ...userTheme };
+  editableUiTheme.value = JSON.parse(JSON.stringify(mergedTheme));
+  themeParseError.value = null;
 
-onMounted(() => {
-  for (const [key, def] of Object.entries(DEFAULT_VARS)) {
-    vars[key] = appearance.get(key, def);
+  const lines = Object.entries(editableUiTheme.value).map(([key, value]) => `${key}: ${value}`);
+  editableUiThemeString.value = lines.join('\n');
+};
+
+onMounted(initializeEditableState);
+
+watch(
+  () => appearanceSettings.value.customUiTheme,
+  () => {
+    initializeEditableState();
+  },
+  { deep: true },
+);
+
+const formattedEditableUiThemeJson = computed(() => {
+  const themeObject = editableUiTheme.value;
+  if (!themeObject || typeof themeObject !== 'object' || Object.keys(themeObject).length === 0) {
+    return '';
+  }
+  return Object.entries(themeObject)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join('\n');
+});
+
+watch(formattedEditableUiThemeJson, (newValue) => {
+  if (document.activeElement?.id !== 'uiThemeTextarea' || themeParseError.value) {
+    editableUiThemeString.value = newValue;
+    if (themeParseError.value && document.activeElement?.id !== 'uiThemeTextarea') {
+      themeParseError.value = null;
+    }
   }
 });
 
-function isColor(v: string): boolean {
-  return /^#[0-9a-fA-F]{3,8}$/.test(v);
-}
-
-async function saveAll() {
+const handleSaveUiTheme = async () => {
   try {
-    for (const [key, value] of Object.entries(vars)) {
-      await appearance.set(key, value);
-    }
-    notify.addNotification('success', 'UI 主题已保存');
-  } catch (e: any) { notify.addNotification('error', e.message); }
-}
+    await appearanceStore.saveCustomUiTheme(editableUiTheme.value);
+    notificationsStore.addNotification({ type: 'success', message: '界面主题已保存' });
+  } catch (error: any) {
+    notificationsStore.addNotification({ type: 'error', message: error?.message ?? '界面主题保存失败' });
+  }
+};
 
-async function reset() {
-  for (const [key, def] of Object.entries(DEFAULT_VARS)) vars[key] = def;
-  await saveAll();
-}
+const handleResetUiTheme = async () => {
+  try {
+    await appearanceStore.resetCustomUiTheme();
+    notificationsStore.addNotification({ type: 'info', message: '已恢复默认模式' });
+  } catch (error: any) {
+    notificationsStore.addNotification({ type: 'error', message: error?.message ?? '恢复默认模式失败' });
+  }
+};
+
+const applyDarkMode = async () => {
+  try {
+    editableUiTheme.value = JSON.parse(JSON.stringify(darkModeTheme));
+    await appearanceStore.saveCustomUiTheme(editableUiTheme.value);
+    notificationsStore.addNotification({ type: 'success', message: '黑暗模式已应用' });
+  } catch (error: any) {
+    notificationsStore.addNotification({ type: 'error', message: error?.message ?? '应用黑暗模式失败' });
+  }
+};
+
+const handleUiThemeStringChange = () => {
+  themeParseError.value = null;
+  const inputText = editableUiThemeString.value.trim();
+
+  if (!inputText) {
+    editableUiTheme.value = {};
+    return;
+  }
+
+  const jsonStringToParse = inputText
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line && line.includes(':'))
+    .map(line => {
+      const parts = line.split(/:(.*)/s);
+      if (parts.length < 2) {
+        return null;
+      }
+
+      let key = parts[0].trim();
+      let value = parts[1].trim();
+
+      if (key.startsWith('"') && key.endsWith('"')) {
+        key = key.slice(1, -1);
+      }
+      if (key.startsWith("'") && key.endsWith("'")) {
+        key = key.slice(1, -1);
+      }
+      key = JSON.stringify(key);
+
+      if (value.endsWith(',')) {
+        value = value.slice(0, -1).trim();
+      }
+      let originalValue = value;
+      if (value.startsWith('"') && value.endsWith('"')) {
+        originalValue = value.slice(1, -1);
+      } else if (value.startsWith("'") && value.endsWith("'")) {
+        originalValue = value.slice(1, -1);
+      }
+
+      if (
+        Number.isNaN(Number(originalValue))
+        && originalValue !== 'true'
+        && originalValue !== 'false'
+        && originalValue !== 'null'
+      ) {
+        value = JSON.stringify(originalValue);
+      } else {
+        value = originalValue;
+      }
+
+      return `  ${key}: ${value}`;
+    })
+    .filter((line): line is string => line !== null)
+    .join(',\n');
+
+  const fullJsonString = `{\n${jsonStringToParse}\n}`;
+
+  try {
+    const parsedTheme = JSON.parse(fullJsonString);
+    if (typeof parsedTheme !== 'object' || parsedTheme === null || Array.isArray(parsedTheme)) {
+      throw new Error('配置必须是对象格式');
+    }
+    editableUiTheme.value = parsedTheme;
+  } catch (error: any) {
+    themeParseError.value = error?.message ?? 'JSON 格式错误，请检查后重试';
+  }
+};
+
+const formatLabel = (key: string): string => {
+  return key
+    .replace(/^--/, '')
+    .replace(/-/g, ' ')
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, str => str.toUpperCase());
+};
+
+const handleFocusAndSelect = (event: FocusEvent) => {
+  const target = event.target;
+  if (target instanceof HTMLInputElement) {
+    target.select();
+  }
+};
+
+defineExpose({
+  handleSaveUiTheme,
+  handleResetUiTheme,
+});
 </script>
 
+<template>
+  <section class="ui-tab">
+    <h3 class="section-title">界面样式</h3>
+
+    <div class="mode-row">
+      <label class="mode-label">主题模式:</label>
+      <div class="mode-actions">
+        <button type="button" class="mode-btn" @click="handleResetUiTheme">默认模式</button>
+        <button type="button" class="mode-btn" @click="applyDarkMode">黑暗模式</button>
+      </div>
+    </div>
+
+    <p class="section-desc">调整程序界面的颜色、边框和交互视觉风格。</p>
+
+    <div class="theme-rows">
+      <div v-for="(value, key) in editableUiTheme" :key="key" class="theme-row">
+        <label :for="`ui-${key}`" class="theme-label">{{ formatLabel(key) }}:</label>
+        <div class="theme-input-wrap">
+          <input
+            v-if="typeof value === 'string' && (value.startsWith('#') || value.startsWith('rgb') || value.startsWith('hsl'))"
+            type="color"
+            :id="`ui-${key}`"
+            v-model="editableUiTheme[key]"
+            class="color-input"
+          />
+          <input
+            v-if="typeof value === 'string' && (value.startsWith('#') || value.startsWith('rgb') || value.startsWith('hsl'))"
+            type="text"
+            :value="editableUiTheme[key]"
+            class="text-input"
+            @focus="handleFocusAndSelect"
+            @input="editableUiTheme[key] = ($event.target as HTMLInputElement).value"
+          />
+          <input
+            v-else
+            type="text"
+            :id="`ui-${key}`"
+            v-model="editableUiTheme[key]"
+            class="text-input"
+          />
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <h4 class="json-title">界面主题 JSON 编辑器</h4>
+    <p class="section-desc">支持按 `变量: 值` 的形式批量编辑主题配置。</p>
+
+    <div class="json-editor-wrap">
+      <label for="uiThemeTextarea" class="sr-only">界面主题 JSON 编辑器</label>
+      <textarea
+        id="uiThemeTextarea"
+        v-model="editableUiThemeString"
+        @blur="handleUiThemeStringChange"
+        rows="15"
+        placeholder="--app-bg-color: #ffffff&#10;--text-color: #333333"
+        spellcheck="false"
+        class="json-textarea"
+      />
+    </div>
+
+    <p v-if="themeParseError" class="error-message">{{ themeParseError }}</p>
+  </section>
+</template>
+
 <style scoped>
-.tab-section { display: flex; flex-direction: column; gap: 10px; }
-.section-title { font-size: 15px; font-weight: 600; margin: 0 0 4px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-.desc { font-size: 12px; color: var(--text-sub); margin: 0; }
-.var-row { display: flex; align-items: center; gap: 8px; }
-.var-label { font-size: 12px; color: var(--text-sub); min-width: 120px; font-family: monospace; }
-.var-input { display: flex; align-items: center; gap: 6px; flex: 1; }
-.color-picker { width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 4px; padding: 1px; cursor: pointer; flex-shrink: 0; }
-.input { background: var(--bg-mantle); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; color: var(--text); font-size: 12px; outline: none; flex: 1; font-family: monospace; }
-.input:focus { border-color: var(--blue); }
-.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
-.btn-save { padding: 5px 16px; border-radius: 4px; border: none; background: var(--blue); color: var(--bg-base); cursor: pointer; font-size: 13px; font-weight: 600; }
-.btn-reset { padding: 5px 16px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--text-sub); cursor: pointer; font-size: 13px; }
-.btn-reset:hover { background: var(--bg-surface1); }
+.ui-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-title {
+  margin: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 19px;
+  line-height: 1.2;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.mode-row {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.mode-label {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.mode-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mode-btn {
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--header-bg-color);
+  color: var(--text);
+  padding: 0 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mode-btn:hover {
+  background: var(--bg-surface1);
+}
+
+.section-desc {
+  margin: 0;
+  color: var(--text-sub);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.theme-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.theme-row {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.theme-label {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.color-input {
+  width: 44px;
+  height: 32px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  padding: 2px;
+}
+
+.text-input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--app-bg-color);
+  color: var(--text);
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: var(--input-focus-border-color);
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 14px 0 0;
+}
+
+.json-title {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.json-editor-wrap {
+  margin-top: 2px;
+}
+
+.json-textarea {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--app-bg-color);
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 13px;
+  font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
+  line-height: 1.45;
+}
+
+.json-textarea:focus {
+  outline: none;
+  border-color: var(--input-focus-border-color);
+}
+
+.error-message {
+  margin: 0;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--color-error) 45%, transparent);
+  background: color-mix(in srgb, var(--color-error) 14%, transparent);
+  color: var(--color-error);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+@media (max-width: 860px) {
+  .mode-row,
+  .theme-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
 </style>

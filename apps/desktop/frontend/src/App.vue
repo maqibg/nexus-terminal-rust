@@ -7,9 +7,7 @@
     <header v-if="showHeader" class="app-header" data-tauri-drag-region>
       <nav class="app-nav" data-tauri-drag-region>
         <div class="nav-left no-drag">
-          <div class="brand-mark" title="Nexus Terminal">
-            <i class="fas fa-angle-left"></i>
-          </div>
+          <img :src="logoPng" alt="Nexus Terminal" class="brand-logo" title="Nexus Terminal" />
           <router-link to="/connections" class="nav-link" active-class="nav-link-active">连接管理</router-link>
           <router-link to="/workspace" class="nav-link" active-class="nav-link-active">终端</router-link>
           <router-link to="/proxies" class="nav-link nav-link-desktop" active-class="nav-link-active">代理管理</router-link>
@@ -28,6 +26,9 @@
           >
             <i class="fab fa-github"></i>
           </a>
+          <button class="nav-icon-btn" title="外观自定义" @click="showStyleCustomizer = true">
+            <i class="fas fa-paint-brush"></i>
+          </button>
           <button v-if="isAuthenticated" @click="handleLogout" class="nav-link nav-link-ghost">登出</button>
 
           <div class="window-controls">
@@ -64,6 +65,8 @@
       <router-view />
     </main>
 
+    <StyleCustomizer :visible="showStyleCustomizer" @close="showStyleCustomizer = false" />
+
     <FocusSwitcherConfigurator
       :visible="isFocusSwitcherVisible"
       @close="focusSwitcherStore.toggleConfigurator(false)"
@@ -72,24 +75,28 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useAuthStore } from '@/stores/auth';
 import { useLayoutStore } from '@/stores/layout';
 import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
+import { useAppearanceStore } from '@/stores/appearance';
 import { statusApi } from '@/lib/api';
 import UINotificationDisplay from '@/components/UINotificationDisplay.vue';
 import GlobalAlertDialog from '@/components/GlobalAlertDialog.vue';
 import GlobalConfirmDialog from '@/components/GlobalConfirmDialog.vue';
 import FocusSwitcherConfigurator from '@/components/FocusSwitcherConfigurator.vue';
+import StyleCustomizer from '@/components/StyleCustomizer.vue';
+import logoPng from '@/assets/logo.png';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const layoutStore = useLayoutStore();
 const focusSwitcherStore = useFocusSwitcherStore();
+const appearanceStore = useAppearanceStore();
 const { isAuthenticated } = storeToRefs(authStore);
 const { headerVisible } = storeToRefs(layoutStore);
 const { isConfiguratorVisible: isFocusSwitcherVisible } = storeToRefs(focusSwitcherStore);
@@ -111,6 +118,7 @@ const isWorkspaceRoute = computed(() => route.path === '/workspace');
 
 const startupState = ref<'starting' | 'ready' | 'error'>('starting');
 const startupError = ref('');
+const showStyleCustomizer = ref(false);
 
 const isAltPressed = ref(false);
 const altShortcutKey = ref<string | null>(null);
@@ -255,7 +263,21 @@ function preventBrowserContextMenu(event: MouseEvent): void {
   event.preventDefault();
 }
 
+const loadAppearanceData = async () => {
+  await appearanceStore.loadAll().catch(() => undefined);
+};
+
+watch(isAuthenticated, (authenticated) => {
+  if (!authenticated) {
+    return;
+  }
+  void loadAppearanceData();
+});
+
 onMounted(() => {
+  if (isAuthenticated.value) {
+    void loadAppearanceData();
+  }
   void layoutStore.loadLayout().catch(() => undefined);
   void checkBackendStartup();
   void focusSwitcherStore.loadConfigurationFromBackend();
@@ -285,7 +307,7 @@ onUnmounted(() => {
   position: sticky;
   top: 0;
   z-index: 10;
-  height: 52px;
+  height: 55px;
   background: var(--header-bg-color);
   border-bottom: 1px solid var(--border);
 }
@@ -305,18 +327,12 @@ onUnmounted(() => {
   gap: 2px;
 }
 
-.brand-mark {
-  width: 26px;
-  height: 26px;
+.brand-logo {
+  height: 40px;
+  width: auto;
+  display: block;
   margin-right: 4px;
-  border-radius: 6px;
-  background: var(--link-active-bg-color);
-  border: 1px solid var(--border);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--link-hover-color);
-  font-size: 15px;
+  user-select: none;
 }
 
 .nav-drag-region {
@@ -358,6 +374,8 @@ onUnmounted(() => {
 .nav-icon-btn {
   width: 32px;
   height: 32px;
+  border: none;
+  background: transparent;
   border-radius: 6px;
   display: inline-flex;
   align-items: center;
@@ -375,9 +393,8 @@ onUnmounted(() => {
 .window-controls {
   display: flex;
   align-items: center;
-  margin-left: 4px;
-  border-left: 1px solid var(--border);
-  padding-left: 6px;
+  margin-left: 2px;
+  padding-left: 0;
   gap: 2px;
 }
 
