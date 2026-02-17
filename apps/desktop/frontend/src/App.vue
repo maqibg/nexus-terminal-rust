@@ -26,7 +26,7 @@
           >
             <i class="fab fa-github"></i>
           </a>
-          <button class="nav-icon-btn" title="外观自定义" @click="showStyleCustomizer = true">
+          <button class="nav-icon-btn" title="外观自定义" @click="appearanceStore.toggleStyleCustomizer(true)">
             <i class="fas fa-paint-brush"></i>
           </button>
           <button v-if="isAuthenticated" @click="handleLogout" class="nav-link nav-link-ghost">登出</button>
@@ -65,7 +65,7 @@
       <router-view />
     </main>
 
-    <StyleCustomizer :visible="showStyleCustomizer" @close="showStyleCustomizer = false" />
+    <StyleCustomizer v-if="isStyleCustomizerVisible" :visible="isStyleCustomizerVisible" @close="appearanceStore.toggleStyleCustomizer(false)" />
 
     <FocusSwitcherConfigurator
       :visible="isFocusSwitcherVisible"
@@ -100,6 +100,7 @@ const appearanceStore = useAppearanceStore();
 const { isAuthenticated } = storeToRefs(authStore);
 const { headerVisible } = storeToRefs(layoutStore);
 const { isConfiguratorVisible: isFocusSwitcherVisible } = storeToRefs(focusSwitcherStore);
+const { isStyleCustomizerVisible } = storeToRefs(appearanceStore);
 const appWindow = getCurrentWindow();
 
 const noHeaderPaths = ['/login', '/setup'];
@@ -118,7 +119,6 @@ const isWorkspaceRoute = computed(() => route.path === '/workspace');
 
 const startupState = ref<'starting' | 'ready' | 'error'>('starting');
 const startupError = ref('');
-const showStyleCustomizer = ref(false);
 
 const isAltPressed = ref(false);
 const altShortcutKey = ref<string | null>(null);

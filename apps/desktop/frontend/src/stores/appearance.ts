@@ -281,6 +281,7 @@ export const useAppearanceStore = defineStore('appearance', () => {
   const activeHtmlPresetTab = ref<'local' | 'remote'>('local');
   const isLoadingHtmlPresets = ref(false);
   const htmlPresetError = ref<string | null>(null);
+  const isStyleCustomizerVisible = ref(false);
 
   const pickValue = (keys: readonly string[], fallback = ''): string => {
     for (const key of keys) {
@@ -316,12 +317,12 @@ export const useAppearanceStore = defineStore('appearance', () => {
   const effectiveTerminalTheme = computed<ITheme>(() => currentTerminalTheme.value);
 
   const currentTerminalFontFamily = computed(() => appearanceSettings.value.terminalFontFamily ?? `Consolas, 'Courier New', monospace, 'Microsoft YaHei', '微软雅黑'`);
-  const currentTerminalFontSize = computed(() => appearanceSettings.value.terminalFontSize ?? 13);
+  const currentTerminalFontSize = computed(() => appearanceSettings.value.terminalFontSize ?? 14);
   const currentEditorFontSize = computed(() => appearanceSettings.value.editorFontSize ?? 14);
   const currentEditorFontFamily = computed(() => appearanceSettings.value.editorFontFamily ?? `Consolas, 'Noto Sans SC', 'Microsoft YaHei'`);
-  const currentMobileEditorFontSize = computed(() => appearanceSettings.value.mobileEditorFontSize ?? 14);
+  const currentMobileEditorFontSize = computed(() => appearanceSettings.value.mobileEditorFontSize ?? 16);
   const terminalBackgroundImage = computed(() => appearanceSettings.value.terminalBackgroundImage ?? '');
-  const isTerminalBackgroundEnabled = computed(() => appearanceSettings.value.terminalBackgroundEnabled ?? false);
+  const isTerminalBackgroundEnabled = computed(() => appearanceSettings.value.terminalBackgroundEnabled ?? true);
   const currentTerminalBackgroundOverlayOpacity = computed(() => appearanceSettings.value.terminalBackgroundOverlayOpacity ?? 0.5);
   const terminalCustomHTML = computed(() => appearanceSettings.value.terminal_custom_html ?? '');
 
@@ -329,21 +330,21 @@ export const useAppearanceStore = defineStore('appearance', () => {
   const terminalTextStrokeWidth = computed(() => appearanceSettings.value.terminalTextStrokeWidth ?? 1);
   const terminalTextStrokeColor = computed(() => appearanceSettings.value.terminalTextStrokeColor ?? '#000000');
   const terminalTextShadowEnabled = computed(() => appearanceSettings.value.terminalTextShadowEnabled ?? false);
-  const terminalTextShadowOffsetX = computed(() => appearanceSettings.value.terminalTextShadowOffsetX ?? 2);
-  const terminalTextShadowOffsetY = computed(() => appearanceSettings.value.terminalTextShadowOffsetY ?? 2);
-  const terminalTextShadowBlur = computed(() => appearanceSettings.value.terminalTextShadowBlur ?? 3);
-  const terminalTextShadowColor = computed(() => appearanceSettings.value.terminalTextShadowColor ?? '#000000');
+  const terminalTextShadowOffsetX = computed(() => appearanceSettings.value.terminalTextShadowOffsetX ?? 0);
+  const terminalTextShadowOffsetY = computed(() => appearanceSettings.value.terminalTextShadowOffsetY ?? 0);
+  const terminalTextShadowBlur = computed(() => appearanceSettings.value.terminalTextShadowBlur ?? 0);
+  const terminalTextShadowColor = computed(() => appearanceSettings.value.terminalTextShadowColor ?? 'rgba(0,0,0,0.5)');
 
   const syncAppearanceSettings = () => {
     appearanceSettings.value = {
       customUiTheme: pickValue(APPEARANCE_ALIASES.customUiTheme, '{}'),
       activeTerminalThemeId: toInteger(pickValue(APPEARANCE_ALIASES.activeTerminalThemeId, undefined), null),
       terminalFontFamily: pickValue(APPEARANCE_ALIASES.terminalFontFamily, currentTerminalFontFamily.value),
-      terminalFontSize: toNumber(pickValue(APPEARANCE_ALIASES.terminalFontSize, undefined), 13),
+      terminalFontSize: toNumber(pickValue(APPEARANCE_ALIASES.terminalFontSize, undefined), 14),
       editorFontSize: toNumber(pickValue(APPEARANCE_ALIASES.editorFontSize, undefined), 14),
       editorFontFamily: pickValue(APPEARANCE_ALIASES.editorFontFamily, currentEditorFontFamily.value),
-      mobileEditorFontSize: toNumber(pickValue(APPEARANCE_ALIASES.mobileEditorFontSize, undefined), 14),
-      terminalBackgroundEnabled: toBoolean(pickValue(APPEARANCE_ALIASES.terminalBackgroundEnabled, undefined), false),
+      mobileEditorFontSize: toNumber(pickValue(APPEARANCE_ALIASES.mobileEditorFontSize, undefined), 16),
+      terminalBackgroundEnabled: toBoolean(pickValue(APPEARANCE_ALIASES.terminalBackgroundEnabled, undefined), true),
       terminalBackgroundImage: pickValue(APPEARANCE_ALIASES.terminalBackgroundImage, ''),
       terminalBackgroundOverlayOpacity: toNumber(
         pickValue(APPEARANCE_ALIASES.terminalBackgroundOverlayOpacity, undefined),
@@ -354,10 +355,10 @@ export const useAppearanceStore = defineStore('appearance', () => {
       terminalTextStrokeWidth: toNumber(pickValue(APPEARANCE_ALIASES.terminalTextStrokeWidth, undefined), 1),
       terminalTextStrokeColor: pickValue(APPEARANCE_ALIASES.terminalTextStrokeColor, '#000000'),
       terminalTextShadowEnabled: toBoolean(pickValue(APPEARANCE_ALIASES.terminalTextShadowEnabled, undefined), false),
-      terminalTextShadowOffsetX: toNumber(pickValue(APPEARANCE_ALIASES.terminalTextShadowOffsetX, undefined), 2),
-      terminalTextShadowOffsetY: toNumber(pickValue(APPEARANCE_ALIASES.terminalTextShadowOffsetY, undefined), 2),
-      terminalTextShadowBlur: toNumber(pickValue(APPEARANCE_ALIASES.terminalTextShadowBlur, undefined), 3),
-      terminalTextShadowColor: pickValue(APPEARANCE_ALIASES.terminalTextShadowColor, '#000000'),
+      terminalTextShadowOffsetX: toNumber(pickValue(APPEARANCE_ALIASES.terminalTextShadowOffsetX, undefined), 0),
+      terminalTextShadowOffsetY: toNumber(pickValue(APPEARANCE_ALIASES.terminalTextShadowOffsetY, undefined), 0),
+      terminalTextShadowBlur: toNumber(pickValue(APPEARANCE_ALIASES.terminalTextShadowBlur, undefined), 0),
+      terminalTextShadowColor: pickValue(APPEARANCE_ALIASES.terminalTextShadowColor, 'rgba(0,0,0,0.5)'),
     };
   };
 
@@ -856,6 +857,10 @@ export const useAppearanceStore = defineStore('appearance', () => {
     await setTerminalCustomHTML(htmlContent);
   }
 
+  function toggleStyleCustomizer(visible?: boolean) {
+    isStyleCustomizerVisible.value = visible === undefined ? !isStyleCustomizerVisible.value : visible;
+  }
+
   return {
     appearance,
     loaded,
@@ -888,6 +893,7 @@ export const useAppearanceStore = defineStore('appearance', () => {
     activeHtmlPresetTab,
     isLoadingHtmlPresets,
     htmlPresetError,
+    isStyleCustomizerVisible,
     loadAll,
     loadInitialAppearanceData,
     set,
@@ -928,5 +934,6 @@ export const useAppearanceStore = defineStore('appearance', () => {
     fetchRemoteHtmlPresets,
     getRemoteHtmlPresetContent,
     applyHtmlPreset,
+    toggleStyleCustomizer,
   };
 });

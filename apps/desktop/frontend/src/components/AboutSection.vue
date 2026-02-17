@@ -9,8 +9,17 @@
 </template>
 
 <script setup lang="ts">
-const version = __APP_VERSION__ ?? '0.1.0';
-declare const __APP_VERSION__: string | undefined;
+type AppVersionHost = {
+  __APP_VERSION__?: unknown;
+};
+
+const version = (() => {
+  const maybeVersion = (globalThis as AppVersionHost).__APP_VERSION__;
+  if (typeof maybeVersion === 'string' && maybeVersion.trim()) {
+    return maybeVersion;
+  }
+  return '0.1.0';
+})();
 </script>
 
 <style scoped>

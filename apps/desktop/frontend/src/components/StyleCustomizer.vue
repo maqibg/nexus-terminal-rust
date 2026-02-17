@@ -104,8 +104,8 @@ const resetUiTheme = async () => {
 }
 
 .style-customizer-dialog {
-  width: min(980px, 96vw);
-  height: min(850px, 94vh);
+  width: min(800px, 90vw);
+  height: min(85vh, 700px);
   min-height: 620px;
   background: var(--bg-surface0);
   border: 1px solid var(--border);

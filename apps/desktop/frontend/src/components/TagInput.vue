@@ -1,154 +1,351 @@
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue';
+
+interface GenericTag {
+  id: number;
+  name: string;
+}
+
+type TagValue = number | string;
+
+const props = withDefaults(defineProps<{
+  modelValue: TagValue[];
+  availableTags?: Array<GenericTag | string>;
+  placeholder?: string;
+  allowCreate?: boolean;
+  allowDelete?: boolean;
+}>(), {
+  availableTags: () => [],
+  placeholder: '添加或选择标签...',
+  allowCreate: true,
+  allowDelete: true,
+});
+
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: TagValue[]): void;
+  (e: 'create-tag', tagName: string): void;
+  (e: 'delete-tag', tagId: number): void;
+}>();
+
+const inputValue = ref('');
+const inputRef = ref<HTMLInputElement | null>(null);
+const showSuggestions = ref(false);
+
+const isNumericMode = computed(() => {
+  if (props.modelValue.length > 0) {
+    return typeof props.modelValue[0] === 'number';
+  }
+  if (props.availableTags.length > 0) {
+    return typeof props.availableTags[0] === 'object';
+  }
+  return false;
+});
+
+const availableObjectTags = computed<GenericTag[]>(() => {
+  if (!isNumericMode.value) {
+    return [];
+  }
+  return props.availableTags
+    .filter(tag => typeof tag === 'object')
+    .map(tag => ({ id: Number((tag as GenericTag).id), name: String((tag as GenericTag).name) }));
+});
+
+const availableStringTags = computed<string[]>(() => {
+  if (isNumericMode.value) {
+    return [];
+  }
+  return props.availableTags
+    .map((tag) => {
+      if (typeof tag === 'string') {
+        return tag;
+      }
+      return String(tag.name);
+    })
+    .filter(tagName => tagName.trim().length > 0);
+});
+
+const selectedTagIds = ref<number[]>([]);
+const selectedTagNames = ref<string[]>([]);
+
+watch(
+  () => props.modelValue,
+  (value) => {
+    if (isNumericMode.value) {
+      selectedTagIds.value = value
+        .filter(item => typeof item === 'number')
+        .map(item => Number(item));
+      return;
+    }
+
+    selectedTagNames.value = value
+      .map(item => String(item))
+      .filter(item => item.trim().length > 0);
+  },
+  { immediate: true, deep: true },
+);
+
+watch(selectedTagIds, (value) => {
+  if (!isNumericMode.value) {
+    return;
+  }
+  emit('update:modelValue', [...value]);
+}, { deep: true });
+
+watch(selectedTagNames, (value) => {
+  if (isNumericMode.value) {
+    return;
+  }
+  emit('update:modelValue', [...value]);
+}, { deep: true });
+
+const selectedTags = computed<GenericTag[]>(() => {
+  if (!isNumericMode.value) {
+    return [];
+  }
+
+  const tagMap = new Map<number, GenericTag>();
+  availableObjectTags.value.forEach(tag => tagMap.set(tag.id, tag));
+  return selectedTagIds.value
+    .map(tagId => tagMap.get(tagId))
+    .filter((tag): tag is GenericTag => Boolean(tag));
+});
+
+const stringSuggestions = computed(() => {
+  if (!showSuggestions.value || isNumericMode.value) {
+    return [] as string[];
+  }
+  const q = inputValue.value.trim().toLowerCase();
+  return availableStringTags.value
+    .filter(tag => !selectedTagNames.value.includes(tag))
+    .filter(tag => !q || tag.toLowerCase().includes(q));
+});
+
+const objectSuggestions = computed(() => {
+  if (!showSuggestions.value || !isNumericMode.value) {
+    return [] as GenericTag[];
+  }
+  const q = inputValue.value.trim().toLowerCase();
+  return availableObjectTags.value
+    .filter(tag => !selectedTagIds.value.includes(tag.id))
+    .filter(tag => !q || tag.name.toLowerCase().includes(q));
+});
+
+const handleFocus = () => {
+  if (isNumericMode.value) {
+    showSuggestions.value = objectSuggestions.value.length > 0;
+    return;
+  }
+  showSuggestions.value = stringSuggestions.value.length > 0;
+};
+
+const handleBlur = () => {
+  setTimeout(() => {
+    showSuggestions.value = false;
+  }, 120);
+};
+
+const removeTagLocally = (tag: GenericTag | string) => {
+  if (isNumericMode.value) {
+    const tagId = (tag as GenericTag).id;
+    selectedTagIds.value = selectedTagIds.value.filter(id => id !== tagId);
+    return;
+  }
+  const tagName = String(tag);
+  selectedTagNames.value = selectedTagNames.value.filter(item => item !== tagName);
+};
+
+const selectTag = (tag: GenericTag | string) => {
+  if (isNumericMode.value) {
+    const tagId = (tag as GenericTag).id;
+    if (!selectedTagIds.value.includes(tagId)) {
+      selectedTagIds.value = [...selectedTagIds.value, tagId];
+    }
+  } else {
+    const tagName = String(tag);
+    if (!selectedTagNames.value.includes(tagName)) {
+      selectedTagNames.value = [...selectedTagNames.value, tagName];
+    }
+  }
+
+  inputValue.value = '';
+  showSuggestions.value = false;
+  inputRef.value?.focus();
+};
+
+const handleDeleteTagGlobally = (tag: GenericTag) => {
+  emit('delete-tag', tag.id);
+};
+
+const handleKeyDown = () => {
+  const value = inputValue.value.trim();
+  if (!value) {
+    return;
+  }
+
+  if (isNumericMode.value) {
+    const existingTag = availableObjectTags.value.find(tag => tag.name.toLowerCase() === value.toLowerCase());
+    if (existingTag) {
+      selectTag(existingTag);
+      return;
+    }
+    if (props.allowCreate) {
+      emit('create-tag', value);
+    }
+    inputValue.value = '';
+    showSuggestions.value = false;
+    return;
+  }
+
+  const existingName = availableStringTags.value.find(tag => tag.toLowerCase() === value.toLowerCase());
+  if (existingName) {
+    selectTag(existingName);
+    return;
+  }
+  if (props.allowCreate && !selectedTagNames.value.includes(value)) {
+    selectedTagNames.value = [...selectedTagNames.value, value];
+  }
+  inputValue.value = '';
+  showSuggestions.value = false;
+};
+</script>
+
 <template>
-  <div class="tag-input">
-    <div class="chips">
-      <span v-for="tag in modelValue" :key="tag" class="chip">
-        {{ tag }}
-        <button class="chip-del" @click="remove(tag)">&times;</button>
-      </span>
+  <div class="tag-input-root" @click="inputRef?.focus()">
+    <div class="selected-tags">
+      <template v-if="isNumericMode">
+        <span v-for="tag in selectedTags" :key="tag.id" class="tag-chip">
+          {{ tag.name }}
+          <button type="button" class="chip-remove" @click.stop="removeTagLocally(tag)">&times;</button>
+          <button
+            v-if="allowDelete"
+            type="button"
+            class="chip-delete"
+            @click.stop="handleDeleteTagGlobally(tag)"
+            title="删除该标签"
+          >
+            <i class="fas fa-trash-alt"></i>
+          </button>
+        </span>
+      </template>
+      <template v-else>
+        <span v-for="tag in selectedTagNames" :key="tag" class="tag-chip">
+          {{ tag }}
+          <button type="button" class="chip-remove" @click.stop="removeTagLocally(tag)">&times;</button>
+        </span>
+      </template>
+
       <input
-        ref="inputEl"
-        v-model="input"
-        class="tag-field"
-        :placeholder="placeholderText"
-        @keydown.enter.prevent="add"
-        @focus="showDropdown = true"
-        @blur="hideDropdown"
+        ref="inputRef"
+        v-model="inputValue"
+        class="tag-input"
+        :placeholder="placeholder"
+        @focus="handleFocus"
+        @blur="handleBlur"
+        @keydown.enter.prevent="handleKeyDown"
       />
     </div>
-    <div v-if="showDropdown && filtered.length" class="dropdown">
-      <div
-        v-for="tagOption in filtered"
-        :key="tagOption"
-        class="dropdown-item"
-        @mousedown.prevent="select(tagOption)"
+
+    <ul v-if="isNumericMode && showSuggestions && objectSuggestions.length > 0" class="suggestion-list">
+      <li
+        v-for="item in objectSuggestions"
+        :key="item.id"
+        class="suggestion-item"
+        @mousedown.prevent="selectTag(item)"
       >
-        {{ tagOption }}
-      </div>
-    </div>
+        {{ item.name }}
+      </li>
+    </ul>
+
+    <ul v-if="!isNumericMode && showSuggestions && stringSuggestions.length > 0" class="suggestion-list">
+      <li
+        v-for="item in stringSuggestions"
+        :key="item"
+        class="suggestion-item"
+        @mousedown.prevent="selectTag(item)"
+      >
+        {{ item }}
+      </li>
+    </ul>
   </div>
 </template>
 
-<script setup lang="ts">
-import { computed, ref } from 'vue';
-
-const props = defineProps<{ modelValue: string[]; availableTags: string[]; placeholder?: string }>();
-const emit = defineEmits<{ 'update:modelValue': [tags: string[]] }>();
-
-const input = ref('');
-const inputEl = ref<HTMLInputElement>();
-const showDropdown = ref(false);
-
-const placeholderText = computed(() => props.placeholder || '输入搜索或创建标签...');
-
-const filtered = computed(() =>
-  props.availableTags.filter(
-    (tag) => !props.modelValue.includes(tag) && tag.toLowerCase().includes(input.value.toLowerCase()),
-  ),
-);
-
-function add() {
-  const value = input.value.trim();
-  if (value && !props.modelValue.includes(value)) {
-    emit('update:modelValue', [...props.modelValue, value]);
-  }
-  input.value = '';
-}
-
-function select(tag: string) {
-  if (!props.modelValue.includes(tag)) {
-    emit('update:modelValue', [...props.modelValue, tag]);
-  }
-  input.value = '';
-}
-
-function remove(tag: string) {
-  emit('update:modelValue', props.modelValue.filter((item) => item !== tag));
-}
-
-function hideDropdown() {
-  setTimeout(() => {
-    showDropdown.value = false;
-  }, 150);
-}
-</script>
-
 <style scoped>
-.tag-input {
+.tag-input-root {
   position: relative;
 }
 
-.chips {
+.selected-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
   align-items: center;
+  gap: 6px;
   min-height: 38px;
-  padding: 5px 6px;
-  border: 1px solid var(--border, #45475a);
-  border-radius: 8px;
-  background: var(--bg-base, #1e1e2e);
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-base);
 }
 
-.chip {
+.tag-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  max-width: 100%;
   padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(203, 166, 247, 0.2);
-  color: var(--mauve, #cba6f7);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface1);
+  color: var(--text);
   font-size: 12px;
-  line-height: 1.3;
 }
 
-.chip-del {
+.chip-remove,
+.chip-delete {
   border: none;
   background: transparent;
-  color: inherit;
-  font-size: 14px;
-  line-height: 1;
+  color: var(--text-sub);
   cursor: pointer;
   padding: 0;
+  line-height: 1;
 }
 
-.tag-field {
+.chip-delete:hover {
+  color: var(--red);
+}
+
+.tag-input {
   flex: 1;
   min-width: 120px;
   border: none;
   background: transparent;
-  color: var(--text, #cdd6f4);
+  color: var(--text);
   font-size: 13px;
-  line-height: 1.5;
   outline: none;
 }
 
-.tag-field::placeholder {
-  color: var(--text-dim, #6c7086);
-}
-
-.dropdown {
+.suggestion-list {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
   right: 0;
+  z-index: 30;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface0);
   max-height: 180px;
   overflow-y: auto;
-  background: var(--bg-surface0, #313244);
-  border: 1px solid var(--border, #45475a);
-  border-radius: 8px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
-  z-index: 3400;
 }
 
-.dropdown-item {
-  padding: 7px 10px;
-  font-size: 12px;
-  color: var(--text, #cdd6f4);
+.suggestion-item {
+  padding: 6px 10px;
+  color: var(--text);
+  font-size: 13px;
   cursor: pointer;
 }
 
-.dropdown-item:hover {
-  background: rgba(137, 180, 250, 0.12);
+.suggestion-item:hover {
+  background: var(--bg-surface1);
 }
 </style>

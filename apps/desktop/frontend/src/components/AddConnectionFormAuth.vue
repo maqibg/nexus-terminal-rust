@@ -1,54 +1,171 @@
+<script setup lang="ts">
+import SshKeySelector from './SshKeySelector.vue';
+
+defineProps<{
+  formData: {
+    type: 'SSH' | 'RDP' | 'VNC';
+    username: string;
+    auth_method: 'password' | 'key';
+    password: string;
+    selected_ssh_key_id: number | null;
+    vncPassword: string;
+  };
+  isEditMode: boolean;
+}>();
+</script>
+
 <template>
-  <div class="form-section">
-    <template v-if="form.type === 'SSH'">
-      <label class="field">
-        <span class="label">认证方式</span>
-        <select v-model="form.auth_method" class="input">
-          <option value="password">密码</option>
-          <option value="key">SSH 密钥</option>
-          <option value="none">无</option>
-        </select>
-      </label>
-      <label v-if="form.auth_method === 'password'" class="field">
-        <span class="label">密码</span>
-        <input v-model="form.password" type="password" class="input" />
-      </label>
-      <label v-if="form.auth_method === 'key'" class="field">
-        <span class="label">SSH 密钥</span>
-        <select v-model="form.ssh_key_id" class="input">
-          <option :value="undefined">选择密钥...</option>
-          <option v-for="k in sshKeys" :key="k.id" :value="k.id">{{ k.name }}</option>
-        </select>
-      </label>
+  <div class="section-card">
+    <h4 class="section-title">认证信息</h4>
+
+    <div class="field-block">
+      <label for="conn-username" class="field-label">用户名</label>
+      <input id="conn-username" v-model="formData.username" type="text" class="field-input" required />
+    </div>
+
+    <template v-if="formData.type === 'SSH'">
+      <div class="field-block">
+        <label class="field-label">认证方式</label>
+        <div class="segment-group">
+          <button
+            type="button"
+            class="segment-btn"
+            :class="{ active: formData.auth_method === 'password' }"
+            @click="formData.auth_method = 'password'"
+          >
+            密码
+          </button>
+          <button
+            type="button"
+            class="segment-btn"
+            :class="{ active: formData.auth_method === 'key' }"
+            @click="formData.auth_method = 'key'"
+          >
+            SSH 密钥
+          </button>
+        </div>
+      </div>
+
+      <div v-if="formData.auth_method === 'password'" class="field-block">
+        <label for="conn-password" class="field-label">密码</label>
+        <input
+          id="conn-password"
+          v-model="formData.password"
+          type="password"
+          class="field-input"
+          :required="!isEditMode"
+          autocomplete="new-password"
+        />
+      </div>
+
+      <div v-if="formData.auth_method === 'key'" class="field-block">
+        <label class="field-label">SSH 密钥</label>
+        <SshKeySelector v-model="formData.selected_ssh_key_id" />
+      </div>
     </template>
-    <div v-else class="hint">RDP 协议不使用 SSH 认证参数。</div>
+
+    <template v-if="formData.type === 'RDP'">
+      <div class="field-block">
+        <label for="conn-password-rdp" class="field-label">密码</label>
+        <input
+          id="conn-password-rdp"
+          v-model="formData.password"
+          type="password"
+          class="field-input"
+          :required="!isEditMode"
+          autocomplete="new-password"
+        />
+      </div>
+    </template>
+
+    <template v-if="formData.type === 'VNC'">
+      <div class="field-block">
+        <label for="conn-password-vnc" class="field-label">VNC 密码</label>
+        <input
+          id="conn-password-vnc"
+          v-model="formData.vncPassword"
+          type="password"
+          class="field-input"
+          :required="!isEditMode"
+          autocomplete="new-password"
+        />
+      </div>
+    </template>
   </div>
 </template>
 
-<script setup lang="ts">
-import { onMounted } from 'vue';
-import { useSshKeysStore } from '@/stores/sshKeys';
-import { storeToRefs } from 'pinia';
-import type { ConnectionFormData } from '@/composables/useAddConnectionForm';
-
-defineProps<{ form: ConnectionFormData }>();
-
-const sshKeysStore = useSshKeysStore();
-const { items: sshKeys } = storeToRefs(sshKeysStore);
-onMounted(() => sshKeysStore.fetchAll());
-</script>
-
 <style scoped>
-.form-section { display: flex; flex-direction: column; gap: 12px; }
-.field { display: flex; flex-direction: column; gap: 4px; }
-.label { font-size: 12px; color: var(--text-sub); }
-.input { padding: 6px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 13px; }
-.input:focus { outline: none; border-color: var(--blue); }
-.hint {
-  padding: 10px 12px;
-  border-radius: 6px;
-  border: 1px dashed var(--border);
+.section-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-surface1) 45%, transparent);
+}
+
+.section-title {
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-sub);
-  font-size: 12px;
+}
+
+.field-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-base);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.field-input:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue);
+}
+
+.segment-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.segment-btn {
+  height: 34px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: var(--bg-base);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.segment-btn:last-child {
+  border-right: none;
+}
+
+.segment-btn.active {
+  background: var(--blue);
+  color: #ffffff;
 }
 </style>

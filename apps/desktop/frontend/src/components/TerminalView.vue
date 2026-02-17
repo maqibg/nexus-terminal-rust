@@ -72,9 +72,9 @@ function getTerminalFontFamily(): string {
 }
 
 function getTerminalFontSize(): number {
-  const value = getAppearanceValue(['terminal_font_size', 'terminalFontSize'], '13');
+  const value = getAppearanceValue(['terminal_font_size', 'terminalFontSize'], '14');
   const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 13;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 14;
 }
 
 function normalizeImageUrl(pathValue: string): string {
@@ -95,7 +95,7 @@ function normalizeImageUrl(pathValue: string): string {
 }
 
 const terminalContainerStyle = computed<Record<string, string>>(() => {
-  const enabled = parseBoolean(getAppearanceValue(['terminalBackgroundEnabled', 'terminal_background_enabled'], 'false'));
+  const enabled = parseBoolean(getAppearanceValue(['terminalBackgroundEnabled', 'terminal_background_enabled'], 'true'));
   const imagePath = getAppearanceValue(['terminalBackgroundImage', 'terminal_background_image'], '');
   if (!enabled || !imagePath) {
     return {} as Record<string, string>;
@@ -140,10 +140,10 @@ function buildTerminalShadow(): string {
 
   const shadowEnabled = parseBoolean(getAppearanceValue(['terminalTextShadowEnabled', 'terminal_text_shadow_enabled'], 'false'));
   if (shadowEnabled) {
-    const offsetX = parseNumber(getAppearanceValue(['terminalTextShadowOffsetX', 'terminal_text_shadow_offset_x'], '2'), 2);
-    const offsetY = parseNumber(getAppearanceValue(['terminalTextShadowOffsetY', 'terminal_text_shadow_offset_y'], '2'), 2);
-    const blur = Math.max(0, parseNumber(getAppearanceValue(['terminalTextShadowBlur', 'terminal_text_shadow_blur'], '3'), 3));
-    const color = getAppearanceValue(['terminalTextShadowColor', 'terminal_text_shadow_color'], '#000000');
+    const offsetX = parseNumber(getAppearanceValue(['terminalTextShadowOffsetX', 'terminal_text_shadow_offset_x'], '0'), 0);
+    const offsetY = parseNumber(getAppearanceValue(['terminalTextShadowOffsetY', 'terminal_text_shadow_offset_y'], '0'), 0);
+    const blur = Math.max(0, parseNumber(getAppearanceValue(['terminalTextShadowBlur', 'terminal_text_shadow_blur'], '0'), 0));
+    const color = getAppearanceValue(['terminalTextShadowColor', 'terminal_text_shadow_color'], 'rgba(0,0,0,0.5)');
     shadowList.push(`${offsetX}px ${offsetY}px ${blur}px ${color}`);
   }
 
@@ -159,7 +159,7 @@ function applyTerminalAppearance() {
   term.options.fontSize = getTerminalFontSize();
 
   const transparentBackground = parseBoolean(
-    getAppearanceValue(['terminalBackgroundEnabled', 'terminal_background_enabled'], 'false'),
+    getAppearanceValue(['terminalBackgroundEnabled', 'terminal_background_enabled'], 'true'),
   );
   const activeTheme = effectiveTerminalTheme.value;
   term.options.theme = {
@@ -257,7 +257,7 @@ function initTerminal(sid: string): void {
     fontFamily: getTerminalFontFamily(),
     theme: {
       ...activeTheme,
-      background: parseBoolean(getAppearanceValue(['terminalBackgroundEnabled', 'terminal_background_enabled'], 'false'))
+      background: parseBoolean(getAppearanceValue(['terminalBackgroundEnabled', 'terminal_background_enabled'], 'true'))
         ? '#00000000'
         : (activeTheme.background ?? '#1e1e2e'),
     },
