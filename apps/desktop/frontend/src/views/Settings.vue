@@ -59,6 +59,7 @@
                   <input id="workspace-share-tabs" v-model="workspaceForm.shareFileEditorTabs" class="checkbox-input" type="checkbox">
                   <label for="workspace-share-tabs">在所有会话间共享编辑器标签页</label>
                 </div>
+                <small class="section-desc">如果启用，所有 SSH 会话将共享同一组打开的文件编辑器标签页。如果禁用，每个会话将拥有自己独立的一组标签页。</small>
                 <div class="form-actions">
                   <button type="submit" class="btn btn-primary">保存</button>
                   <p v-if="feedback.shareTabs?.message" :class="['feedback-msg', feedback.shareTabs.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.shareTabs.message }}</p>
@@ -91,6 +92,7 @@
                   <input id="workspace-sidebar-persistent" v-model="workspaceForm.workspaceSidebarPersistent" class="checkbox-input" type="checkbox">
                   <label for="workspace-sidebar-persistent">弹出后固定侧边栏 (不自动收回)</label>
                 </div>
+                <small class="section-desc">开启后，点击侧边栏外部区域不会自动收回侧边栏。</small>
                 <div class="form-actions">
                   <button type="submit" class="btn btn-primary">保存</button>
                   <p v-if="feedback.sidebarPersistent?.message" :class="['feedback-msg', feedback.sidebarPersistent.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.sidebarPersistent.message }}</p>
@@ -104,14 +106,35 @@
               <h3 class="section-heading">命令输入同步</h3>
               <form class="section-form" @submit.prevent="saveWorkspaceText('commandInputSyncTarget', workspaceForm.commandInputSyncTarget, 'commandSync', '命令输入同步目标已保存')">
                 <div class="form-field">
-                  <label class="form-label" for="workspace-command-sync">同步目标</label>
-                  <select id="workspace-command-sync" v-model="workspaceForm.commandInputSyncTarget" class="form-control select-control">
-                    <option value="none">无</option>
-                    <option value="quickCommands">快捷指令</option>
-                    <option value="commandHistory">命令历史</option>
-                  </select>
+                  <label class="form-label" for="workspace-command-sync">同步目标:</label>
+                  <div class="command-sync-select-wrap" ref="commandSyncSelectRef" :class="{ open: commandSyncMenuOpen }">
+                    <button
+                      id="workspace-command-sync"
+                      type="button"
+                      class="form-control command-sync-trigger"
+                      :aria-expanded="commandSyncMenuOpen ? 'true' : 'false'"
+                      aria-haspopup="listbox"
+                      @click="toggleCommandSyncMenu"
+                    >
+                      <span>{{ commandSyncTargetLabel }}</span>
+                      <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div v-if="commandSyncMenuOpen" class="command-sync-menu" role="listbox">
+                      <button
+                        v-for="option in commandSyncTargetOptions"
+                        :key="option.value"
+                        type="button"
+                        class="command-sync-option"
+                        :class="{ active: workspaceForm.commandInputSyncTarget === option.value }"
+                        @click="selectCommandSyncTarget(option.value)"
+                      >
+                        {{ option.label }}
+                      </button>
+                    </div>
+                  </div>
+                  <small class="section-desc">将命令输入栏的内容实时同步到所选面板的搜索框。键盘上下选中后使用 Enter 使用指令</small>
                 </div>
-                <div class="form-actions">
+                <div class="form-actions command-sync-actions">
                   <button type="submit" class="btn btn-primary">保存</button>
                   <p v-if="feedback.commandSync?.message" :class="['feedback-msg', feedback.commandSync.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.commandSync.message }}</p>
                 </div>
@@ -127,7 +150,8 @@
                   <input id="workspace-show-connection-tags" v-model="workspaceForm.showConnectionTags" class="checkbox-input" type="checkbox">
                   <label for="workspace-show-connection-tags">在连接列表中显示标签</label>
                 </div>
-                <div class="form-actions">
+                <small class="section-desc">关闭后将隐藏连接列表中的标签，并从搜索中排除标签。</small>
+                <div class="form-actions form-actions-top-padding">
                   <button type="submit" class="btn btn-primary">保存</button>
                   <p v-if="feedback.connectionTags?.message" :class="['feedback-msg', feedback.connectionTags.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.connectionTags.message }}</p>
                 </div>
@@ -143,7 +167,8 @@
                   <input id="workspace-show-quick-command-tags" v-model="workspaceForm.showQuickCommandTags" class="checkbox-input" type="checkbox">
                   <label for="workspace-show-quick-command-tags">在快捷指令列表中显示标签</label>
                 </div>
-                <div class="form-actions">
+                <small class="section-desc">关闭后将隐藏快捷指令列表中的标签，并从搜索中排除标签。</small>
+                <div class="form-actions form-actions-top-padding">
                   <button type="submit" class="btn btn-primary">保存</button>
                   <p v-if="feedback.quickCommandTags?.message" :class="['feedback-msg', feedback.quickCommandTags.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.quickCommandTags.message }}</p>
                 </div>
@@ -365,7 +390,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { authApi, connectionsApi } from '@/lib/api';
 import { useUiNotificationsStore } from '@/stores/uiNotifications';
@@ -441,6 +466,46 @@ const settingsError = ref('');
 const settingsMap = ref<Record<string, string>>({});
 
 const feedback = reactive<Record<string, { message: string; success: boolean }>>({});
+
+const commandSyncTargetOptions = [
+  { value: 'none', label: '无' },
+  { value: 'quickCommands', label: '快捷指令' },
+  { value: 'commandHistory', label: '命令历史' },
+] as const;
+
+const commandSyncMenuOpen = ref(false);
+const commandSyncSelectRef = ref<HTMLElement | null>(null);
+
+const commandSyncTargetLabel = computed(() => {
+  const item = commandSyncTargetOptions.find((option) => option.value === workspaceForm.commandInputSyncTarget);
+  return item?.label ?? '无';
+});
+
+function toggleCommandSyncMenu() {
+  commandSyncMenuOpen.value = !commandSyncMenuOpen.value;
+}
+
+function selectCommandSyncTarget(value: 'none' | 'quickCommands' | 'commandHistory') {
+  workspaceForm.commandInputSyncTarget = value;
+  commandSyncMenuOpen.value = false;
+}
+
+function handleCommandSyncOutsideClick(event: MouseEvent) {
+  if (!commandSyncMenuOpen.value) {
+    return;
+  }
+
+  const target = event.target as Node | null;
+  if (target && commandSyncSelectRef.value && !commandSyncSelectRef.value.contains(target)) {
+    commandSyncMenuOpen.value = false;
+  }
+}
+
+function handleCommandSyncEscape(event: KeyboardEvent) {
+  if (event.key === 'Escape' && commandSyncMenuOpen.value) {
+    commandSyncMenuOpen.value = false;
+  }
+}
 
 const workspaceForm = reactive({
   showPopupFileEditor: false,
@@ -811,8 +876,15 @@ async function checkLatestVersion() {
 }
 
 onMounted(async () => {
+  document.addEventListener('mousedown', handleCommandSyncOutsideClick);
+  window.addEventListener('keydown', handleCommandSyncEscape);
   await loadSettings();
   await checkLatestVersion();
+});
+
+onUnmounted(() => {
+  document.removeEventListener('mousedown', handleCommandSyncOutsideClick);
+  window.removeEventListener('keydown', handleCommandSyncEscape);
 });
 </script>
 
@@ -996,6 +1068,64 @@ onMounted(async () => {
   padding-right: 28px;
 }
 
+.command-sync-select-wrap {
+  position: relative;
+}
+
+.command-sync-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  cursor: pointer;
+  padding-right: 12px;
+}
+
+.command-sync-trigger .fa-chevron-down {
+  color: var(--text-sub);
+  font-size: 11px;
+  transition: transform 0.15s ease;
+}
+
+.command-sync-select-wrap.open .fa-chevron-down {
+  transform: rotate(180deg);
+}
+
+.command-sync-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  border: 1px solid var(--border);
+  border-radius: 0 0 10px 10px;
+  background: var(--bg-base);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  z-index: 80;
+}
+
+.command-sync-option {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  padding: 5px 10px;
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.command-sync-option:hover {
+  background: color-mix(in srgb, var(--blue) 20%, var(--bg-base));
+}
+
+.command-sync-option.active {
+  background: var(--blue);
+  color: #fff;
+}
+
+
 .mono-textarea {
   min-height: 120px;
   resize: vertical;
@@ -1021,6 +1151,18 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.form-actions-top-padding {
+  padding-top: 2px;
+}
+
+.command-sync-actions {
+  justify-content: space-between;
+}
+
+.command-sync-actions .feedback-msg {
+  margin-left: auto;
 }
 
 .btn {
