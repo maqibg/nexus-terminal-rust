@@ -2,23 +2,11 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { settingsApi } from '@/lib/api';
 
-const AVAILABLE_LOCALES = ['en-US', 'zh-CN', 'ja-JP'] as const;
+const AVAILABLE_LOCALES = ['zh-CN'] as const;
 type AppLocale = (typeof AVAILABLE_LOCALES)[number];
 
-function normalizeLocale(value: string | undefined | null): AppLocale {
-  const candidate = String(value ?? '').trim();
-  if ((AVAILABLE_LOCALES as readonly string[]).includes(candidate)) {
-    return candidate as AppLocale;
-  }
-
-  const lower = candidate.toLowerCase();
-  if (lower.startsWith('zh')) {
-    return 'zh-CN';
-  }
-  if (lower.startsWith('ja')) {
-    return 'ja-JP';
-  }
-  return 'en-US';
+function normalizeLocale(_value: string | undefined | null): AppLocale {
+  return 'zh-CN';
 }
 
 function applyDocumentLocale(locale: AppLocale): void {
@@ -31,7 +19,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<Record<string, string>>({});
   const loaded = ref(false);
 
-  const locale = computed<AppLocale>(() => normalizeLocale(settings.value.language ?? (typeof navigator !== 'undefined' ? navigator.language : 'en-US')));
+  const locale = computed<AppLocale>(() => 'zh-CN');
 
   async function loadAll() {
     const items = await settingsApi.getAll();
@@ -39,13 +27,14 @@ export const useSettingsStore = defineStore('settings', () => {
     for (const item of items) {
       map[item.key] = item.value;
     }
+    map.language = 'zh-CN';
     settings.value = map;
     loaded.value = true;
-    applyDocumentLocale(locale.value);
+    applyDocumentLocale('zh-CN');
   }
 
   async function set(key: string, value: string) {
-    const persistedValue = key === 'language' ? normalizeLocale(value) : value;
+    const persistedValue = key === 'language' ? 'zh-CN' : value;
     await settingsApi.set(key, persistedValue);
     settings.value[key] = persistedValue;
 
@@ -80,8 +69,8 @@ export const useSettingsStore = defineStore('settings', () => {
     return parsed;
   }
 
-  function setRuntimeLocale(value: string): AppLocale {
-    const normalized = normalizeLocale(value);
+  function setRuntimeLocale(_value: string): AppLocale {
+    const normalized: AppLocale = 'zh-CN';
     settings.value.language = normalized;
     applyDocumentLocale(normalized);
     return normalized;

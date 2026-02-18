@@ -281,24 +281,6 @@
           <h2 class="card-title">系统设置</h2>
           <div class="card-body">
             <div class="settings-section-content">
-              <h3 class="section-heading">语言设置</h3>
-              <form class="section-form" @submit.prevent="saveSystemLanguage">
-                <div class="form-field">
-                  <label class="form-label" for="system-language">界面语言:</label>
-                  <select id="system-language" v-model="systemForm.language" class="form-control select-control">
-                    <option v-for="locale in availableLocales" :key="locale" :value="locale">{{ languageNames[locale] ?? locale }}</option>
-                  </select>
-                </div>
-                <div class="form-actions">
-                  <button type="submit" class="btn btn-primary">保存语言</button>
-                  <p v-if="feedback.language?.message" :class="['feedback-msg', feedback.language.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.language.message }}</p>
-                </div>
-              </form>
-            </div>
-
-            <hr class="section-divider">
-
-            <div class="settings-section-content">
               <h3 class="section-heading">时区设置</h3>
               <form class="section-form" @submit.prevent="saveSystemTimezone">
                 <div class="form-field">
@@ -437,13 +419,6 @@ const tabs = computed<Array<{ key: TabKey; label: string }>>(() => {
   ];
 });
 
-const availableLocales = ['en-US', 'zh-CN', 'ja-JP'];
-const languageNames: Record<string, string> = {
-  'en-US': 'English',
-  'zh-CN': '中文',
-  'ja-JP': '日本語',
-};
-
 const commonTimezones = [
   'UTC',
   'Etc/GMT+12', 'Pacific/Midway', 'Pacific/Honolulu', 'America/Anchorage',
@@ -526,7 +501,6 @@ const workspaceForm = reactive({
 });
 
 const systemForm = reactive({
-  language: 'en-US',
   timezone: 'Asia/Shanghai',
 });
 
@@ -629,17 +603,8 @@ function hydrateFormsFromSettings() {
   workspaceForm.dockerStatusIntervalSeconds = toInt(map.dockerStatusIntervalSeconds, 2);
   workspaceForm.dockerDefaultExpand = toBool(map.dockerDefaultExpand, false);
 
-  const languageFromSettings = map.language?.trim();
-  if (languageFromSettings && availableLocales.includes(languageFromSettings)) {
-    systemForm.language = languageFromSettings;
-  } else {
-    const navigatorLocale = typeof navigator !== 'undefined' ? navigator.language : '';
-    const navigatorLanguage = navigatorLocale?.split('-')[0] ?? '';
-    const matchedLocale = availableLocales.find((locale) => locale === navigatorLocale || locale.split('-')[0] === navigatorLanguage);
-    systemForm.language = matchedLocale || 'en-US';
-  }
   systemForm.timezone = map.timezone || 'Asia/Shanghai';
-  settingsStore.setRuntimeLocale(systemForm.language);
+  settingsStore.setRuntimeLocale('zh-CN');
 }
 
 async function saveSetting(key: string, value: string) {
@@ -743,17 +708,6 @@ async function saveDockerSettings() {
   }
 }
 
-async function saveSystemLanguage() {
-  try {
-    await saveSetting('language', systemForm.language);
-    const appliedLocale = settingsStore.setRuntimeLocale(systemForm.language);
-    systemForm.language = appliedLocale;
-    settingsMap.value.language = appliedLocale;
-    setFeedback('language', '语言设置已保存', true);
-  } catch (error) {
-    setFeedback('language', normalizeError(error, '保存失败'), false);
-  }
-}
 
 async function saveSystemTimezone() {
   try {
