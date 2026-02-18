@@ -1,10 +1,10 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="overlay-backdrop">
+    <div v-if="isVisible" class="overlay-backdrop" @click.self="closeOverlay">
       <div class="overlay-card">
         <div class="overlay-header">
           <span class="overlay-title">文件编辑器</span>
-          <button class="btn-close" @click="emit('close')">&times;</button>
+          <button class="btn-close" @click="closeOverlay">&times;</button>
         </div>
         <FileEditorContainer />
       </div>
@@ -13,9 +13,41 @@
 </template>
 
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import FileEditorContainer from './FileEditorContainer.vue';
-defineProps<{ visible: boolean }>();
-const emit = defineEmits<{ close: [] }>();
+import { useFileEditorStore } from '@/stores/fileEditor';
+import { useSettingsStore } from '@/stores/settings';
+
+const settingsStore = useSettingsStore();
+const fileEditorStore = useFileEditorStore();
+const { popupTrigger, popupFileInfo } = storeToRefs(fileEditorStore);
+
+const popupEditorEnabled = computed(() => settingsStore.getBoolean('showPopupFileEditor', false));
+const isVisible = ref(false);
+
+function closeOverlay() {
+  isVisible.value = false;
+}
+
+watch(
+  popupTrigger,
+  () => {
+    if (!popupEditorEnabled.value || !popupFileInfo.value) {
+      isVisible.value = false;
+      return;
+    }
+
+    isVisible.value = true;
+  },
+  { immediate: true },
+);
+
+watch(popupEditorEnabled, (enabled) => {
+  if (!enabled) {
+    isVisible.value = false;
+  }
+});
 </script>
 
 <style scoped>

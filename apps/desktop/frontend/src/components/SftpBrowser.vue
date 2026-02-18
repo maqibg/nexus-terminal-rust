@@ -120,6 +120,16 @@
 
         <div class="toolbar-actions">
           <button
+            v-if="showPopupFileEditor"
+            class="action-btn"
+            @click="openPopupEditor"
+            :disabled="!activeSftpSessionId"
+            title="打开弹窗编辑器"
+          >
+            <i class="far fa-edit"></i>
+            <span>打开编辑器</span>
+          </button>
+          <button
             class="action-btn"
             @click="openUpload"
             :disabled="!activeSftpSessionId"
@@ -303,12 +313,14 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { useFileEditorStore } from '@/stores/fileEditor';
 import { useUINotificationStore } from '@/stores/uiNotifications';
 import { useSessionStore } from '@/stores/session';
+import { useSettingsStore } from '@/stores/settings';
 import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 import FavoritePaths from '@/components/FavoritePaths.vue';
 import FileUploadPopup from '@/components/FileUploadPopup.vue';
 import SendFilesModal from '@/components/SendFilesModal.vue';
 
 const sessionStore = useSessionStore();
+const settingsStore = useSettingsStore();
 const { activeSessionId: sshSessionId, activeSession } = storeToRefs(sessionStore);
 const connectionId = computed(() => activeSession.value?.connectionId);
 const activeSftpSessionId = computed(() => activeSession.value?.sftpSessionId ?? null);
@@ -340,6 +352,8 @@ const error = ref('');
 const showUpload = ref(false);
 const showSendFile = ref(false);
 const sendFileTarget = ref<string | null>(null);
+const fileManagerShowDeleteConfirmation = computed(() => settingsStore.getBoolean('fileManagerShowDeleteConfirmation', true));
+const showPopupFileEditor = computed(() => settingsStore.getBoolean('showPopupFileEditor', false));
 
 interface BrowserContextMenuItem {
   key: string;
@@ -1394,7 +1408,7 @@ async function handleDeleteEntries(targetEntries: FileEntry[]): Promise<void> {
   }
 
   const label = targetEntries.length === 1 ? `"${targetEntries[0].name}"` : `${targetEntries.length} 项`;
-  if (!confirm(`确定删除 ${label} 吗？`)) {
+  if (fileManagerShowDeleteConfirmation.value && !confirm(`确定删除 ${label} 吗？`)) {
     return;
   }
 
@@ -1504,12 +1518,31 @@ async function handleChmod(entry: FileEntry) {
   }
 }
 
+function openPopupEditor() {
+  const sid = activeSftpSessionId.value;
+  if (!sid) {
+    notify.addNotification('warning', '没有活动会话，无法打开编辑器');
+    return;
+  }
+
+  fileEditorStore.triggerPopup('', sid);
+}
+
 async function openEditor(entry: FileEntry) {
   const sid = activeSftpSessionId.value;
   if (!sid) return;
 
-  const tabId = `${sid}:${entry.path}`;
+  const popupEditorEnabled = settingsStore.getBoolean('showPopupFileEditor', false);
+  const shareFileEditorTabs = settingsStore.getBoolean('shareFileEditorTabs', true);
+  const tabScope = connectionId.value != null ? String(connectionId.value) : 'global';
+  const tabId = shareFileEditorTabs ? `shared:${tabScope}:${entry.path}` : `${sid}:${entry.path}`;
+
+  if (popupEditorEnabled) {
+    fileEditorStore.triggerPopup(entry.path, sid);
+  }
+
   if (fileEditorStore.openFiles.has(tabId)) {
+    fileEditorStore.updateFileSession(tabId, sid);
     fileEditorStore.setActive(tabId);
     return;
   }
@@ -1557,6 +1590,7 @@ async function openEditor(entry: FileEntry) {
       scrollLeft: 0,
       language: langMap[ext] ?? 'plaintext',
     });
+
   } catch (e: any) {
     notify.addNotification('error', `打开失败: ${e.message}`);
   }
@@ -1748,6 +1782,7 @@ async function focusSearchInput(): Promise<boolean | undefined> {
 }
 
 onMounted(() => {
+  void settingsStore.loadAll().catch(() => undefined);
   unregisterFileManagerSearch = focusSwitcherStore.registerFocusAction('fileManagerSearch', focusSearchInput);
   unregisterFileManagerPathInput = focusSwitcherStore.registerFocusAction('fileManagerPathInput', focusPathInput);
   document.addEventListener('mousedown', handleDocumentMouseDown);
@@ -2491,3 +2526,4 @@ watch(
   }
 }
 </style>
+

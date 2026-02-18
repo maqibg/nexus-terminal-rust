@@ -26,8 +26,24 @@
     >
       <i class="fas fa-search"></i>
     </button>
+    <button
+      v-if="showPopupFileManager"
+      class="bar-btn"
+      title="弹窗文件管理器"
+      @click="openFileManagerPopup"
+    >
+      <i class="fas fa-folder-open"></i>
+    </button>
 
-    <div v-else class="search-controls">
+    <button
+      v-if="showPopupFileEditor"
+      class="bar-btn"
+      title="弹窗文件编辑器"
+      @click="openFileEditorPopup"
+    >
+      <i class="fas fa-pen-to-square"></i>
+    </button>
+    <div v-if="isSearching" class="search-controls">
       <input
         ref="searchInputEl"
         v-model="searchTerm"
@@ -58,13 +74,15 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { historyApi, sshApi } from '@/lib/api';
 import { useSessionStore } from '@/stores/session';
 import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
+import { useSettingsStore } from '@/stores/settings';
 
 const sessionStore = useSessionStore();
 const focusSwitcherStore = useFocusSwitcherStore();
+const settingsStore = useSettingsStore();
 
 const inputEl = ref<HTMLInputElement>();
 const searchInputEl = ref<HTMLInputElement>();
@@ -72,6 +90,15 @@ const searchInputEl = ref<HTMLInputElement>();
 const command = ref('');
 const searchTerm = ref('');
 const isSearching = ref(false);
+const commandInputSyncTarget = computed<'none' | 'quickCommands' | 'commandHistory'>(() => {
+  const target = settingsStore.get('commandInputSyncTarget', 'none');
+  if (target === 'quickCommands' || target === 'commandHistory') {
+    return target;
+  }
+  return 'none';
+});
+const showPopupFileManager = computed(() => settingsStore.getBoolean('showPopupFileManager', false));
+const showPopupFileEditor = computed(() => settingsStore.getBoolean('showPopupFileEditor', false));
 
 const history = ref<string[]>([]);
 const historyIdx = ref(-1);
@@ -207,6 +234,8 @@ function findPrevious(): void {
 }
 
 onMounted(async () => {
+  await settingsStore.loadAll().catch(() => undefined);
+
   try {
     const items = await historyApi.list(100);
     history.value = items.map((h) => h.command);
@@ -217,6 +246,7 @@ onMounted(async () => {
   await nextTick();
   unregisterCommandInput = focusSwitcherStore.registerFocusAction('commandInput', focusCommandInput);
   unregisterTerminalSearch = focusSwitcherStore.registerFocusAction('terminalSearch', focusSearchInput);
+  emitCommandInputSyncTarget(command.value);
 });
 
 onUnmounted(() => {
@@ -238,8 +268,46 @@ watch(
   },
 );
 
+function emitCommandInputSyncTarget(term: string): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const detail = { term };
+  if (commandInputSyncTarget.value === 'quickCommands') {
+    window.dispatchEvent(new CustomEvent('nexus:quick-commands:set-search', { detail }));
+    return;
+  }
+
+  if (commandInputSyncTarget.value === 'commandHistory') {
+    window.dispatchEvent(new CustomEvent('nexus:command-history:set-search', { detail }));
+  }
+}
+
+watch(command, (nextCommand) => {
+  emitCommandInputSyncTarget(nextCommand);
+});
+
+watch(commandInputSyncTarget, () => {
+  emitCommandInputSyncTarget(command.value);
+});
+
 function openFocusConfigurator() {
   focusSwitcherStore.toggleConfigurator(true);
+}
+
+function openFileManagerPopup() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.dispatchEvent(new Event('nexus:workspace:file-manager-popup:open'));
+}
+
+function openFileEditorPopup() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.dispatchEvent(new Event('nexus:workspace:file-editor-popup:open'));
 }
 
 async function send() {
@@ -400,3 +468,8 @@ function historyDown() {
   }
 }
 </style>
+
+
+
+
+

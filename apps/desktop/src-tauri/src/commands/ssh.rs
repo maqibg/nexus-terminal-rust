@@ -2,8 +2,10 @@
 
 use api_contract::error::AppError;
 use connection_core::repository::ConnectionRepository;
+use settings_core::repository::SettingsRepository;
 use serde::Deserialize;
 use tauri::State;
+use tokio::time::Duration;
 
 use crate::state::AppState;
 
@@ -110,9 +112,23 @@ pub async fn ssh_connect(
         .await
         .map_err(AppError::Ssh)?;
 
+    let status_monitor_interval = state
+        .settings_repo
+        .get_setting("statusMonitorIntervalSeconds")
+        .await
+        .map_err(AppError::Database)?
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .filter(|seconds| *seconds >= 1)
+        .map(Duration::from_secs);
+
     state
         .status_monitor
-        .start_session(session_id.clone(), state.ssh_manager.clone(), app_handle)
+        .start_session(
+            session_id.clone(),
+            state.ssh_manager.clone(),
+            app_handle,
+            status_monitor_interval,
+        )
         .await;
 
     Ok(session_id)
@@ -169,3 +185,4 @@ pub async fn ssh_session_list(state: State<'_, AppState>) -> CmdResult<Vec<serde
         })
         .collect())
 }
+

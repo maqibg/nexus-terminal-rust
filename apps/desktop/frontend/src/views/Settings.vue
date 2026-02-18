@@ -366,9 +366,11 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { authApi, connectionsApi, settingsApi } from '@/lib/api';
+import { storeToRefs } from 'pinia';
+import { authApi, connectionsApi } from '@/lib/api';
 import { useUiNotificationsStore } from '@/stores/uiNotifications';
 import { useAppearanceStore } from '@/stores/appearance';
+import { useSettingsStore } from '@/stores/settings';
 
 type AppVersionHost = {
   __APP_VERSION__?: unknown;
@@ -377,14 +379,38 @@ type AppVersionHost = {
 type TabKey = 'workspace' | 'system' | 'security' | 'dataManagement' | 'appearance' | 'about';
 
 
-const tabs: Array<{ key: TabKey; label: string }> = [
-  { key: 'workspace', label: '工作区' },
-  { key: 'system', label: '系统' },
-  { key: 'security', label: '安全' },
-  { key: 'dataManagement', label: '数据管理' },
-  { key: 'appearance', label: '外观' },
-  { key: 'about', label: '关于' },
-];
+const tabs = computed<Array<{ key: TabKey; label: string }>>(() => {
+  if (locale.value === 'zh-CN') {
+    return [
+      { key: 'workspace', label: '工作区' },
+      { key: 'system', label: '系统' },
+      { key: 'security', label: '安全' },
+      { key: 'dataManagement', label: '数据管理' },
+      { key: 'appearance', label: '外观' },
+      { key: 'about', label: '关于' },
+    ];
+  }
+
+  if (locale.value === 'ja-JP') {
+    return [
+      { key: 'workspace', label: 'ワークスペース' },
+      { key: 'system', label: 'システム' },
+      { key: 'security', label: 'セキュリティ' },
+      { key: 'dataManagement', label: 'データ管理' },
+      { key: 'appearance', label: '外観' },
+      { key: 'about', label: '情報' },
+    ];
+  }
+
+  return [
+    { key: 'workspace', label: 'Workspace' },
+    { key: 'system', label: 'System' },
+    { key: 'security', label: 'Security' },
+    { key: 'dataManagement', label: 'Data' },
+    { key: 'appearance', label: 'Appearance' },
+    { key: 'about', label: 'About' },
+  ];
+});
 
 const availableLocales = ['en-US', 'zh-CN', 'ja-JP'];
 const languageNames: Record<string, string> = {
@@ -406,6 +432,8 @@ const commonTimezones = [
 
 const notifications = useUiNotificationsStore();
 const appearanceStore = useAppearanceStore();
+const settingsStore = useSettingsStore();
+const { locale, settings: runtimeSettings } = storeToRefs(settingsStore);
 
 const activeTab = ref<TabKey>('workspace');
 const loadingSettings = ref(false);
@@ -415,7 +443,7 @@ const settingsMap = ref<Record<string, string>>({});
 const feedback = reactive<Record<string, { message: string; success: boolean }>>({});
 
 const workspaceForm = reactive({
-  showPopupFileEditor: true,
+  showPopupFileEditor: false,
   showPopupFileManager: false,
   shareFileEditorTabs: true,
   autoCopyOnSelect: false,
@@ -517,7 +545,7 @@ function toInt(value: string | undefined, fallback: number): number {
 function hydrateFormsFromSettings() {
   const map = settingsMap.value;
 
-  workspaceForm.showPopupFileEditor = toBool(map.showPopupFileEditor, true);
+  workspaceForm.showPopupFileEditor = toBool(map.showPopupFileEditor, false);
   workspaceForm.showPopupFileManager = toBool(map.showPopupFileManager, false);
   workspaceForm.shareFileEditorTabs = toBool(map.shareFileEditorTabs, true);
   workspaceForm.autoCopyOnSelect = toBool(map.autoCopyOnSelect, false);
@@ -546,11 +574,12 @@ function hydrateFormsFromSettings() {
     systemForm.language = matchedLocale || 'en-US';
   }
   systemForm.timezone = map.timezone || 'Asia/Shanghai';
+  settingsStore.setRuntimeLocale(systemForm.language);
 }
 
 async function saveSetting(key: string, value: string) {
-  await settingsApi.set(key, value);
-  settingsMap.value[key] = value;
+  await settingsStore.set(key, value);
+  settingsMap.value[key] = settingsStore.get(key, value);
 }
 
 async function saveSettingsBatch(entries: Array<[string, string]>) {
@@ -564,12 +593,8 @@ async function loadSettings() {
   settingsError.value = '';
 
   try {
-    const all = await settingsApi.getAll();
-    const map: Record<string, string> = {};
-    for (const item of all) {
-      map[item.key] = item.value;
-    }
-    settingsMap.value = map;
+    await settingsStore.loadAll();
+    settingsMap.value = { ...runtimeSettings.value };
     hydrateFormsFromSettings();
   } catch (error) {
     settingsError.value = normalizeError(error, '加载设置失败');
@@ -656,6 +681,9 @@ async function saveDockerSettings() {
 async function saveSystemLanguage() {
   try {
     await saveSetting('language', systemForm.language);
+    const appliedLocale = settingsStore.setRuntimeLocale(systemForm.language);
+    systemForm.language = appliedLocale;
+    settingsMap.value.language = appliedLocale;
     setFeedback('language', '语言设置已保存', true);
   } catch (error) {
     setFeedback('language', normalizeError(error, '保存失败'), false);
@@ -1248,3 +1276,4 @@ onMounted(async () => {
   }
 }
 </style>
+

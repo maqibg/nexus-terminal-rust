@@ -15,8 +15,8 @@
       @add="showConnList = true"
     />
 
-    <div class="workspace-body">
-      <div class="workspace-left-tools">
+    <div class="workspace-body" @click="handleWorkspaceBodyClick">
+      <div class="workspace-left-tools" @click.stop>
         <button
           class="workspace-left-tool-btn"
           :class="{ 'workspace-left-tool-btn-active': activeLeftToolPane === 'connections' }"
@@ -35,7 +35,7 @@
         </button>
       </div>
 
-      <div v-if="activeLeftToolPane" class="workspace-left-panel">
+      <div v-if="activeLeftToolPane" class="workspace-left-panel" @click.stop>
         <div class="workspace-left-panel-header">
           <div class="workspace-left-panel-title">
             {{ activeLeftToolPane === 'connections' ? '连接列表' : 'Docker 管理器' }}
@@ -92,6 +92,24 @@
       </div>
     </Teleport>
 
+    <Teleport to="body">
+      <div v-if="showFileManagerPopup" class="dialog-backdrop" @click.self="showFileManagerPopup = false">
+        <div class="workspace-modal-popup">
+          <div class="workspace-modal-header">
+            <div class="workspace-modal-title">弹窗文件管理器</div>
+            <button class="workspace-modal-close" title="关闭" @click="showFileManagerPopup = false">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="workspace-modal-body">
+            <SftpBrowser />
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <FileEditorOverlay />
+
     <TransferProgressModal
       :visible="showTransferModal"
       :tasks="taskList"
@@ -107,12 +125,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { Splitpanes, Pane } from 'splitpanes';
 import 'splitpanes/dist/splitpanes.css';
 import { useSessionStore } from '@/stores/session';
 import { useLayoutStore } from '@/stores/layout';
+import { useSettingsStore } from '@/stores/settings';
+import { useFileEditorStore } from '@/stores/fileEditor';
 import { sshApi, sftpApi, desktopApi, type Connection } from '@/lib/api';
 import { useTransferProgress } from '@/composables/useTransferProgress';
 import LayoutRenderer from '@/components/LayoutRenderer.vue';
@@ -120,20 +140,29 @@ import TerminalTabBar from '@/components/TerminalTabBar.vue';
 import WorkspaceConnectionList from '@/components/WorkspaceConnectionList.vue';
 import TransferProgressModal from '@/components/TransferProgressModal.vue';
 import LayoutConfigurator from '@/components/LayoutConfigurator.vue';
+import SftpBrowser from '@/components/SftpBrowser.vue';
+import FileEditorOverlay from '@/components/FileEditorOverlay.vue';
 
 const sessionStore = useSessionStore();
 const layoutStore = useLayoutStore();
+const settingsStore = useSettingsStore();
+const fileEditorStore = useFileEditorStore();
 const { activeSessionId, sessionList } = storeToRefs(sessionStore);
 const { layoutConfig, leftSidebarVisible, rightSidebarVisible, leftSidebarSize, rightSidebarSize, headerVisible, layoutLocked } =
   storeToRefs(layoutStore);
 const showConnList = ref(false);
 const showTransferModal = ref(false);
 const showLayoutConfigurator = ref(false);
+const showFileManagerPopup = ref(false);
+
 type LeftToolPane = 'connections' | 'docker';
 const activeLeftToolPane = ref<LeftToolPane | null>(null);
 const { taskList, startListening, cancelTask, cleanup } = useTransferProgress();
+const workspaceSidebarPersistent = computed(() => settingsStore.getBoolean('workspaceSidebarPersistent', false));
+const dockerStatusIntervalSeconds = computed(() => settingsStore.getInteger('dockerStatusIntervalSeconds', 2, 1));
 
 let workspaceResizeDispatchRaf = 0;
+let dockerStatusRefreshTimer: number | null = null;
 
 function extractPaneSizes(payload: unknown): number[] {
   if (Array.isArray(payload)) {
@@ -174,6 +203,25 @@ function notifyWorkspaceLayoutResized() {
   });
 }
 
+function clearDockerStatusRefreshTimer() {
+  if (dockerStatusRefreshTimer != null && typeof window !== 'undefined') {
+    window.clearInterval(dockerStatusRefreshTimer);
+  }
+  dockerStatusRefreshTimer = null;
+}
+
+function startDockerStatusRefreshTimer() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  clearDockerStatusRefreshTimer();
+  const intervalMs = Math.max(1, dockerStatusIntervalSeconds.value) * 1000;
+  dockerStatusRefreshTimer = window.setInterval(() => {
+    window.dispatchEvent(new CustomEvent('nexus:docker-status:refresh'));
+  }, intervalMs);
+}
+
 function handleWorkspacePaneResize(payload?: unknown) {
   if (layoutLocked.value) {
     notifyWorkspaceLayoutResized();
@@ -208,6 +256,33 @@ function toggleLeftToolPane(pane: LeftToolPane) {
 
 function closeLeftToolPane() {
   activeLeftToolPane.value = null;
+}
+
+function handleWorkspaceBodyClick() {
+  if (workspaceSidebarPersistent.value) {
+    return;
+  }
+  closeLeftToolPane();
+}
+
+function handleOpenFileManagerPopup() {
+  if (!settingsStore.getBoolean('showPopupFileManager', false)) {
+    return;
+  }
+  showFileManagerPopup.value = true;
+}
+
+function handleOpenFileEditorPopup() {
+  if (!settingsStore.getBoolean('showPopupFileEditor', false)) {
+    return;
+  }
+
+  const sid = activeSessionId.value;
+  if (!sid) {
+    return;
+  }
+
+  fileEditorStore.triggerPopup('', sid);
 }
 
 const effectiveLeftSidebarVisible = computed(() => leftSidebarVisible.value && !activeLeftToolPane.value);
@@ -313,15 +388,34 @@ function handleTransferCreated() {
 onMounted(() => {
   void layoutStore.loadLayout();
   void startListening();
+  void settingsStore
+    .loadAll()
+    .then(() => {
+      if (settingsStore.getBoolean('dockerDefaultExpand', false) && !activeLeftToolPane.value) {
+        activeLeftToolPane.value = 'docker';
+      }
+    })
+    .catch(() => undefined);
+
   window.addEventListener('transfer-created', handleTransferCreated);
+  window.addEventListener('nexus:workspace:file-manager-popup:open', handleOpenFileManagerPopup as EventListener);
+  window.addEventListener('nexus:workspace:file-editor-popup:open', handleOpenFileEditorPopup as EventListener);
+  startDockerStatusRefreshTimer();
+});
+
+watch(dockerStatusIntervalSeconds, () => {
+  startDockerStatusRefreshTimer();
 });
 
 onUnmounted(() => {
   window.removeEventListener('transfer-created', handleTransferCreated);
+  window.removeEventListener('nexus:workspace:file-manager-popup:open', handleOpenFileManagerPopup as EventListener);
+  window.removeEventListener('nexus:workspace:file-editor-popup:open', handleOpenFileEditorPopup as EventListener);
   if (workspaceResizeDispatchRaf) {
     window.cancelAnimationFrame(workspaceResizeDispatchRaf);
     workspaceResizeDispatchRaf = 0;
   }
+  clearDockerStatusRefreshTimer();
   cleanup();
 });
 </script>
@@ -517,4 +611,55 @@ onUnmounted(() => {
   color: var(--text);
   border-bottom: 1px solid var(--border);
 }
+
+.workspace-modal-popup {
+  width: min(1180px, 92vw);
+  height: min(840px, 86vh);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface0);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.workspace-modal-header {
+  height: 42px;
+  padding: 0 10px 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-mantle);
+}
+
+.workspace-modal-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.workspace-modal-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.workspace-modal-close:hover {
+  color: var(--text);
+  background: var(--bg-surface0);
+}
+
+.workspace-modal-body {
+  flex: 1;
+  min-height: 0;
+}
 </style>
+
+
+
+

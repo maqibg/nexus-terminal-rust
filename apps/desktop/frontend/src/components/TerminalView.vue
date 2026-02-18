@@ -20,11 +20,14 @@ import { storeToRefs } from 'pinia';
 import { onSshOutput, sshApi } from '@/lib/api';
 import { useSessionStore } from '@/stores/session';
 import { useAppearanceStore } from '@/stores/appearance';
+import { useSettingsStore } from '@/stores/settings';
 
 const sessionStore = useSessionStore();
 const appearanceStore = useAppearanceStore();
+const settingsStore = useSettingsStore();
 const { activeSessionId: sessionId } = storeToRefs(sessionStore);
 const { appearance, effectiveTerminalTheme } = storeToRefs(appearanceStore);
+const { settings: runtimeSettings } = storeToRefs(settingsStore);
 
 const termRef = ref<HTMLElement>();
 let term: Terminal | null = null;
@@ -33,6 +36,7 @@ let searchAddon: SearchAddon | null = null;
 let unlisten: (() => void) | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let currentSearchTerm = '';
+let selectionDisposable: { dispose: () => void } | null = null;
 
 interface TerminalSearchEventDetail {
   sessionId?: string;
@@ -64,11 +68,31 @@ function parseNumber(value: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function getSettingBoolean(key: string, fallback: boolean): boolean {
+  return settingsStore.getBoolean(key, fallback);
+}
+
+function getSettingInteger(key: string, fallback: number, min?: number): number {
+  return settingsStore.getInteger(key, fallback, min);
+}
+
 function getTerminalFontFamily(): string {
   return getAppearanceValue(
     ['terminal_font_family', 'terminalFontFamily'],
     `Consolas, 'Courier New', monospace, 'Microsoft YaHei', '微软雅黑'`,
   );
+}
+
+function getTerminalScrollbackLimit(): number {
+  return getSettingInteger('terminalScrollbackLimit', 5000, 0);
+}
+
+function isTerminalRightClickPasteEnabled(): boolean {
+  return getSettingBoolean('terminalEnableRightClickPaste', true);
+}
+
+function isTerminalAutoCopyOnSelectEnabled(): boolean {
+  return getSettingBoolean('autoCopyOnSelect', false);
 }
 
 function getTerminalFontSize(): number {
@@ -253,6 +277,7 @@ function initTerminal(sid: string): void {
   const activeTheme = effectiveTerminalTheme.value;
   term = new Terminal({
     cursorBlink: true,
+    scrollback: getTerminalScrollbackLimit(),
     fontSize: getTerminalFontSize(),
     fontFamily: getTerminalFontFamily(),
     theme: {
@@ -271,6 +296,19 @@ function initTerminal(sid: string): void {
   term.loadAddon(new WebLinksAddon());
 
   term.open(termRef.value);
+  selectionDisposable = term.onSelectionChange(() => {
+    if (!isTerminalAutoCopyOnSelectEnabled()) {
+      return;
+    }
+
+    const selectedText = term?.getSelection();
+    if (!selectedText) {
+      return;
+    }
+
+    void navigator.clipboard.writeText(selectedText).catch(() => undefined);
+  });
+  termRef.value?.addEventListener('contextmenu', handleTerminalContextMenu);
   applyTerminalAppearance();
 
   term.onData((data) => {
@@ -305,12 +343,34 @@ function initTerminal(sid: string): void {
   resizeObserver.observe(termRef.value);
 }
 
+
+async function handleTerminalContextMenu(event: MouseEvent): Promise<void> {
+  if (!sessionId.value || !isTerminalRightClickPasteEnabled()) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  try {
+    const clipboardText = await navigator.clipboard.readText();
+    if (!clipboardText) {
+      return;
+    }
+    await sshApi.write(sessionId.value, btoa(clipboardText));
+  } catch {
+  }
+}
 function cleanup(): void {
   unlisten?.();
   unlisten = null;
 
   resizeObserver?.disconnect();
   resizeObserver = null;
+
+  selectionDisposable?.dispose();
+  selectionDisposable = null;
+  termRef.value?.removeEventListener('contextmenu', handleTerminalContextMenu);
 
   term?.dispose();
   term = null;
@@ -328,6 +388,17 @@ watch(sessionId, (newSid) => {
 });
 
 watch(
+  runtimeSettings,
+  () => {
+    if (!term) {
+      return;
+    }
+    term.options.scrollback = getTerminalScrollbackLimit();
+  },
+  { deep: true },
+);
+
+watch(
   appearance,
   () => {
     if (term) {
@@ -338,6 +409,10 @@ watch(
 );
 
 onMounted(async () => {
+  if (!settingsStore.loaded) {
+    await settingsStore.loadAll().catch(() => undefined);
+  }
+
   if (!appearanceStore.loaded) {
     await appearanceStore.loadAll().catch(() => undefined);
   }
@@ -401,3 +476,4 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 </style>
+

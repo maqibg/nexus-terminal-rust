@@ -6,6 +6,7 @@ import AddConnectionForm from '@/components/AddConnectionForm.vue';
 import BatchEditConnectionForm from '@/components/BatchEditConnectionForm.vue';
 import { useConnectionsStore } from '@/stores/connections';
 import { useSessionStore } from '@/stores/session';
+import { useSettingsStore } from '@/stores/settings';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import { useAlertDialog } from '@/composables/useAlertDialog';
 import { connectionsApi, desktopApi, sftpApi, sshApi, type Connection, type Tag } from '@/lib/api';
@@ -49,8 +50,15 @@ const sortOptions: { value: SortField; label: string }[] = [
 
 const store = useConnectionsStore();
 const sessionStore = useSessionStore();
+const settingsStore = useSettingsStore();
 const { list: connections, tags, loading: isLoadingConnections } = storeToRefs(store);
 const isLoadingTags = computed(() => isLoadingConnections.value);
+const currentLocale = computed(() => settingsStore.locale);
+const currentTimezone = computed(() => {
+  const fallback = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai';
+  return settingsStore.get('timezone', fallback);
+});
+const showConnectionTags = computed(() => settingsStore.getBoolean('showConnectionTags', true));
 
 const router = useRouter();
 const { confirm } = useConfirmDialog();
@@ -139,7 +147,7 @@ const formatRelativeTime = (timestampInSeconds: number | null | undefined): stri
   const nowInSeconds = Math.floor(Date.now() / 1000);
   const deltaSeconds = normalizedTimestamp - nowInSeconds;
   const absDeltaSeconds = Math.abs(deltaSeconds);
-  const formatter = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'auto' });
+  const formatter = new Intl.RelativeTimeFormat(currentLocale.value, { numeric: 'auto' });
 
   if (absDeltaSeconds < 60) {
     return formatter.format(deltaSeconds, 'second');
@@ -154,7 +162,13 @@ const formatRelativeTime = (timestampInSeconds: number | null | undefined): stri
     return formatter.format(Math.round(deltaSeconds / 86400), 'day');
   }
 
-  return new Date(normalizedTimestamp * 1000).toLocaleString();
+  try {
+    return new Date(normalizedTimestamp * 1000).toLocaleString(currentLocale.value, {
+      timeZone: currentTimezone.value,
+    });
+  } catch {
+    return new Date(normalizedTimestamp * 1000).toLocaleString(currentLocale.value);
+  }
 };
 
 const getTruncatedNotes = (notes: string | null | undefined): string => {
@@ -240,6 +254,12 @@ watch(localSortBy, (newValue) => {
 
 watch(localSortOrder, (newValue) => {
   localStorage.setItem(LS_SORT_ORDER_KEY, newValue);
+});
+
+watch(showConnectionTags, (value) => {
+  if (!value) {
+    selectedTagId.value = null;
+  }
 });
 
 watch(selectedTagId, (newValue) => {
@@ -527,7 +547,10 @@ const handleConnectAllFilteredConnections = async () => {
 };
 
 onMounted(async () => {
-  await store.fetch();
+  await Promise.all([
+    store.fetch(),
+    settingsStore.loadAll().catch(() => undefined),
+  ]);
 });
 </script>
 
@@ -561,7 +584,7 @@ onMounted(async () => {
               class="search-input"
             />
 
-            <div class="select-group">
+            <div v-if="showConnectionTags" class="select-group">
               <select
                 v-model="selectedTagId"
                 class="select-control"
@@ -687,7 +710,7 @@ onMounted(async () => {
                   </span>
                 </div>
 
-                <div v-if="getConnectionTags(conn).length > 0" class="connection-tags">
+                <div v-if="showConnectionTags && getConnectionTags(conn).length > 0" class="connection-tags">
                   <span
                     v-for="tagName in getConnectionTags(conn)"
                     :key="tagName"
@@ -1253,3 +1276,4 @@ onMounted(async () => {
   }
 }
 </style>
+

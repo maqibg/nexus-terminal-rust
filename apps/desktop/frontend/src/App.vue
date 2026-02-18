@@ -8,10 +8,10 @@
       <nav class="app-nav" data-tauri-drag-region>
         <div class="nav-left no-drag">
           <img :src="logoPng" alt="Nexus Terminal" class="brand-logo" title="Nexus Terminal" />
-          <router-link to="/connections" class="nav-link" active-class="nav-link-active">连接管理</router-link>
-          <router-link to="/workspace" class="nav-link" active-class="nav-link-active">终端</router-link>
-          <router-link to="/proxies" class="nav-link nav-link-desktop" active-class="nav-link-active">代理管理</router-link>
-          <router-link to="/settings" class="nav-link" active-class="nav-link-active">设置</router-link>
+          <router-link to="/connections" class="nav-link" active-class="nav-link-active">{{ uiText.navConnections }}</router-link>
+          <router-link to="/workspace" class="nav-link" active-class="nav-link-active">{{ uiText.navTerminal }}</router-link>
+          <router-link to="/proxies" class="nav-link nav-link-desktop" active-class="nav-link-active">{{ uiText.navProxy }}</router-link>
+          <router-link to="/settings" class="nav-link" active-class="nav-link-active">{{ uiText.navSettings }}</router-link>
         </div>
 
         <div class="nav-drag-region" data-tauri-drag-region></div>
@@ -26,23 +26,23 @@
           >
             <i class="fab fa-github"></i>
           </a>
-          <button class="nav-icon-btn" title="外观自定义" @click="appearanceStore.toggleStyleCustomizer(true)">
+          <button class="nav-icon-btn" :title="uiText.customizeAppearance" @click="appearanceStore.toggleStyleCustomizer(true)">
             <i class="fas fa-paint-brush"></i>
           </button>
-          <button v-if="isAuthenticated" @click="handleLogout" class="nav-link nav-link-ghost">登出</button>
+          <button v-if="isAuthenticated" @click="handleLogout" class="nav-link nav-link-ghost">{{ uiText.logout }}</button>
 
           <div class="window-controls">
-            <button class="window-btn minimize" @click="minimizeWindow" title="最小化" aria-label="最小化">
+            <button class="window-btn minimize" @click="minimizeWindow" :title="uiText.minimize" :aria-label="uiText.minimize">
               <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                 <path fill-rule="evenodd" d="M2 8a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 8Z" />
               </svg>
             </button>
-            <button class="window-btn maximize" @click="toggleMaximize" title="最大化/还原" aria-label="最大化或还原">
+            <button class="window-btn maximize" @click="toggleMaximize" :title="uiText.maximize" :aria-label="uiText.maximize">
               <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                 <path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z" />
               </svg>
             </button>
-            <button class="window-btn close" @click="closeWindow" title="关闭" aria-label="关闭窗口">
+            <button class="window-btn close" @click="closeWindow" :title="uiText.close" :aria-label="uiText.close">
               <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                 <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z" />
               </svg>
@@ -57,8 +57,8 @@
       class="startup-banner"
       :class="startupState"
     >
-      <span v-if="startupState === 'starting'">后端启动中...</span>
-      <span v-else>后端启动失败：{{ startupError || '未知错误' }}</span>
+      <span v-if="startupState === 'starting'">{{ uiText.backendStarting }}</span>
+      <span v-else>{{ uiText.backendFailed }}{{ startupError || uiText.unknownError }}</span>
     </div>
 
     <main class="app-main">
@@ -83,6 +83,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useLayoutStore } from '@/stores/layout';
 import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 import { useAppearanceStore } from '@/stores/appearance';
+import { useSettingsStore } from '@/stores/settings';
 import { statusApi } from '@/lib/api';
 import UINotificationDisplay from '@/components/UINotificationDisplay.vue';
 import GlobalAlertDialog from '@/components/GlobalAlertDialog.vue';
@@ -97,11 +98,63 @@ const authStore = useAuthStore();
 const layoutStore = useLayoutStore();
 const focusSwitcherStore = useFocusSwitcherStore();
 const appearanceStore = useAppearanceStore();
+const settingsStore = useSettingsStore();
 const { isAuthenticated } = storeToRefs(authStore);
 const { headerVisible } = storeToRefs(layoutStore);
 const { isConfiguratorVisible: isFocusSwitcherVisible } = storeToRefs(focusSwitcherStore);
 const { isStyleCustomizerVisible } = storeToRefs(appearanceStore);
+const { locale } = storeToRefs(settingsStore);
 const appWindow = getCurrentWindow();
+const uiText = computed(() => {
+  if (locale.value === 'zh-CN') {
+    return {
+      navConnections: '连接管理',
+      navTerminal: '终端',
+      navProxy: '代理管理',
+      navSettings: '设置',
+      customizeAppearance: '外观自定义',
+      logout: '登出',
+      minimize: '最小化',
+      maximize: '最大化/还原',
+      close: '关闭',
+      backendStarting: '后端启动中...',
+      backendFailed: '后端启动失败：',
+      unknownError: '未知错误',
+    };
+  }
+
+  if (locale.value === 'ja-JP') {
+    return {
+      navConnections: '接続管理',
+      navTerminal: 'ターミナル',
+      navProxy: 'プロキシ管理',
+      navSettings: '設定',
+      customizeAppearance: '外観カスタマイズ',
+      logout: 'ログアウト',
+      minimize: '最小化',
+      maximize: '最大化/復元',
+      close: '閉じる',
+      backendStarting: 'バックエンド起動中...',
+      backendFailed: 'バックエンド起動失敗: ',
+      unknownError: '不明なエラー',
+    };
+  }
+
+  return {
+    navConnections: 'Connections',
+    navTerminal: 'Terminal',
+    navProxy: 'Proxies',
+    navSettings: 'Settings',
+    customizeAppearance: 'Customize Appearance',
+    logout: 'Logout',
+    minimize: 'Minimize',
+    maximize: 'Maximize/Restore',
+    close: 'Close',
+    backendStarting: 'Backend starting...',
+    backendFailed: 'Backend startup failed: ',
+    unknownError: 'Unknown error',
+  };
+});
 
 const noHeaderPaths = ['/login', '/setup'];
 const showHeader = computed(() => {
@@ -278,6 +331,7 @@ onMounted(() => {
   if (isAuthenticated.value) {
     void loadAppearanceData();
   }
+  void settingsStore.loadAll().catch(() => undefined);
   void layoutStore.loadLayout().catch(() => undefined);
   void checkBackendStartup();
   void focusSwitcherStore.loadConfigurationFromBackend();

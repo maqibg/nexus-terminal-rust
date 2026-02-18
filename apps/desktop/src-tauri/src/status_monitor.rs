@@ -164,11 +164,12 @@ impl StatusMonitorService {
         session_id: String,
         ssh_manager: SshSessionManager,
         app_handle: tauri::AppHandle,
+        poll_interval_override: Option<Duration>,
     ) {
         self.prune_finished().await;
         self.stop_session(&session_id).await;
 
-        let poll_interval = self.poll_interval;
+        let poll_interval = poll_interval_override.unwrap_or(self.poll_interval);
         let sid = session_id.clone();
         let task = tokio::spawn(async move {
             let mut ticker = interval(poll_interval);
@@ -472,3 +473,4 @@ fn now_timestamp_ms() -> i64 {
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
 }
+

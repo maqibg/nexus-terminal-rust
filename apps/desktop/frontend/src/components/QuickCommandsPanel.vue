@@ -38,7 +38,7 @@
 
       <template v-else>
         <section v-for="group in groupedCommands" :key="group.name" class="command-group">
-          <button class="group-header" @click="toggleGroup(group.name)">
+          <button v-if="showQuickCommandTags" class="group-header" @click="toggleGroup(group.name)">
             <i
               class="fas group-chevron"
               :class="expandedGroups[group.name] ? 'fa-chevron-down' : 'fa-chevron-right'"
@@ -47,7 +47,7 @@
             <span class="group-count">{{ group.commands.length }}</span>
           </button>
 
-          <ul v-show="expandedGroups[group.name]" class="group-items">
+          <ul v-show="!showQuickCommandTags || expandedGroups[group.name]" class="group-items">
             <li
               v-for="command in group.commands"
               :key="command.id"
@@ -125,6 +125,7 @@ import { useCommandHistoryStore } from '@/stores/commandHistory';
 import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 import { useQuickCommandsStore } from '@/stores/quickCommands';
 import { useSessionStore } from '@/stores/session';
+import { useSettingsStore } from '@/stores/settings';
 import { useUINotificationStore } from '@/stores/uiNotifications';
 
 interface GroupedCommands {
@@ -132,11 +133,16 @@ interface GroupedCommands {
   commands: QuickCommand[];
 }
 
+interface CommandInputSyncEventDetail {
+  term?: string;
+}
+
 const UNTAGGED_GROUP_NAME = '未标记';
 
 const quickCommandsStore = useQuickCommandsStore();
 const historyStore = useCommandHistoryStore();
 const sessionStore = useSessionStore();
+const settingsStore = useSettingsStore();
 const focusSwitcherStore = useFocusSwitcherStore();
 const notificationStore = useUINotificationStore();
 const { confirm } = useConfirmDialog();
@@ -162,6 +168,7 @@ const showVariableDialog = ref(false);
 const pendingCommand = ref<QuickCommand | null>(null);
 const variableOrder = ref<string[]>([]);
 const variableValues = reactive<Record<string, string>>({});
+const showQuickCommandTags = computed(() => settingsStore.getBoolean('showQuickCommandTags', true));
 
 let unregisterFocusAction: (() => void) | null = null;
 
@@ -178,7 +185,7 @@ const filteredCommands = computed(() => {
     return (
       item.name.toLowerCase().includes(keyword)
       || item.command.toLowerCase().includes(keyword)
-      || (item.tags ?? []).some((tag) => tag.toLowerCase().includes(keyword))
+      || (showQuickCommandTags.value && (item.tags ?? []).some((tag) => tag.toLowerCase().includes(keyword)))
     );
   });
 
@@ -198,6 +205,10 @@ const filteredCommands = computed(() => {
 });
 
 const groupedCommands = computed<GroupedCommands[]>(() => {
+  if (!showQuickCommandTags.value) {
+    return [{ name: '全部快捷指令', commands: filteredCommands.value }];
+  }
+
   const groups: Record<string, QuickCommand[]> = {};
 
   for (const item of filteredCommands.value) {
@@ -477,20 +488,29 @@ function handleDocumentPointerDown(event: MouseEvent) {
   closeContextMenu();
 }
 
+function handleCommandInputSearchSync(event: Event) {
+  const detail = (event as CustomEvent<CommandInputSyncEventDetail>).detail;
+  searchTerm.value = String(detail?.term ?? '');
+}
 async function loadCommands() {
   await quickCommandsStore.fetchAll();
 }
 
 onMounted(async () => {
-  await loadCommands();
+  await Promise.all([
+    loadCommands(),
+    settingsStore.loadAll().catch(() => undefined),
+  ]);
   unregisterFocusAction = focusSwitcherStore.registerFocusAction('quickCommandsSearch', focusSearchInput);
   document.addEventListener('mousedown', handleDocumentPointerDown);
+  window.addEventListener('nexus:quick-commands:set-search', handleCommandInputSearchSync as EventListener);
 });
 
 onUnmounted(() => {
   unregisterFocusAction?.();
   unregisterFocusAction = null;
   document.removeEventListener('mousedown', handleDocumentPointerDown);
+  window.removeEventListener('nexus:quick-commands:set-search', handleCommandInputSearchSync as EventListener);
 });
 </script>
 
@@ -858,3 +878,6 @@ onUnmounted(() => {
   font-size: 11px;
 }
 </style>
+
+
+

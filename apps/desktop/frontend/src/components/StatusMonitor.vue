@@ -19,7 +19,7 @@
 
     <div v-else class="status-content">
       <div class="info-grid">
-        <div class="status-item">
+        <div v-if="showStatusMonitorIpAddress" class="status-item">
           <label class="item-label">IP:</label>
           <span
             class="item-value item-link"
@@ -142,9 +142,11 @@ import StatusCharts from '@/components/StatusCharts.vue';
 import { useStatusMonitor } from '@/composables/useStatusMonitor';
 import { useSessionStore } from '@/stores/session';
 import { useUINotificationStore } from '@/stores/uiNotifications';
+import { useSettingsStore } from '@/stores/settings';
 
 const sessionStore = useSessionStore();
 const uiNotificationStore = useUINotificationStore();
+const settingsStore = useSettingsStore();
 const { activeSessionId } = storeToRefs(sessionStore);
 
 const {
@@ -155,6 +157,8 @@ const {
   netRxHistory,
   netTxHistory,
 } = useStatusMonitor();
+
+void settingsStore.loadAll().catch(() => undefined);
 
 const cachedCpuModel = ref<string>('');
 const cachedOsName = ref<string>('');
@@ -178,6 +182,7 @@ watch(
   { immediate: true },
 );
 
+const showStatusMonitorIpAddress = computed(() => settingsStore.getBoolean('showStatusMonitorIpAddress', false));
 const displayIpAddress = computed(() => currentStatus.value?.ipAddress?.trim() || '--');
 const canCopyIp = computed(() => displayIpAddress.value !== '--');
 const displayCpuModel = computed(() => currentStatus.value?.cpuModel?.trim() || cachedCpuModel.value || '未知');

@@ -3,6 +3,10 @@ import { computed, ref } from 'vue';
 
 export type FileSaveStatus = 'idle' | 'saving' | 'success' | 'error';
 
+export interface PopupFileInfo {
+  filePath: string;
+  sessionId: string;
+}
 export interface FileTab {
   id: string;
   sessionId: string;
@@ -26,6 +30,8 @@ export interface FileTab {
 export const useFileEditorStore = defineStore('fileEditor', () => {
   const openFiles = ref<Map<string, FileTab>>(new Map());
   const activeFileId = ref<string | null>(null);
+  const popupTrigger = ref(0);
+  const popupFileInfo = ref<PopupFileInfo | null>(null);
 
   const activeFile = computed(() =>
     activeFileId.value ? openFiles.value.get(activeFileId.value) : undefined,
@@ -119,6 +125,15 @@ export const useFileEditorStore = defineStore('fileEditor', () => {
     if (openFiles.value.has(id)) {
       activeFileId.value = id;
     }
+  }
+
+  function updateFileSession(id: string, sessionId: string) {
+    const tab = openFiles.value.get(id);
+    if (!tab) {
+      return;
+    }
+
+    patchFile(id, { sessionId });
   }
 
   function patchFile(id: string, patch: Partial<FileTab>) {
@@ -219,9 +234,16 @@ export const useFileEditorStore = defineStore('fileEditor', () => {
     });
   }
 
+  function triggerPopup(filePath: string, sessionId: string) {
+    popupFileInfo.value = { filePath, sessionId };
+    popupTrigger.value += 1;
+  }
+
   return {
     openFiles,
     activeFileId,
+    popupTrigger,
+    popupFileInfo,
     activeFile,
     fileList,
     openFile,
@@ -230,6 +252,7 @@ export const useFileEditorStore = defineStore('fileEditor', () => {
     closeFilesToRight,
     closeFilesToLeft,
     setActive,
+    updateFileSession,
     updateContent,
     setDecodedContent,
     setRawContentBase64,
@@ -238,5 +261,6 @@ export const useFileEditorStore = defineStore('fileEditor', () => {
     markSaved,
     setLoadingState,
     updateScrollPosition,
+    triggerPopup,
   };
 });

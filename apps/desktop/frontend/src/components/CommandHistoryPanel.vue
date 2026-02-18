@@ -86,6 +86,10 @@ const contextMenuRef = ref<HTMLDivElement>();
 const contextCommand = ref('');
 const contextMenuPosition = reactive({ x: 0, y: 0 });
 
+interface CommandInputSyncEventDetail {
+  term?: string;
+}
+
 let unregisterFocusAction: (() => void) | null = null;
 
 const filtered = computed(() => {
@@ -250,6 +254,11 @@ function handleDocumentPointerDown(event: MouseEvent) {
   closeContextMenu();
 }
 
+
+function handleCommandInputSearchSync(event: Event) {
+  const detail = (event as CustomEvent<CommandInputSyncEventDetail>).detail;
+  searchTerm.value = String(detail?.term ?? '');
+}
 function handleHistoryUpdated() {
   void loadHistory();
 }
@@ -259,6 +268,7 @@ onMounted(async () => {
   unregisterFocusAction = focusSwitcherStore.registerFocusAction('commandHistorySearch', focusSearchInput);
   document.addEventListener('mousedown', handleDocumentPointerDown);
   window.addEventListener('nexus:command-history-updated', handleHistoryUpdated);
+  window.addEventListener('nexus:command-history:set-search', handleCommandInputSearchSync as EventListener);
 });
 
 onUnmounted(() => {
@@ -266,6 +276,7 @@ onUnmounted(() => {
   unregisterFocusAction = null;
   document.removeEventListener('mousedown', handleDocumentPointerDown);
   window.removeEventListener('nexus:command-history-updated', handleHistoryUpdated);
+  window.removeEventListener('nexus:command-history:set-search', handleCommandInputSearchSync as EventListener);
 });
 </script>
 
@@ -454,3 +465,5 @@ onUnmounted(() => {
   background: rgba(137, 180, 250, 0.12);
 }
 </style>
+
+
