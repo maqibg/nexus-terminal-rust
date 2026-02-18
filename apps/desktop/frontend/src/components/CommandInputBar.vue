@@ -1,6 +1,6 @@
 <template>
   <div class="command-input-bar">
-    <button class="bar-btn" @click="clearTerminal" title="清空终端">
+    <button class="bar-btn" :disabled="!isSshActiveSession" @click="clearTerminal" title="清空终端">
       <i class="fas fa-eraser"></i>
     </button>
     <button class="bar-btn" @click="openFocusConfigurator" title="配置焦点切换器">
@@ -16,6 +16,7 @@
       @keydown.enter="send"
       @keydown.up.prevent="historyUp"
       @keydown.down.prevent="historyDown"
+      :disabled="!isSshActiveSession"
     />
 
     <button
@@ -99,6 +100,7 @@ const commandInputSyncTarget = computed<'none' | 'quickCommands' | 'commandHisto
 });
 const showPopupFileManager = computed(() => settingsStore.getBoolean('showPopupFileManager', false));
 const showPopupFileEditor = computed(() => settingsStore.getBoolean('showPopupFileEditor', false));
+const isSshActiveSession = computed(() => sessionStore.activeSession?.protocol === 'SSH');
 
 const history = ref<string[]>([]);
 const historyIdx = ref(-1);
@@ -314,7 +316,7 @@ async function send() {
   const cmd = command.value.trim();
   if (!cmd) return;
   const sid = sessionStore.activeSessionId;
-  if (!sid) return;
+  if (!sid || !isSshActiveSession.value) return;
 
   const data = btoa(unescape(encodeURIComponent(`${cmd}\n`)));
   await sshApi.write(sid, data);
@@ -333,7 +335,7 @@ async function send() {
 
 function clearTerminal() {
   const sid = sessionStore.activeSessionId;
-  if (!sid) return;
+  if (!sid || !isSshActiveSession.value) return;
   const data = btoa(unescape(encodeURIComponent('clear\n')));
   sshApi.write(sid, data).catch(() => {});
 }

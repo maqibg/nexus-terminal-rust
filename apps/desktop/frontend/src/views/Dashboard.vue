@@ -210,11 +210,21 @@ onMounted(() => { connStore.fetch(); });
 async function openSession(conn: Connection) {
   activeConnId.value = conn.id;
 
-  if (String(conn.type ?? 'SSH').toUpperCase() === 'RDP') {
+  const connType = String(conn.type ?? 'SSH').toUpperCase();
+  if (connType === 'RDP') {
     try {
       await desktopApi.openRdpConnection(conn.id);
     } catch (e: any) {
       alert(`RDP 启动失败: ${e.message}`);
+    }
+    return;
+  }
+
+  if (connType === 'VNC') {
+    try {
+      await desktopApi.openVncConnection(conn.id);
+    } catch (e: any) {
+      alert(`VNC 启动失败: ${e.message}`);
     }
     return;
   }

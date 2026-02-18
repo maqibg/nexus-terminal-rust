@@ -140,7 +140,7 @@ export function useStatusMonitor() {
   watch(
     [activeSessionId, () => activeSession.value?.status],
     ([sessionId, status]) => {
-      if (status === 'connected' && sessionId) {
+      if (status === 'connected' && sessionId && activeSession.value?.protocol === 'SSH') {
         void bindSession(sessionId);
       } else {
         void bindSession(null);

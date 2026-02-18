@@ -24,6 +24,8 @@ export interface Connection {
   auth_method: string;
   ssh_key_id?: number;
   proxy_id?: number;
+  rdp_options?: string | null;
+  vnc_options?: string | null;
   sort_order: number;
   tags: string[];
   [key: string]: unknown;

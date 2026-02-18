@@ -20,7 +20,7 @@ defineProps<{
 
     <div class="field-block">
       <label for="conn-username" class="field-label">用户名</label>
-      <input id="conn-username" v-model="formData.username" type="text" class="field-input" required />
+      <input id="conn-username" v-model="formData.username" type="text" class="field-input" :required="formData.type === 'SSH'" />
     </div>
 
     <template v-if="formData.type === 'SSH'">
@@ -72,7 +72,7 @@ defineProps<{
           v-model="formData.password"
           type="password"
           class="field-input"
-          :required="!isEditMode"
+          :required="false"
           autocomplete="new-password"
         />
       </div>

@@ -32,6 +32,13 @@ async fn test_tcp_endpoint(host: &str, port: u16) -> CmdResult<bool> {
         Err(e) => Err(AppError::Ssh(format!("tcp connect failed: {e}"))),
     }
 }
+
+fn resolve_port(port: Option<i32>, default_port: u16) -> u16 {
+    port.and_then(|value| u16::try_from(value).ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(default_port)
+}
+
 #[tauri::command]
 pub async fn connection_list(state: State<'_, AppState>) -> CmdResult<Vec<Connection>> {
     state.auth.require_auth().await?;
@@ -305,7 +312,11 @@ pub async fn connection_test(state: State<'_, AppState>, id: i64) -> CmdResult<b
         .ok_or(AppError::NotFound("connection not found".into()))?;
 
     if conn.conn_type.eq_ignore_ascii_case("RDP") {
-        return test_tcp_endpoint(&conn.host, conn.port as u16).await;
+        return test_tcp_endpoint(&conn.host, resolve_port(Some(conn.port), 3389)).await;
+    }
+
+    if conn.conn_type.eq_ignore_ascii_case("VNC") {
+        return test_tcp_endpoint(&conn.host, resolve_port(Some(conn.port), 5900)).await;
     }
 
     let auth = if conn.auth_method == "key" {
@@ -346,7 +357,7 @@ pub async fn connection_test(state: State<'_, AppState>, id: i64) -> CmdResult<b
 
     let creds = ssh_core::session::SshCredentials {
         host: conn.host,
-        port: conn.port as u16,
+        port: resolve_port(Some(conn.port), 22),
         username: conn.username,
         auth,
     };
@@ -371,7 +382,11 @@ pub async fn connection_test_unsaved(
     }
 
     if conn_type.eq_ignore_ascii_case("RDP") {
-        return test_tcp_endpoint(host, input.port.unwrap_or(3389) as u16).await;
+        return test_tcp_endpoint(host, resolve_port(input.port, 3389)).await;
+    }
+
+    if conn_type.eq_ignore_ascii_case("VNC") {
+        return test_tcp_endpoint(host, resolve_port(input.port, 5900)).await;
     }
 
     let auth_method = input.auth_method.as_deref().unwrap_or("password");
@@ -408,7 +423,7 @@ pub async fn connection_test_unsaved(
 
     let creds = ssh_core::session::SshCredentials {
         host: host.to_string(),
-        port: input.port.unwrap_or(22) as u16,
+        port: resolve_port(input.port, 22),
         username: input.username.unwrap_or_else(|| "root".into()),
         auth,
     };
@@ -440,6 +455,8 @@ pub async fn connection_clone(state: State<'_, AppState>, id: i64) -> CmdResult<
         proxy_id: conn.proxy_id,
         jump_chain: conn.jump_chain,
         notes: conn.notes,
+        rdp_options: conn.rdp_options,
+        vnc_options: conn.vnc_options,
         sort_order: Some(conn.sort_order),
         tags: Some(conn.tags),
     };
@@ -465,6 +482,8 @@ pub struct ExportConnection {
     pub proxy_id: Option<i64>,
     pub jump_chain: Option<String>,
     pub notes: Option<String>,
+    pub rdp_options: Option<String>,
+    pub vnc_options: Option<String>,
     pub tags: Vec<String>,
 }
 
@@ -493,6 +512,8 @@ pub async fn connection_export(
             proxy_id: c.proxy_id,
             jump_chain: c.jump_chain,
             notes: c.notes,
+            rdp_options: c.rdp_options,
+            vnc_options: c.vnc_options,
             tags: c.tags,
         })
         .collect();
@@ -518,6 +539,8 @@ pub async fn connection_import(state: State<'_, AppState>, json: String) -> CmdR
             proxy_id: item.proxy_id,
             jump_chain: item.jump_chain,
             notes: item.notes,
+            rdp_options: item.rdp_options,
+            vnc_options: item.vnc_options,
             sort_order: None,
             tags: Some(item.tags),
         };

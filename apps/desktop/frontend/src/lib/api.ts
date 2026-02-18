@@ -11,7 +11,7 @@ export type { SshSession } from './api-ssh';
 export { sftpApi } from './api-sftp';
 export type { FileEntry } from './api-sftp';
 export { desktopApi } from './api-desktop';
-export type { OpenRdpPayload } from './api-desktop';
+export type { OpenRdpPayload, OpenVncPayload, RdpSessionStatus, VncSessionInfo } from './api-desktop';
 export { transferApi } from './api-transfer';
 export type { TransferTaskDto } from './api-transfer';
 export { statusApi } from './api-status';

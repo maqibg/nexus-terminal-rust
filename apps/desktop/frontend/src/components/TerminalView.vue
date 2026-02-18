@@ -3,6 +3,9 @@
     <div v-if="!sessionId" class="terminal-placeholder">
       <span class="placeholder-text">无活动会话</span>
     </div>
+    <div v-else-if="isVncSession" class="terminal-container terminal-container-vnc">
+      <VncSessionView :session-id="sessionId" />
+    </div>
     <div v-else class="terminal-container" :style="terminalContainerStyle">
       <div ref="termRef" class="terminal-host"></div>
     </div>
@@ -18,6 +21,7 @@ import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { storeToRefs } from 'pinia';
 import { onSshOutput, sshApi } from '@/lib/api';
+import VncSessionView from '@/components/VncSessionView.vue';
 import { useSessionStore } from '@/stores/session';
 import { useAppearanceStore } from '@/stores/appearance';
 import { useSettingsStore } from '@/stores/settings';
@@ -25,9 +29,10 @@ import { useSettingsStore } from '@/stores/settings';
 const sessionStore = useSessionStore();
 const appearanceStore = useAppearanceStore();
 const settingsStore = useSettingsStore();
-const { activeSessionId: sessionId } = storeToRefs(sessionStore);
+const { activeSessionId: sessionId, activeSession } = storeToRefs(sessionStore);
 const { appearance, effectiveTerminalTheme } = storeToRefs(appearanceStore);
 const { settings: runtimeSettings } = storeToRefs(settingsStore);
+const isVncSession = computed(() => activeSession.value?.protocol === 'VNC');
 
 const termRef = ref<HTMLElement>();
 let term: Terminal | null = null;
@@ -378,8 +383,8 @@ function cleanup(): void {
   searchAddon = null;
 }
 
-watch(sessionId, (newSid) => {
-  if (newSid) {
+watch([sessionId, () => activeSession.value?.protocol], ([newSid, protocol]) => {
+  if (newSid && protocol === 'SSH') {
     setTimeout(() => initTerminal(newSid), 0);
   } else {
     cleanup();
@@ -417,7 +422,7 @@ onMounted(async () => {
     await appearanceStore.loadAll().catch(() => undefined);
   }
 
-  if (sessionId.value) {
+  if (sessionId.value && activeSession.value?.protocol === 'SSH') {
     initTerminal(sessionId.value);
   }
 
@@ -451,6 +456,10 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   padding: 10px 4px 2px 12px;
   background: var(--bg-base);
+}
+
+.terminal-container-vnc {
+  padding: 0;
 }
 
 .terminal-host {

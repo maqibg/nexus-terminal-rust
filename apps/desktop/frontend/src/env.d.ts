@@ -11,3 +11,15 @@ declare module 'splitpanes' {
   export const Splitpanes: DefineComponent<any, any, any>;
   export const Pane: DefineComponent<any, any, any>;
 }
+
+
+declare module '@novnc/novnc/lib/rfb' {
+  const RFB: any;
+  export default RFB;
+}
+
+
+declare module '@novnc/novnc/lib/rfb.js' {
+  const RFB: any;
+  export default RFB;
+}

@@ -18,6 +18,8 @@ pub struct Connection {
     pub proxy_id: Option<i64>,
     pub jump_chain: Option<String>,
     pub notes: Option<String>,
+    pub rdp_options: Option<String>,
+    pub vnc_options: Option<String>,
     pub sort_order: i32,
     pub tags: Vec<String>,
 }
@@ -37,6 +39,8 @@ pub struct ConnectionInput {
     pub proxy_id: Option<i64>,
     pub jump_chain: Option<String>,
     pub notes: Option<String>,
+    pub rdp_options: Option<String>,
+    pub vnc_options: Option<String>,
     pub sort_order: Option<i32>,
     pub tags: Option<Vec<String>>,
 }

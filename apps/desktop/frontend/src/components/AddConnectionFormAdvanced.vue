@@ -30,6 +30,35 @@ const props = defineProps({
       jump_chain: Array<number | null> | null;
       tag_ids: number[];
       notes: string;
+      rdpOptions: {
+        width: number | null;
+        height: number | null;
+        fullscreen: boolean;
+        multimon: boolean;
+        admin: boolean;
+        restrictedAdmin: boolean;
+        remoteGuard: boolean;
+        drives: boolean;
+        printers: boolean;
+        clipboard: boolean;
+        audio: 'local' | 'remote' | 'none';
+        colorDepth: 15 | 16 | 24 | 32;
+        compression: boolean;
+        gateway: {
+          enabled: boolean;
+          host: string;
+          port: number | null;
+          username: string;
+          password: string;
+        };
+      };
+      vncOptions: {
+        viewOnly: boolean;
+        quality: number;
+        compression: number;
+        localCursor: boolean;
+        sharedConnection: boolean;
+      };
     }>,
     required: true,
   },
@@ -158,6 +187,97 @@ const getAvailableJumpHostsForIndex = (currentIndex: number): ConnectionInfo[] =
       </div>
     </div>
 
+    <div v-if="formData.type === 'RDP'" class="field-block option-group">
+      <label class="field-label">RDP 连接选项</label>
+      <div class="option-grid option-grid-2">
+        <div class="field-block option-inline">
+          <label class="field-label">宽度</label>
+          <input v-model.number="formData.rdpOptions.width" type="number" min="0" class="field-input" placeholder="默认" />
+        </div>
+        <div class="field-block option-inline">
+          <label class="field-label">高度</label>
+          <input v-model.number="formData.rdpOptions.height" type="number" min="0" class="field-input" placeholder="默认" />
+        </div>
+      </div>
+
+      <div class="option-grid option-grid-3">
+        <label class="checkbox-row"><input class="checkbox-input" v-model="formData.rdpOptions.fullscreen" type="checkbox" /> 全屏模式</label>
+        <label class="checkbox-row"><input class="checkbox-input" v-model="formData.rdpOptions.multimon" type="checkbox" /> 多显示器</label>
+        <label class="checkbox-row"><input class="checkbox-input" v-model="formData.rdpOptions.admin" type="checkbox" /> 管理员模式</label>
+        <label class="checkbox-row"><input class="checkbox-input" v-model="formData.rdpOptions.restrictedAdmin" type="checkbox" /> 受限管理员</label>
+        <label class="checkbox-row"><input class="checkbox-input" v-model="formData.rdpOptions.remoteGuard" type="checkbox" /> Remote Guard</label>
+        <label class="checkbox-row"><input class="checkbox-input" v-model="formData.rdpOptions.compression" type="checkbox" /> 压缩</label>
+      </div>
+
+      <div class="option-grid option-grid-3">
+        <label class="checkbox-row"><input class="checkbox-input" v-model="formData.rdpOptions.drives" type="checkbox" /> 驱动器重定向</label>
+        <label class="checkbox-row"><input class="checkbox-input" v-model="formData.rdpOptions.printers" type="checkbox" /> 打印机重定向</label>
+        <label class="checkbox-row"><input class="checkbox-input" v-model="formData.rdpOptions.clipboard" type="checkbox" /> 剪贴板重定向</label>
+      </div>
+
+      <div class="option-grid option-grid-2">
+        <div class="field-block option-inline">
+          <label class="field-label">音频</label>
+          <select v-model="formData.rdpOptions.audio" class="field-select">
+            <option value="local">本地播放</option>
+            <option value="remote">远端播放</option>
+            <option value="none">禁用音频</option>
+          </select>
+        </div>
+        <div class="field-block option-inline">
+          <label class="field-label">色深</label>
+          <select v-model.number="formData.rdpOptions.colorDepth" class="field-select">
+            <option :value="15">15-bit</option>
+            <option :value="16">16-bit</option>
+            <option :value="24">24-bit</option>
+            <option :value="32">32-bit</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field-block option-group-child">
+        <label class="checkbox-row"><input class="checkbox-input" v-model="formData.rdpOptions.gateway.enabled" type="checkbox" /> 启用网关</label>
+        <div v-if="formData.rdpOptions.gateway.enabled" class="option-grid option-grid-2">
+          <div class="field-block option-inline">
+            <label class="field-label">网关地址</label>
+            <input v-model="formData.rdpOptions.gateway.host" type="text" class="field-input" placeholder="gateway.example.com" />
+          </div>
+          <div class="field-block option-inline">
+            <label class="field-label">网关端口</label>
+            <input v-model.number="formData.rdpOptions.gateway.port" type="number" min="1" max="65535" class="field-input" placeholder="443" />
+          </div>
+          <div class="field-block option-inline">
+            <label class="field-label">网关用户名</label>
+            <input v-model="formData.rdpOptions.gateway.username" type="text" class="field-input" />
+          </div>
+          <div class="field-block option-inline">
+            <label class="field-label">网关密码</label>
+            <input v-model="formData.rdpOptions.gateway.password" type="password" class="field-input" autocomplete="new-password" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="formData.type === 'VNC'" class="field-block option-group">
+      <label class="field-label">VNC 显示选项</label>
+      <div class="option-grid option-grid-3">
+        <label class="checkbox-row"><input class="checkbox-input" v-model="formData.vncOptions.viewOnly" type="checkbox" /> 只读模式</label>
+        <label class="checkbox-row"><input class="checkbox-input" v-model="formData.vncOptions.localCursor" type="checkbox" /> 本地光标</label>
+        <label class="checkbox-row"><input class="checkbox-input" v-model="formData.vncOptions.sharedConnection" type="checkbox" /> 共享连接</label>
+      </div>
+
+      <div class="option-grid option-grid-2">
+        <div class="field-block option-inline">
+          <label class="field-label">图像质量 (0-9)</label>
+          <input v-model.number="formData.vncOptions.quality" type="number" min="0" max="9" class="field-input" />
+        </div>
+        <div class="field-block option-inline">
+          <label class="field-label">压缩级别 (0-9)</label>
+          <input v-model.number="formData.vncOptions.compression" type="number" min="0" max="9" class="field-input" />
+        </div>
+      </div>
+    </div>
+
     <div class="field-block">
       <label class="field-label">标签（可选）</label>
       <TagInput
@@ -245,6 +365,7 @@ const getAvailableJumpHostsForIndex = (currentIndex: number): ConnectionInfo[] =
   color: #ffffff;
 }
 
+.field-input,
 .field-select,
 .field-textarea {
   width: 100%;
@@ -265,6 +386,7 @@ const getAvailableJumpHostsForIndex = (currentIndex: number): ConnectionInfo[] =
   padding-right: 30px;
 }
 
+.field-input:focus,
 .field-select:focus,
 .field-textarea:focus {
   outline: none;
@@ -341,6 +463,59 @@ const getAvailableJumpHostsForIndex = (currentIndex: number): ConnectionInfo[] =
 .error-text {
   font-size: 12px;
   color: var(--red);
+}
+
+.option-group {
+  gap: 12px;
+}
+
+.option-group-child {
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-base) 72%, transparent);
+}
+
+.option-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.option-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.option-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.option-inline {
+  gap: 6px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  font-size: 13px;
+  color: var(--text-sub);
+}
+
+.checkbox-input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--blue);
+}
+
+
+@media (max-width: 920px) {
+  .option-grid-2,
+  .option-grid-3 {
+    grid-template-columns: 1fr;
+  }
 }
 
 .warning-text {

@@ -46,7 +46,7 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
       <div class="dialog-panel">
         <h3 class="dialog-title">{{ form.formTitle.value }}</h3>
 
-        <form class="dialog-form" @submit.prevent="form.handleSubmit">
+        <form id="add-connection-form" class="dialog-form" @submit.prevent="form.handleSubmit">
           <template v-if="!form.isScriptModeActive.value">
             <AddConnectionFormBasicInfo :form-data="form.formData" />
             <AddConnectionFormAuth :form-data="form.formData" :is-edit-mode="form.isEditMode.value" />
@@ -136,7 +136,7 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
               删除
             </button>
 
-            <button type="submit" class="btn btn-primary" :disabled="isActionDisabled">{{ form.submitButtonText.value }}</button>
+            <button type="submit" form="add-connection-form" class="btn btn-primary" :disabled="isActionDisabled">{{ form.submitButtonText.value }}</button>
             <button type="button" class="btn btn-secondary" :disabled="isActionDisabled" @click="emit('close')">取消</button>
           </div>
         </div>

@@ -163,6 +163,14 @@ pub fn run() {
             // Desktop
             commands::desktop::desktop_open_rdp,
             commands::desktop::desktop_open_rdp_connection,
+            commands::desktop::desktop_open_vnc,
+            commands::desktop::desktop_open_vnc_connection,
+            commands::desktop::desktop_rdp_status,
+            commands::desktop::desktop_rdp_list_sessions,
+            commands::desktop::desktop_rdp_disconnect_connection,
+            commands::desktop::desktop_vnc_status,
+            commands::desktop::desktop_vnc_list_sessions,
+            commands::desktop::desktop_vnc_disconnect,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

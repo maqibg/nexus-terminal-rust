@@ -1,15 +1,21 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 
+export type SessionProtocol = 'SSH' | 'RDP' | 'VNC';
+
 export interface SessionInfo {
   id: string;
   connectionId: number;
   connectionName: string;
+  protocol: SessionProtocol;
   status: 'connecting' | 'connected' | 'disconnected';
   createdAt: string;
   sftpReady: boolean;
   sftpSessionId: string | null;
   currentPath: string;
+  desktopSessionId?: string | null;
+  vncWsPort?: number | null;
+  vncPassword?: string | null;
 }
 
 export const useSessionStore = defineStore('session', () => {
@@ -88,18 +94,40 @@ export const useSessionStore = defineStore('session', () => {
     sessions.value = next;
   }
 
-  /** Convenience: create session entry from connectionId + name, returns generated id */
-  function createSession(connectionId: number, connectionName: string): string {
+  function createSession(connectionId: number, connectionName: string, protocol: SessionProtocol = 'SSH'): string {
     const id = `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     addSession({
       id,
       connectionId,
       connectionName,
+      protocol,
       status: 'connecting',
       createdAt: new Date().toISOString(),
       sftpReady: false,
       sftpSessionId: null,
       currentPath: '/',
+      desktopSessionId: null,
+      vncWsPort: null,
+      vncPassword: null,
+    });
+    return id;
+  }
+
+  function createVncSession(connectionId: number, connectionName: string, desktopSessionId: string, wsPort: number, password?: string | null): string {
+    const id = `vnc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    addSession({
+      id,
+      connectionId,
+      connectionName,
+      protocol: 'VNC',
+      status: 'connected',
+      createdAt: new Date().toISOString(),
+      sftpReady: false,
+      sftpSessionId: null,
+      currentPath: '/',
+      desktopSessionId,
+      vncWsPort: wsPort,
+      vncPassword: password ?? null,
     });
     return id;
   }
@@ -118,5 +146,6 @@ export const useSessionStore = defineStore('session', () => {
     setSftpSession,
     setCurrentPath,
     createSession,
+    createVncSession,
   };
 });

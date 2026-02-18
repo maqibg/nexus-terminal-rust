@@ -306,7 +306,8 @@ async function warmupSftp(sessionId: string, connectionId: number) {
 async function handleConnect(conn: Connection) {
   showConnList.value = false;
 
-  if (String(conn.type ?? 'SSH').toUpperCase() === 'RDP') {
+  const connType = String(conn.type ?? 'SSH').toUpperCase();
+  if (connType === 'RDP') {
     try {
       await desktopApi.openRdpConnection(conn.id);
     } catch (e: any) {
@@ -315,7 +316,24 @@ async function handleConnect(conn: Connection) {
     return;
   }
 
-  const sid = sessionStore.createSession(conn.id, conn.name);
+  if (connType === 'VNC') {
+    try {
+      const vncSession = await desktopApi.openVncConnection(conn.id);
+      const localSessionId = sessionStore.createVncSession(
+        conn.id,
+        conn.name,
+        vncSession.session_id,
+        vncSession.ws_port,
+        vncSession.password,
+      );
+      sessionStore.setActive(localSessionId);
+    } catch (e: any) {
+      window.alert(`VNC 启动失败: ${e.message ?? String(e)}`);
+    }
+    return;
+  }
+
+  const sid = sessionStore.createSession(conn.id, conn.name, 'SSH');
   try {
     const realSid = await sshApi.connect(conn.id);
     sessionStore.removeSession(sid);
@@ -323,11 +341,15 @@ async function handleConnect(conn: Connection) {
       id: realSid,
       connectionId: conn.id,
       connectionName: conn.name,
+      protocol: 'SSH',
       status: 'connected',
       createdAt: new Date().toISOString(),
       sftpReady: false,
       sftpSessionId: null,
       currentPath: '/',
+      desktopSessionId: null,
+      vncWsPort: null,
+      vncPassword: null,
     });
     sessionStore.setActive(realSid);
     void warmupSftp(realSid, conn.id);
@@ -338,6 +360,22 @@ async function handleConnect(conn: Connection) {
 
 async function closeSession(sessionId: string) {
   const session = sessionStore.getSession(sessionId);
+  if (!session) {
+    return;
+  }
+
+  if (session.protocol === 'VNC') {
+    if (session.desktopSessionId) {
+      try {
+        await desktopApi.disconnectVncSession(session.desktopSessionId);
+      } catch {
+        // ignore VNC close failures
+      }
+    }
+    sessionStore.removeSession(sessionId);
+    return;
+  }
+
   if (session?.sftpSessionId) {
     try {
       await sftpApi.close(session.sftpSessionId);

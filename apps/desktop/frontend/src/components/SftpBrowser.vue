@@ -1,9 +1,9 @@
 <template>
   <div class="sftp-browser">
-    <template v-if="!sshSessionId">
+    <template v-if="!sshSessionId || !isSshSession">
       <div class="sftp-placeholder">
         <i class="fas fa-folder-open placeholder-icon"></i>
-        <span class="placeholder-text">无活动会话</span>
+        <span class="placeholder-text">当前会话不支持文件管理</span>
       </div>
     </template>
     <template v-else>
@@ -322,8 +322,9 @@ import SendFilesModal from '@/components/SendFilesModal.vue';
 const sessionStore = useSessionStore();
 const settingsStore = useSettingsStore();
 const { activeSessionId: sshSessionId, activeSession } = storeToRefs(sessionStore);
-const connectionId = computed(() => activeSession.value?.connectionId);
-const activeSftpSessionId = computed(() => activeSession.value?.sftpSessionId ?? null);
+const isSshSession = computed(() => activeSession.value?.protocol === 'SSH');
+const connectionId = computed(() => (activeSession.value?.protocol === 'SSH' ? activeSession.value.connectionId : undefined));
+const activeSftpSessionId = computed(() => (activeSession.value?.protocol === 'SSH' ? activeSession.value?.sftpSessionId ?? null : null));
 
 const fileEditorStore = useFileEditorStore();
 const notify = useUINotificationStore();
@@ -505,6 +506,9 @@ async function ensureSftpSession(sshSid: string): Promise<string> {
   const session = sessionStore.getSession(sshSid);
   if (!session) {
     throw new Error('会话不存在');
+  }
+  if (session.protocol !== 'SSH') {
+    throw new Error('当前会话不支持 SFTP');
   }
   if (session.sftpSessionId) {
     return session.sftpSessionId;
@@ -1806,7 +1810,7 @@ watch(
     sendFileTarget.value = null;
     resetBrowserState();
 
-    if (!newSid) {
+    if (!newSid || !isSshSession.value) {
       return;
     }
 

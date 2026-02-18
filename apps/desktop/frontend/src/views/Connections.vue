@@ -391,8 +391,11 @@ const getLatencyColorString = (latencyMs?: number): string => {
   return 'var(--red)';
 };
 
+const testableConnectionTypes = new Set(['SSH', 'RDP', 'VNC']);
+
 const handleTestSingleConnection = async (conn: ExtendedConnection) => {
-  if (!conn.id || getConnectionType(conn) !== 'SSH') {
+  const connType = getConnectionType(conn);
+  if (!conn.id || !testableConnectionTypes.has(connType)) {
     return;
   }
 
@@ -431,26 +434,28 @@ const handleTestAllFilteredConnections = async () => {
     return;
   }
 
-  const sshConnectionsToTest = filteredAndSortedConnections.value.filter(conn => getConnectionType(conn) === 'SSH');
-  if (sshConnectionsToTest.length === 0) {
+  const connectionsToTest = filteredAndSortedConnections.value.filter(conn =>
+    testableConnectionTypes.has(getConnectionType(conn)),
+  );
+  if (connectionsToTest.length === 0) {
     return;
   }
 
   isTestingAll.value = true;
   try {
-    await Promise.all(sshConnectionsToTest.map(conn => handleTestSingleConnection(conn)));
+    await Promise.all(connectionsToTest.map(conn => handleTestSingleConnection(conn)));
   } finally {
     isTestingAll.value = false;
   }
 };
 
 const getSingleTestButtonInfo = (connId: number, connType: string): TestButtonInfo => {
-  if (connType !== 'SSH') {
+  if (!testableConnectionTypes.has(connType)) {
     return {
       text: '测试',
       iconClass: 'fas fa-plug',
       disabled: true,
-      title: '仅 SSH 连接支持测试。',
+      title: '当前连接类型不支持测试。',
     };
   }
 
@@ -492,7 +497,10 @@ const warmupSftp = async (sessionId: string, connectionId: number) => {
 };
 
 const connectTo = async (conn: ExtendedConnection) => {
-  if (getConnectionType(conn) === 'RDP') {
+  const connType = getConnectionType(conn);
+  const connectionName = getConnectionName(conn);
+
+  if (connType === 'RDP') {
     try {
       await desktopApi.openRdpConnection(conn.id);
     } catch (error) {
@@ -501,8 +509,25 @@ const connectTo = async (conn: ExtendedConnection) => {
     return;
   }
 
-  const connectionName = getConnectionName(conn);
-  const pendingSessionId = sessionStore.createSession(conn.id, connectionName);
+  if (connType === 'VNC') {
+    try {
+      const vncSession = await desktopApi.openVncConnection(conn.id);
+      const localSessionId = sessionStore.createVncSession(
+        conn.id,
+        connectionName,
+        vncSession.session_id,
+        vncSession.ws_port,
+        vncSession.password,
+      );
+      sessionStore.setActive(localSessionId);
+      void router.push('/workspace');
+    } catch (error) {
+      await alert('VNC 启动失败', getErrorMessage(error));
+    }
+    return;
+  }
+
+  const pendingSessionId = sessionStore.createSession(conn.id, connectionName, 'SSH');
   sessionStore.setActive(pendingSessionId);
   void router.push('/workspace');
 
@@ -513,11 +538,15 @@ const connectTo = async (conn: ExtendedConnection) => {
       id: realSessionId,
       connectionId: conn.id,
       connectionName,
+      protocol: 'SSH',
       status: 'connected',
       createdAt: new Date().toISOString(),
       sftpReady: false,
       sftpSessionId: null,
       currentPath: '/',
+      desktopSessionId: null,
+      vncWsPort: null,
+      vncPassword: null,
     });
     sessionStore.setActive(realSessionId);
     void warmupSftp(realSessionId, conn.id);

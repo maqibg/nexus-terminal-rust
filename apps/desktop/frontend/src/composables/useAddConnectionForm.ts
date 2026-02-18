@@ -44,6 +44,37 @@ interface BuildPayloadOptions {
   jumpChain?: Array<number | null> | null;
   tagNames: string[];
   notes: string;
+}interface RdpGatewayFormData {
+  enabled: boolean;
+  host: string;
+  port: number | null;
+  username: string;
+  password: string;
+}
+
+interface RdpOptionsFormData {
+  width: number | null;
+  height: number | null;
+  fullscreen: boolean;
+  multimon: boolean;
+  admin: boolean;
+  restrictedAdmin: boolean;
+  remoteGuard: boolean;
+  drives: boolean;
+  printers: boolean;
+  clipboard: boolean;
+  audio: 'local' | 'remote' | 'none';
+  colorDepth: 15 | 16 | 24 | 32;
+  compression: boolean;
+  gateway: RdpGatewayFormData;
+}
+
+interface VncOptionsFormData {
+  viewOnly: boolean;
+  quality: number;
+  compression: number;
+  localCursor: boolean;
+  sharedConnection: boolean;
 }
 
 export interface ConnectionFormData {
@@ -62,6 +93,8 @@ export interface ConnectionFormData {
   tag_ids: number[];
   notes: string;
   vncPassword: string;
+  rdpOptions: RdpOptionsFormData;
+  vncOptions: VncOptionsFormData;
 }
 
 const scriptModeFormatInfo = `格式: user@host:port [-type TYPE] [-name NAME] [-p PASSWORD] [-k KEY_NAME] [-proxy PROXY_NAME] [-tags TAG1,TAG2] [-note NOTE]\n参数说明:\n  user@host:port  用户名@主机/IP:端口 (必填)\n  -type TYPE      连接类型，支持 SSH/RDP/VNC\n  -name NAME      显示名称\n  -p PASSWORD     密码\n  -k KEY_NAME     SSH 密钥名称\n  -proxy NAME     代理名称\n  -tags TAGS      标签（逗号分隔）\n  -note TEXT      备注`;
@@ -81,6 +114,35 @@ const createDefaultFormData = (): ConnectionFormData => ({
   tag_ids: [],
   notes: '',
   vncPassword: '',
+  rdpOptions: {
+    width: null,
+    height: null,
+    fullscreen: true,
+    multimon: false,
+    admin: true,
+    restrictedAdmin: false,
+    remoteGuard: false,
+    drives: false,
+    printers: false,
+    clipboard: true,
+    audio: 'none',
+    colorDepth: 32,
+    compression: false,
+    gateway: {
+      enabled: false,
+      host: '',
+      port: null,
+      username: '',
+      password: '',
+    },
+  },
+  vncOptions: {
+    viewOnly: false,
+    quality: 6,
+    compression: 2,
+    localCursor: true,
+    sharedConnection: true,
+  },
 });
 
 export function useAddConnectionForm(
@@ -140,11 +202,24 @@ export function useAddConnectionForm(
   const isLoading = computed(() => (
     isInitializing.value
     || isSubmitting.value
-    || isConnectionsLoading.value
-    || isProxyLoading.value
-    || isTagLoading.value
-    || isSshKeyLoading.value
   ));
+
+  let initializeRequestId = 0;
+  const INITIALIZE_TIMEOUT_MS = 8_000;
+
+  const withTimeout = async <T>(promise: Promise<T>, label: string): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error(label)), INITIALIZE_TIMEOUT_MS);
+    });
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+    }
+  };
 
   const proxies = computed<Proxy[]>(() => proxyItems.value as Proxy[]);
   const tags = computed<Tag[]>(() => tagItems.value as Tag[]);
@@ -202,6 +277,23 @@ export function useAddConnectionForm(
     return null;
   };
 
+  const parseJsonObject = (value: unknown): Record<string, unknown> => {
+    if (!value) {
+      return {};
+    }
+
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : {};
+      } catch {
+        return {};
+      }
+    }
+
+    return typeof value === 'object' && value !== null ? value as Record<string, unknown> : {};
+  };
+
   const resetForm = () => {
     Object.assign(formData, createDefaultFormData());
     testStatus.value = 'idle';
@@ -238,6 +330,34 @@ export function useAddConnectionForm(
     formData.proxy_type = jumpChain && jumpChain.length > 0 ? 'jump' : 'proxy';
     formData.notes = String(connection.notes ?? '');
     formData.tag_ids = mapTagNamesToIds(Array.isArray(connection.tags) ? connection.tags : []);
+
+    const rdpOptionsRaw = parseJsonObject((connection as Record<string, unknown>).rdp_options);
+    formData.rdpOptions.width = typeof rdpOptionsRaw.width === 'number' ? Math.max(0, Math.round(rdpOptionsRaw.width)) : null;
+    formData.rdpOptions.height = typeof rdpOptionsRaw.height === 'number' ? Math.max(0, Math.round(rdpOptionsRaw.height)) : null;
+    formData.rdpOptions.fullscreen = rdpOptionsRaw.fullscreen === true;
+    formData.rdpOptions.multimon = rdpOptionsRaw.multimon === true;
+    formData.rdpOptions.admin = rdpOptionsRaw.admin === true;
+    formData.rdpOptions.restrictedAdmin = rdpOptionsRaw.restrictedAdmin === true;
+    formData.rdpOptions.remoteGuard = rdpOptionsRaw.remoteGuard === true;
+    formData.rdpOptions.drives = rdpOptionsRaw.drives === true;
+    formData.rdpOptions.printers = rdpOptionsRaw.printers !== false;
+    formData.rdpOptions.clipboard = rdpOptionsRaw.clipboard !== false;
+    formData.rdpOptions.audio = (rdpOptionsRaw.audio === 'remote' || rdpOptionsRaw.audio === 'none') ? rdpOptionsRaw.audio : 'local';
+    formData.rdpOptions.colorDepth = (rdpOptionsRaw.colorDepth === 15 || rdpOptionsRaw.colorDepth === 16 || rdpOptionsRaw.colorDepth === 24) ? rdpOptionsRaw.colorDepth : 32;
+    formData.rdpOptions.compression = rdpOptionsRaw.compression !== false;
+    const gatewayRaw = parseJsonObject(rdpOptionsRaw.gateway);
+    formData.rdpOptions.gateway.enabled = gatewayRaw.enabled === true;
+    formData.rdpOptions.gateway.host = typeof gatewayRaw.host === 'string' ? gatewayRaw.host : '';
+    formData.rdpOptions.gateway.port = typeof gatewayRaw.port === 'number' ? Math.max(1, Math.min(65535, Math.round(gatewayRaw.port))) : null;
+    formData.rdpOptions.gateway.username = typeof gatewayRaw.username === 'string' ? gatewayRaw.username : '';
+    formData.rdpOptions.gateway.password = typeof gatewayRaw.password === 'string' ? gatewayRaw.password : '';
+
+    const vncOptionsRaw = parseJsonObject((connection as Record<string, unknown>).vnc_options);
+    formData.vncOptions.viewOnly = vncOptionsRaw.viewOnly === true;
+    formData.vncOptions.quality = typeof vncOptionsRaw.quality === 'number' ? Math.max(0, Math.min(9, Math.round(vncOptionsRaw.quality))) : 6;
+    formData.vncOptions.compression = typeof vncOptionsRaw.compression === 'number' ? Math.max(0, Math.min(9, Math.round(vncOptionsRaw.compression))) : 2;
+    formData.vncOptions.localCursor = vncOptionsRaw.localCursor !== false;
+    formData.vncOptions.sharedConnection = vncOptionsRaw.sharedConnection !== false;
 
     advancedConnectionMode.value = jumpChain && jumpChain.length > 0 ? 'jump' : 'proxy';
   };
@@ -307,42 +427,145 @@ export function useAddConnectionForm(
     payload.ssh_key_id = null;
     payload.proxy_id = null;
     payload.jump_chain = null;
+
+    if (options.type === 'RDP') {
+      const rdpOptions = formData.rdpOptions;
+      payload.rdp_options = JSON.stringify({
+        width: rdpOptions.width && rdpOptions.width > 0 ? rdpOptions.width : undefined,
+        height: rdpOptions.height && rdpOptions.height > 0 ? rdpOptions.height : undefined,
+        fullscreen: rdpOptions.fullscreen,
+        multimon: rdpOptions.multimon,
+        admin: rdpOptions.admin,
+        restrictedAdmin: rdpOptions.restrictedAdmin,
+        remoteGuard: rdpOptions.remoteGuard,
+        drives: rdpOptions.drives,
+        printers: rdpOptions.printers,
+        clipboard: rdpOptions.clipboard,
+        audio: rdpOptions.audio,
+        colorDepth: rdpOptions.colorDepth,
+        compression: rdpOptions.compression,
+        gateway: {
+          enabled: rdpOptions.gateway.enabled,
+          host: rdpOptions.gateway.host.trim() || undefined,
+          port: rdpOptions.gateway.port && rdpOptions.gateway.port > 0 ? rdpOptions.gateway.port : undefined,
+          username: rdpOptions.gateway.username.trim() || undefined,
+          password: rdpOptions.gateway.password.trim() || undefined,
+        },
+      });
+      payload.vnc_options = null;
+    }
+
+    if (options.type === 'VNC') {
+      const vncOptions = formData.vncOptions;
+      payload.vnc_options = JSON.stringify({
+        viewOnly: vncOptions.viewOnly,
+        quality: vncOptions.quality,
+        compression: vncOptions.compression,
+        localCursor: vncOptions.localCursor,
+        sharedConnection: vncOptions.sharedConnection,
+      });
+      payload.rdp_options = null;
+    }
+
     return payload;
   };
 
   const ensureDependencies = async () => {
     proxyStoreError.value = null;
     tagStoreError.value = null;
-    const results = await Promise.allSettled([
-      connectionsStore.fetch(),
-      proxiesStore.fetchAll(),
-      tagsStore.fetchAll(),
-      sshKeysStore.fetchAll(),
-    ]);
 
-    const proxyResult = results[1];
-    if (proxyResult.status === 'rejected') {
-      proxyStoreError.value = getErrorMessage(proxyResult.reason);
+    const tasks: Array<Promise<void>> = [];
+    const taskKinds: Array<'connections' | 'proxy' | 'tag' | 'sshKey'> = [];
+
+    if (connectionsList.value.length === 0) {
+      tasks.push(withTimeout(connectionsStore.fetch(), '加载连接列表超时'));
+      taskKinds.push('connections');
     }
-    const tagResult = results[2];
-    if (tagResult.status === 'rejected') {
-      tagStoreError.value = getErrorMessage(tagResult.reason);
+    if (proxyItems.value.length === 0) {
+      tasks.push(withTimeout(proxiesStore.fetchAll(), '加载代理列表超时'));
+      taskKinds.push('proxy');
     }
+    if (tagItems.value.length === 0) {
+      tasks.push(withTimeout(tagsStore.fetchAll(), '加载标签列表超时'));
+      taskKinds.push('tag');
+    }
+    if (sshKeyItems.value.length === 0) {
+      tasks.push(withTimeout(sshKeysStore.fetchAll(), '加载 SSH 密钥超时'));
+      taskKinds.push('sshKey');
+    }
+
+    if (tasks.length === 0) {
+      return;
+    }
+
+    const results = await Promise.allSettled(tasks);
+    results.forEach((result, index) => {
+      if (result.status !== 'rejected') {
+        return;
+      }
+      const message = getErrorMessage(result.reason);
+      const kind = taskKinds[index];
+
+      if (kind === 'proxy') {
+        proxyStoreError.value = message;
+        return;
+      }
+      if (kind === 'tag') {
+        tagStoreError.value = message;
+        return;
+      }
+
+      notify.addNotification('warning', message);
+    });
   };
 
   const initializeForm = async () => {
+    const requestId = ++initializeRequestId;
     isInitializing.value = true;
     resetForm();
+
+    const editId = (isEditMode.value && typeof connectionId.value === 'number')
+      ? connectionId.value
+      : null;
+
+    if (editId !== null) {
+      const cachedConn = connectionsList.value.find(item => item.id === editId) as ExtendedConnection | undefined;
+      if (cachedConn) {
+        applyConnectionToForm(cachedConn);
+        isInitializing.value = false;
+
+        void (async () => {
+          try {
+            await ensureDependencies();
+          } catch (error) {
+            notify.addNotification('warning', `预加载连接依赖失败: ${getErrorMessage(error)}`);
+          }
+        })();
+
+        return;
+      }
+    }
+
     try {
       await ensureDependencies();
-      if (isEditMode.value && connectionId.value) {
-        const conn = await connectionsApi.get(connectionId.value) as ExtendedConnection;
-        applyConnectionToForm(conn);
+      if (requestId !== initializeRequestId || !visible.value) {
+        return;
+      }
+
+      if (editId !== null) {
+        const loadedConn = connectionsList.value.find(item => item.id === editId) as ExtendedConnection | undefined;
+        if (!loadedConn) {
+          notify.addNotification('warning', '未找到待编辑连接，已使用默认表单');
+          return;
+        }
+        applyConnectionToForm(loadedConn);
       }
     } catch (error) {
       notify.addNotification('error', `加载连接配置失败: ${getErrorMessage(error)}`);
     } finally {
-      isInitializing.value = false;
+      if (requestId === initializeRequestId) {
+        isInitializing.value = false;
+      }
     }
   };
 
@@ -362,6 +585,14 @@ export function useAddConnectionForm(
       if (type === 'SSH' && (formData.port === 3389 || formData.port === 5900)) {
         formData.port = 22;
       }
+
+      if (type === 'RDP' && !formData.username.trim()) {
+        formData.username = 'Administrator';
+      }
+      if (type === 'VNC' && !formData.username.trim()) {
+        formData.username = 'root';
+      }
+
       if (type !== 'SSH') {
         advancedConnectionMode.value = 'proxy';
       }
@@ -371,14 +602,12 @@ export function useAddConnectionForm(
   watch(visible, async (isVisible) => {
     if (isVisible) {
       await initializeForm();
+      return;
     }
-  }, { immediate: true });
 
-  watch([mode, connectionId], async () => {
-    if (visible.value) {
-      await initializeForm();
-    }
-  });
+    initializeRequestId += 1;
+    isInitializing.value = false;
+  }, { immediate: true });
 
   const validateNormalForm = async (): Promise<boolean> => {
     if (!formData.host.trim()) {
@@ -389,9 +618,16 @@ export function useAddConnectionForm(
       await alert('提示', '端口必须在 1~65535 之间');
       return false;
     }
-    if (!formData.username.trim()) {
+    const trimmedUsername = formData.username.trim();
+    if (formData.type === 'SSH' && !trimmedUsername) {
       await alert('提示', '请填写用户名');
       return false;
+    }
+    if (formData.type === 'RDP' && !trimmedUsername) {
+      formData.username = 'Administrator';
+    }
+    if (formData.type === 'VNC' && !trimmedUsername) {
+      formData.username = 'root';
     }
 
     if (formData.type === 'SSH') {
@@ -405,10 +641,6 @@ export function useAddConnectionForm(
       }
     }
 
-    if (formData.type === 'RDP' && !isEditMode.value && !formData.password.trim()) {
-      await alert('提示', 'RDP 密码不能为空');
-      return false;
-    }
 
     if (formData.type === 'VNC' && !isEditMode.value && !formData.vncPassword.trim()) {
       await alert('提示', 'VNC 密码不能为空');
@@ -542,7 +774,7 @@ export function useAddConnectionForm(
         if (parsed.type === 'SSH' && !parsed.password && !parsed.keyName) {
           throw new Error(`SSH 连接必须提供密码(-p)或密钥(-k): ${line}`);
         }
-        if ((parsed.type === 'RDP' || parsed.type === 'VNC') && !parsed.password) {
+        if (parsed.type === 'VNC' && !parsed.password) {
           throw new Error(`${parsed.type} 连接必须提供密码(-p): ${line}`);
         }
 

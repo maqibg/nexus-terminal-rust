@@ -34,6 +34,11 @@ pub async fn run(pool: &SqlitePool) -> Result<(), sqlx::Error> {
             include_str!("sql/003_create_settings.sql"),
         ),
         (4, "add_passkeys", include_str!("sql/004_add_passkeys.sql")),
+        (
+            5,
+            "add_desktop_options",
+            include_str!("sql/005_add_desktop_options.sql"),
+        ),
     ];
 
     for (version, name, sql) in &migrations {

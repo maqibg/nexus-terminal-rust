@@ -59,6 +59,8 @@ type ConnRow = (
     Option<i64>,
     Option<String>,
     Option<String>,
+    Option<String>,
+    Option<String>,
     i32,
 );
 
@@ -76,12 +78,14 @@ fn row_to_connection(r: ConnRow) -> Connection {
         proxy_id: r.9,
         jump_chain: r.10,
         notes: r.11,
-        sort_order: r.12,
+        rdp_options: r.12,
+        vnc_options: r.13,
+        sort_order: r.14,
         tags: vec![],
     }
 }
 
-const CONN_COLS: &str = "id, name, type, host, port, username, auth_method, encrypted_password, ssh_key_id, proxy_id, jump_chain, notes, sort_order";
+const CONN_COLS: &str = "id, name, type, host, port, username, auth_method, encrypted_password, ssh_key_id, proxy_id, jump_chain, notes, rdp_options, vnc_options, sort_order";
 
 #[async_trait]
 impl ConnectionRepository for SqliteConnectionRepo {
@@ -122,7 +126,7 @@ impl ConnectionRepository for SqliteConnectionRepo {
         encrypted_password: Option<&str>,
     ) -> Result<i64, String> {
         let result = sqlx::query(
-            "INSERT INTO connections (name, type, host, port, username, auth_method, encrypted_password, ssh_key_id, proxy_id, jump_chain, notes, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO connections (name, type, host, port, username, auth_method, encrypted_password, ssh_key_id, proxy_id, jump_chain, notes, rdp_options, vnc_options, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         )
          .bind(&input.name)
         .bind(input.conn_type.as_deref().unwrap_or("SSH"))
@@ -133,6 +137,7 @@ impl ConnectionRepository for SqliteConnectionRepo {
         .bind(encrypted_password)
         .bind(input.ssh_key_id).bind(input.proxy_id)
         .bind(&input.jump_chain).bind(&input.notes)
+        .bind(&input.rdp_options).bind(&input.vnc_options)
         .bind(input.sort_order.unwrap_or(0))
         .execute(&self.pool).await.map_err(|e| e.to_string())?;
         let id = result.last_insert_rowid();
@@ -149,7 +154,7 @@ impl ConnectionRepository for SqliteConnectionRepo {
         encrypted_password: Option<&str>,
     ) -> Result<bool, String> {
         let result = sqlx::query(
-            "UPDATE connections SET name=?, type=?, host=?, port=?, username=?, auth_method=?, encrypted_password=COALESCE(?,encrypted_password), ssh_key_id=?, proxy_id=?, jump_chain=?, notes=?, sort_order=?, updated_at=datetime('now') WHERE id=?",
+            "UPDATE connections SET name=?, type=?, host=?, port=?, username=?, auth_method=?, encrypted_password=COALESCE(?,encrypted_password), ssh_key_id=?, proxy_id=?, jump_chain=?, notes=?, rdp_options=?, vnc_options=?, sort_order=?, updated_at=datetime('now') WHERE id=?",
         )
          .bind(&input.name)
         .bind(input.conn_type.as_deref().unwrap_or("SSH"))
@@ -160,6 +165,7 @@ impl ConnectionRepository for SqliteConnectionRepo {
         .bind(encrypted_password)
         .bind(input.ssh_key_id).bind(input.proxy_id)
         .bind(&input.jump_chain).bind(&input.notes)
+        .bind(&input.rdp_options).bind(&input.vnc_options)
         .bind(input.sort_order.unwrap_or(0))
         .bind(id)
         .execute(&self.pool).await.map_err(|e| e.to_string())?;
