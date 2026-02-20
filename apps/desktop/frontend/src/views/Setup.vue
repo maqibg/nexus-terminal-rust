@@ -64,6 +64,6 @@ async function handleSetup() {
 .input { padding: 8px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 13px; }
 .input:focus { outline: none; border-color: var(--blue); }
 .error { color: var(--red); font-size: 12px; margin-bottom: 8px; }
-.btn-primary { width: 100%; padding: 8px; background: var(--blue); color: var(--bg-base); border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+.btn-primary { width: 100%; padding: 8px; background: var(--blue); color: var(--button-text-color); border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
 .btn-primary:disabled { opacity: 0.5; }
 </style>

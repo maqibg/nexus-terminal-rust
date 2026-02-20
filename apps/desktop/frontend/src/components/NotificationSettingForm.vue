@@ -5,11 +5,12 @@
         <div class="form-title">{{ channel ? '编辑通知渠道' : '新建通知渠道' }}</div>
         <div class="form-body">
           <input v-model="form.name" class="input" placeholder="名称" />
-          <select v-model="form.channel_type" class="input">
-            <option value="webhook">Webhook</option>
-            <option value="email">Email</option>
-            <option value="telegram">Telegram</option>
-          </select>
+          <AppSelect
+            v-model="form.channel_type"
+            :options="channelTypeOptions"
+            variant="input"
+            aria-label="通知渠道类型"
+          />
           <template v-if="form.channel_type === 'webhook'">
             <input v-model="config.url" class="input" placeholder="Webhook URL" />
           </template>
@@ -39,12 +40,18 @@
 
 <script setup lang="ts">
 import { reactive, watch } from 'vue';
+import AppSelect from './AppSelect.vue';
 import { settingsApi, type NotificationChannel } from '@/lib/api';
 import { useUINotificationStore } from '@/stores/uiNotifications';
 
 const props = defineProps<{ visible: boolean; channel?: NotificationChannel }>();
 const emit = defineEmits<{ saved: []; cancel: [] }>();
 const notify = useUINotificationStore();
+const channelTypeOptions = [
+  { value: 'webhook', label: 'Webhook' },
+  { value: 'email', label: 'Email' },
+  { value: 'telegram', label: 'Telegram' },
+];
 
 const form = reactive({ name: '', channel_type: 'webhook', enabled: true });
 const config = reactive<Record<string, any>>({});
@@ -81,7 +88,7 @@ async function submit() {
 .form-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
 .form-body { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
 .input { background: var(--bg-mantle); border: 1px solid var(--border); border-radius: 4px; padding: 8px; color: var(--text); font-size: 13px; outline: none; }
-.input:focus { border-color: var(--blue); }
+.input:focus { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
 .checkbox-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-sub); cursor: pointer; }
 .form-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; }

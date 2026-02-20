@@ -285,9 +285,13 @@
               <form class="section-form" @submit.prevent="saveSystemTimezone">
                 <div class="form-field">
                   <label class="form-label" for="system-timezone">选择时区:</label>
-                  <select id="system-timezone" v-model="systemForm.timezone" class="form-control select-control">
-                    <option v-for="timezone in commonTimezones" :key="timezone" :value="timezone">{{ timezone }}</option>
-                  </select>
+                  <AppSelect
+                    id="system-timezone"
+                    v-model="systemForm.timezone"
+                    class="timezone-select"
+                    :options="timezoneOptions"
+                    aria-label="选择时区"
+                  />
                 </div>
                 <div class="form-actions">
                   <button type="submit" class="btn btn-primary">保存</button>
@@ -374,6 +378,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { storeToRefs } from 'pinia';
+import AppSelect from '@/components/AppSelect.vue';
 import { authApi, connectionsApi } from '@/lib/api';
 import { useUiNotificationsStore } from '@/stores/uiNotifications';
 import { useAppearanceStore } from '@/stores/appearance';
@@ -429,6 +434,8 @@ const commonTimezones = [
   'Asia/Shanghai', 'Asia/Tokyo', 'Australia/Sydney', 'Pacific/Auckland',
   'Etc/GMT-14',
 ];
+
+const timezoneOptions = computed(() => commonTimezones.map(timezone => ({ value: timezone, label: timezone })));
 
 const notifications = useUiNotificationsStore();
 const appearanceStore = useAppearanceStore();
@@ -883,7 +890,7 @@ onUnmounted(() => {
 
 .tab-btn.active {
   background: var(--blue);
-  color: #fff;
+  color: var(--button-text-color);
 }
 
 .tab-btn.warn:not(.active) {
@@ -1013,15 +1020,6 @@ onUnmounted(() => {
   border-color: var(--blue);
 }
 
-.select-control {
-  appearance: none;
-  background-image: linear-gradient(45deg, transparent 50%, var(--text-sub) 50%), linear-gradient(135deg, var(--text-sub) 50%, transparent 50%);
-  background-position: calc(100% - 16px) 14px, calc(100% - 11px) 14px;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
-  padding-right: 28px;
-}
-
 .command-sync-select-wrap {
   position: relative;
 }
@@ -1076,7 +1074,7 @@ onUnmounted(() => {
 
 .command-sync-option.active {
   background: var(--blue);
-  color: #fff;
+  color: var(--button-text-color);
 }
 
 
@@ -1164,7 +1162,7 @@ onUnmounted(() => {
 .btn-danger {
   border-color: var(--red);
   background: var(--red);
-  color: #fff;
+  color: var(--button-text-color);
 }
 
 .btn-danger:hover {
@@ -1268,7 +1266,7 @@ onUnmounted(() => {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--ui-switch-knob);
   transition: all 0.2s ease;
 }
 

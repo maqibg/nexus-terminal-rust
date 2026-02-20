@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import AddConnectionForm from '@/components/AddConnectionForm.vue';
@@ -19,6 +19,12 @@ interface ExtendedConnection extends Connection {
   updated_at?: number | null;
   last_connected_at?: number | null;
   notes?: string | null;
+  provider?: string | null;
+  region?: string | null;
+  expiry_date?: string | null;
+  billing_cycle?: string | null;
+  billing_amount?: number | null;
+  billing_currency?: string | null;
   tag_ids?: number[];
 }
 
@@ -34,6 +40,11 @@ interface TestButtonInfo {
   iconClass: string;
   disabled: boolean;
   title: string;
+}
+
+interface ExpiryStatus {
+  text: string;
+  type: 'danger' | 'warning' | 'success';
 }
 
 const LS_SORT_BY_KEY = 'connections_view_sort_by';
@@ -82,6 +93,20 @@ const getInitialSelectedTagId = (): number | null => {
 
 const selectedTagId = ref<number | null>(getInitialSelectedTagId());
 const searchQuery = ref('');
+
+const tagDropdownRef = ref<HTMLElement | null>(null);
+const sortDropdownRef = ref<HTMLElement | null>(null);
+const isTagDropdownOpen = ref(false);
+const isSortDropdownOpen = ref(false);
+
+const selectedTagLabel = computed(() => {
+  if (selectedTagId.value === null) {
+    return '所有标签';
+  }
+  return tags.value.find(tag => tag.id === selectedTagId.value)?.name ?? '所有标签';
+});
+
+const selectedSortLabel = computed(() => sortOptions.find(option => option.value === localSortBy.value)?.label ?? '最近连接');
 
 const showAddEditConnectionForm = ref(false);
 const connectionToEditId = ref<number | null>(null);
@@ -182,6 +207,89 @@ const getTruncatedNotes = (notes: string | null | undefined): string => {
   return `${notes.slice(0, maxLength)}...`;
 };
 
+const parseExpiryTimestamp = (rawValue: unknown): number | null => {
+  if (typeof rawValue !== 'string') {
+    return null;
+  }
+
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  let normalized = trimmed.replace(/\//g, '-').replace(/\s+/, 'T');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    normalized = `${normalized}T00:00:00`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(normalized)) {
+    normalized = `${normalized}:00`;
+  }
+
+  const direct = new Date(normalized);
+  if (!Number.isNaN(direct.getTime())) {
+    return direct.getTime();
+  }
+
+  const match = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:T(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4] ?? 0);
+  const minute = Number(match[5] ?? 0);
+  const second = Number(match[6] ?? 0);
+  const fallback = new Date(year, month - 1, day, hour, minute, second);
+  return Number.isNaN(fallback.getTime()) ? null : fallback.getTime();
+};
+
+const buildExpiryStatus = (conn: ExtendedConnection): ExpiryStatus | null => {
+  const expiryTimestamp = parseExpiryTimestamp(conn.expiry_date);
+  if (expiryTimestamp === null) {
+    return null;
+  }
+
+  const now = Date.now();
+  const diffMs = expiryTimestamp - now;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const hourMs = 60 * 60 * 1000;
+  const diffDays = Math.floor(diffMs / dayMs);
+  const diffHours = Math.max(0, Math.floor((diffMs % dayMs) / hourMs));
+
+  if (diffMs < 0) {
+    return { text: '已过期', type: 'danger' };
+  }
+  if (diffDays === 0) {
+    return { text: `今天到期 (${diffHours}小时)`, type: 'danger' };
+  }
+  if (diffDays < 7) {
+    return { text: `${diffDays}天${diffHours}小时后到期`, type: 'danger' };
+  }
+  if (diffDays < 30) {
+    return { text: `${diffDays}天后到期`, type: 'warning' };
+  }
+
+  const months = Math.max(1, Math.floor(diffDays / 30));
+  return { text: `${months}个月后到期`, type: 'success' };
+};
+
+const expiryStatusMap = computed(() => {
+  const map = new Map<number, ExpiryStatus>();
+  (connections.value as ExtendedConnection[]).forEach((conn) => {
+    const status = buildExpiryStatus(conn);
+    if (status) {
+      map.set(conn.id, status);
+    }
+  });
+  return map;
+});
+
+const getExpiryStatus = (connectionId: number): ExpiryStatus | null => {
+  return expiryStatusMap.value.get(connectionId) ?? null;
+};
+
 const filteredAndSortedConnections = computed<ExtendedConnection[]>(() => {
   const query = searchQuery.value.trim().toLowerCase();
   const selectedTagName = selectedTagId.value === null
@@ -248,6 +356,59 @@ const toggleSortOrder = () => {
   localSortOrder.value = localSortOrder.value === 'asc' ? 'desc' : 'asc';
 };
 
+const closeToolbarDropdowns = () => {
+  isTagDropdownOpen.value = false;
+  isSortDropdownOpen.value = false;
+};
+
+const toggleTagDropdown = () => {
+  if (isLoadingTags.value) {
+    return;
+  }
+  isTagDropdownOpen.value = !isTagDropdownOpen.value;
+  if (isTagDropdownOpen.value) {
+    isSortDropdownOpen.value = false;
+  }
+};
+
+const toggleSortDropdown = () => {
+  isSortDropdownOpen.value = !isSortDropdownOpen.value;
+  if (isSortDropdownOpen.value) {
+    isTagDropdownOpen.value = false;
+  }
+};
+
+const selectTag = (tagId: number | null) => {
+  selectedTagId.value = tagId;
+  isTagDropdownOpen.value = false;
+};
+
+const selectSortBy = (sortBy: SortField) => {
+  localSortBy.value = sortBy;
+  isSortDropdownOpen.value = false;
+};
+
+const handleToolbarDropdownPointerDown = (event: MouseEvent) => {
+  const target = event.target as Node | null;
+  if (!target) {
+    return;
+  }
+
+  if (tagDropdownRef.value && !tagDropdownRef.value.contains(target)) {
+    isTagDropdownOpen.value = false;
+  }
+
+  if (sortDropdownRef.value && !sortDropdownRef.value.contains(target)) {
+    isSortDropdownOpen.value = false;
+  }
+};
+
+const handleToolbarDropdownKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape') {
+    closeToolbarDropdowns();
+  }
+};
+
 watch(localSortBy, (newValue) => {
   localStorage.setItem(LS_SORT_BY_KEY, newValue);
 });
@@ -260,6 +421,7 @@ watch(showConnectionTags, (value) => {
   if (!value) {
     selectedTagId.value = null;
   }
+  closeToolbarDropdowns();
 });
 
 watch(selectedTagId, (newValue) => {
@@ -576,10 +738,18 @@ const handleConnectAllFilteredConnections = async () => {
 };
 
 onMounted(async () => {
+  document.addEventListener('mousedown', handleToolbarDropdownPointerDown);
+  window.addEventListener('keydown', handleToolbarDropdownKeydown);
+
   await Promise.all([
     store.fetch(),
     settingsStore.loadAll().catch(() => undefined),
   ]);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('mousedown', handleToolbarDropdownPointerDown);
+  window.removeEventListener('keydown', handleToolbarDropdownKeydown);
 });
 </script>
 
@@ -614,36 +784,73 @@ onMounted(async () => {
             />
 
             <div v-if="showConnectionTags" class="select-group">
-              <select
-                v-model="selectedTagId"
-                class="select-control"
-                :disabled="isLoadingTags"
-                aria-label="按标签过滤连接"
+              <div
+                ref="tagDropdownRef"
+                class="custom-select"
+                :class="{ 'is-open': isTagDropdownOpen, 'is-disabled': isLoadingTags }"
               >
-                <option :value="null">所有标签</option>
-                <option v-if="isLoadingTags" disabled>加载中...</option>
-                <option
-                  v-for="tag in (tags as Tag[])"
-                  :key="tag.id"
-                  :value="tag.id"
+                <button
+                  type="button"
+                  class="custom-select-trigger"
+                  :disabled="isLoadingTags"
+                  :aria-expanded="isTagDropdownOpen ? 'true' : 'false'"
+                  aria-haspopup="listbox"
+                  aria-label="按标签过滤连接"
+                  @click="toggleTagDropdown"
                 >
-                  {{ tag.name }}
-                </option>
-              </select>
+                  <span class="custom-select-trigger-text">{{ selectedTagLabel }}</span>
+                  <i class="fas fa-chevron-down custom-select-trigger-icon"></i>
+                </button>
+                <div v-if="isTagDropdownOpen" class="custom-select-menu" role="listbox" aria-label="按标签过滤连接">
+                  <button
+                    type="button"
+                    class="custom-select-option"
+                    :class="{ 'is-active': selectedTagId === null }"
+                    @click="selectTag(null)"
+                  >
+                    所有标签
+                  </button>
+                  <button v-if="isLoadingTags" type="button" class="custom-select-option" disabled>
+                    加载中...
+                  </button>
+                  <button
+                    v-for="tag in (tags as Tag[])"
+                    :key="tag.id"
+                    type="button"
+                    class="custom-select-option"
+                    :class="{ 'is-active': selectedTagId === tag.id }"
+                    @click="selectTag(tag.id)"
+                  >
+                    {{ tag.name }}
+                  </button>
+                </div>
+              </div>
 
-              <select
-                v-model="localSortBy"
-                class="select-control"
-                aria-label="连接排序"
-              >
-                <option
-                  v-for="option in sortOptions"
-                  :key="option.value"
-                  :value="option.value"
+              <div ref="sortDropdownRef" class="custom-select" :class="{ 'is-open': isSortDropdownOpen }">
+                <button
+                  type="button"
+                  class="custom-select-trigger"
+                  :aria-expanded="isSortDropdownOpen ? 'true' : 'false'"
+                  aria-haspopup="listbox"
+                  aria-label="连接排序"
+                  @click="toggleSortDropdown"
                 >
-                  {{ option.label }}
-                </option>
-              </select>
+                  <span class="custom-select-trigger-text">{{ selectedSortLabel }}</span>
+                  <i class="fas fa-chevron-down custom-select-trigger-icon"></i>
+                </button>
+                <div v-if="isSortDropdownOpen" class="custom-select-menu" role="listbox" aria-label="连接排序">
+                  <button
+                    v-for="option in sortOptions"
+                    :key="option.value"
+                    type="button"
+                    class="custom-select-option"
+                    :class="{ 'is-active': localSortBy === option.value }"
+                    @click="selectSortBy(option.value)"
+                  >
+                    {{ option.label }}
+                  </button>
+                </div>
+              </div>
 
               <button
                 class="icon-button"
@@ -773,35 +980,43 @@ onMounted(async () => {
               </div>
 
               <div class="connection-actions">
-                <button
-                  v-if="getConnectionType(conn) === 'SSH'"
-                  class="row-ghost-button"
-                  :disabled="isBatchEditMode || getSingleTestButtonInfo(conn.id, getConnectionType(conn)).disabled"
-                  :title="getSingleTestButtonInfo(conn.id, getConnectionType(conn)).title"
-                  @click.stop="handleTestSingleConnection(conn)"
-                >
-                  <i :class="getSingleTestButtonInfo(conn.id, getConnectionType(conn)).iconClass"></i>
-                  <span v-if="getSingleTestButtonInfo(conn.id, getConnectionType(conn)).text !== '测试中'">
-                    {{ getSingleTestButtonInfo(conn.id, getConnectionType(conn)).text }}
+                <div v-if="getExpiryStatus(conn.id)" class="connection-expiry">
+                  <span class="expiry-tag" :class="`is-${getExpiryStatus(conn.id)?.type}`">
+                    {{ getExpiryStatus(conn.id)?.text }}
                   </span>
-                </button>
+                </div>
 
-                <button
-                  class="row-ghost-button"
-                  :disabled="isBatchEditMode"
-                  @click.stop="openEditConnectionForm(conn)"
-                >
-                  <i class="fas fa-pencil-alt"></i>
-                  <span>编辑</span>
-                </button>
+                <div class="connection-action-buttons">
+                  <button
+                    v-if="getConnectionType(conn) === 'SSH'"
+                    class="row-ghost-button"
+                    :disabled="isBatchEditMode || getSingleTestButtonInfo(conn.id, getConnectionType(conn)).disabled"
+                    :title="getSingleTestButtonInfo(conn.id, getConnectionType(conn)).title"
+                    @click.stop="handleTestSingleConnection(conn)"
+                  >
+                    <i :class="getSingleTestButtonInfo(conn.id, getConnectionType(conn)).iconClass"></i>
+                    <span v-if="getSingleTestButtonInfo(conn.id, getConnectionType(conn)).text !== '测试中'">
+                      {{ getSingleTestButtonInfo(conn.id, getConnectionType(conn)).text }}
+                    </span>
+                  </button>
 
-                <button
-                  class="row-primary-button"
-                  :disabled="isBatchEditMode"
-                  @click.stop="connectTo(conn)"
-                >
-                  <span>连接</span>
-                </button>
+                  <button
+                    class="row-ghost-button"
+                    :disabled="isBatchEditMode"
+                    @click.stop="openEditConnectionForm(conn)"
+                  >
+                    <i class="fas fa-pencil-alt"></i>
+                    <span>编辑</span>
+                  </button>
+
+                  <button
+                    class="row-primary-button"
+                    :disabled="isBatchEditMode"
+                    @click.stop="connectTo(conn)"
+                  >
+                    <span>连接</span>
+                  </button>
+                </div>
               </div>
             </li>
           </ul>
@@ -905,7 +1120,7 @@ onMounted(async () => {
   height: 24px;
   border: 2px solid transparent;
   border-radius: 999px;
-  background: #6c757d;
+  background: var(--ui-switch-off);
   cursor: pointer;
   transition: background 0.2s ease;
 }
@@ -921,7 +1136,7 @@ onMounted(async () => {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--ui-switch-knob);
   transition: transform 0.2s ease;
 }
 
@@ -930,7 +1145,7 @@ onMounted(async () => {
 }
 
 .search-input,
-.select-control,
+.custom-select-trigger,
 .icon-button,
 .square-primary-button,
 .toolbar-action-button {
@@ -938,7 +1153,7 @@ onMounted(async () => {
 }
 
 .search-input,
-.select-control {
+.custom-select-trigger {
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--bg-base);
@@ -953,7 +1168,7 @@ onMounted(async () => {
 }
 
 .search-input:focus,
-.select-control:focus,
+.custom-select-trigger:focus-visible,
 .icon-button:focus,
 .square-primary-button:focus,
 .toolbar-action-button:focus,
@@ -971,15 +1186,86 @@ onMounted(async () => {
   gap: 8px;
 }
 
-.select-control {
+.custom-select {
+  position: relative;
   min-width: 116px;
-  padding: 0 26px 0 8px;
+}
+
+.custom-select-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
   cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%238e98a0' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-size: 14px 10px;
-  background-position: right 8px center;
+  text-align: left;
+}
+
+.custom-select.is-open .custom-select-trigger {
+  border-color: var(--blue);
+}
+
+.custom-select.is-disabled .custom-select-trigger {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.custom-select-trigger-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-select-trigger-icon {
+  color: var(--text-sub);
+  font-size: 11px;
+  transition: transform 0.15s ease;
+}
+
+.custom-select.is-open .custom-select-trigger-icon {
+  transform: rotate(180deg);
+}
+
+.custom-select-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  border: 1px solid var(--border);
+  border-radius: 0 0 10px 10px;
+  background: var(--bg-base);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  z-index: 80;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.custom-select-option {
+  width: 100%;
+  min-height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  padding: 5px 10px;
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.custom-select-option:hover {
+  background: color-mix(in srgb, var(--blue) 20%, var(--bg-base));
+}
+
+.custom-select-option.is-active {
+  background: var(--blue);
+  color: var(--button-text-color);
+}
+
+.custom-select-option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .icon-button {
@@ -1000,7 +1286,7 @@ onMounted(async () => {
   border: none;
   border-radius: 6px;
   background: var(--blue);
-  color: #ffffff;
+  color: var(--button-text-color);
   cursor: pointer;
 }
 
@@ -1016,7 +1302,7 @@ onMounted(async () => {
   border: none;
   border-radius: 6px;
   background: var(--blue);
-  color: #ffffff;
+  color: var(--button-text-color);
   font-size: 13px;
   cursor: pointer;
 }
@@ -1071,13 +1357,13 @@ onMounted(async () => {
 .batch-primary-button {
   border: none;
   background: var(--blue);
-  color: #ffffff;
+  color: var(--button-text-color);
 }
 
 .batch-danger-button {
-  border: 1px solid #d9534f;
-  background: #d9534f;
-  color: #ffffff;
+  border: 1px solid var(--red);
+  background: var(--red);
+  color: var(--button-text-color);
 }
 
 .batch-danger-button:hover {
@@ -1102,14 +1388,14 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
   border-radius: 8px;
-  background: rgba(52, 58, 64, 0.45);
+  background: color-mix(in srgb, var(--bg-surface1) 48%, transparent);
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .connection-item:hover {
-  background: rgba(52, 58, 64, 0.7);
+  background: color-mix(in srgb, var(--bg-surface1) 75%, transparent);
 }
 
 .connection-item.is-selectable {
@@ -1198,7 +1484,7 @@ onMounted(async () => {
 .connection-test-result {
   margin-top: 7px;
   padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
   font-size: 12px;
 }
 
@@ -1218,11 +1504,54 @@ onMounted(async () => {
 
 .connection-actions {
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.connection-action-buttons {
+  display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
+}
+
+.connection-expiry {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.expiry-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.expiry-tag.is-danger {
+  color: color-mix(in srgb, var(--red) 70%, #fff);
+  border-color: color-mix(in srgb, var(--red) 45%, transparent);
+  background: color-mix(in srgb, var(--red) 22%, transparent);
+}
+
+.expiry-tag.is-warning {
+  color: color-mix(in srgb, var(--yellow) 72%, #fff);
+  border-color: color-mix(in srgb, var(--yellow) 45%, transparent);
+  background: color-mix(in srgb, var(--yellow) 20%, transparent);
+}
+
+.expiry-tag.is-success {
+  color: color-mix(in srgb, var(--green) 72%, #fff);
+  border-color: color-mix(in srgb, var(--green) 42%, transparent);
+  background: color-mix(in srgb, var(--green) 18%, transparent);
 }
 
 .row-ghost-button,
@@ -1253,7 +1582,7 @@ onMounted(async () => {
   padding: 0 16px;
   border: none;
   background: var(--blue);
-  color: #ffffff;
+  color: var(--button-text-color);
 }
 
 .row-primary-button:hover {
@@ -1286,7 +1615,7 @@ onMounted(async () => {
     min-width: 0;
   }
 
-  .select-control {
+  .custom-select {
     flex: 1;
     min-width: 0;
   }
@@ -1301,8 +1630,15 @@ onMounted(async () => {
 
   .connection-actions {
     width: 100%;
+    align-items: flex-start;
+  }
+
+  .connection-action-buttons {
+    justify-content: flex-start;
+  }
+
+  .connection-expiry {
     justify-content: flex-start;
   }
 }
 </style>
-

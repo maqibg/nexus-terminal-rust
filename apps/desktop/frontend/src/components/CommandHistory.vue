@@ -47,21 +47,21 @@ onMounted(load);
 .history-panel { display: flex; flex-direction: column; height: 100%; }
 .history-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 10px; border-bottom: 1px solid #313244; font-size: 0.8rem; color: #a6adc8;
+  padding: 6px 10px; border-bottom: 1px solid var(--border); font-size: 0.8rem; color: var(--text-sub);
 }
 .btn-icon {
-  width: 20px; height: 20px; border-radius: 4px; border: 1px solid #45475a;
-  background: transparent; color: #f38ba8; cursor: pointer; font-size: 0.8rem;
+  width: 20px; height: 20px; border-radius: 4px; border: 1px solid var(--border);
+  background: transparent; color: var(--red); cursor: pointer; font-size: 0.8rem;
   display: flex; align-items: center; justify-content: center;
 }
-.btn-icon:hover { background: #313244; }
+.btn-icon:hover { background: var(--bg-surface1); }
 .history-list { flex: 1; overflow-y: auto; padding: 4px; }
 .history-item {
   padding: 4px 8px; border-radius: 4px; cursor: pointer;
   display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 1px;
 }
-.history-item:hover { background: #313244; }
-.history-cmd { font-size: 0.75rem; color: #89b4fa; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.history-time { font-size: 0.65rem; color: #6c7086; flex-shrink: 0; }
-.status { padding: 8px; text-align: center; color: #6c7086; font-size: 0.75rem; }
+.history-item:hover { background: var(--bg-surface1); }
+.history-cmd { font-size: 0.75rem; color: var(--blue); font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-time { font-size: 0.65rem; color: var(--text-dim); flex-shrink: 0; }
+.status { padding: 8px; text-align: center; color: var(--text-dim); font-size: 0.75rem; }
 </style>

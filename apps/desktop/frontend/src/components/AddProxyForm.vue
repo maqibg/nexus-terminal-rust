@@ -5,10 +5,12 @@
         <div class="form-title">{{ proxy ? '编辑代理' : '新建代理' }}</div>
         <div class="form-body">
           <input v-model="form.name" class="input" placeholder="名称" />
-          <select v-model="form.proxy_type" class="input">
-            <option value="SOCKS5">SOCKS5</option>
-            <option value="HTTP">HTTP</option>
-          </select>
+          <AppSelect
+            v-model="form.proxy_type"
+            :options="proxyTypeOptions"
+            variant="input"
+            aria-label="代理类型"
+          />
           <input v-model="form.host" class="input" placeholder="主机" />
           <input v-model.number="form.port" class="input" type="number" placeholder="端口" />
           <input v-model="form.username" class="input" placeholder="用户名（可选）" />
@@ -25,12 +27,17 @@
 
 <script setup lang="ts">
 import { reactive, watch } from 'vue';
+import AppSelect from './AppSelect.vue';
 import { connectionsApi, type Proxy } from '@/lib/api';
 import { useUINotificationStore } from '@/stores/uiNotifications';
 
 const props = defineProps<{ visible: boolean; proxy?: Proxy }>();
 const emit = defineEmits<{ saved: []; cancel: [] }>();
 const notify = useUINotificationStore();
+const proxyTypeOptions = [
+  { value: 'SOCKS5', label: 'SOCKS5' },
+  { value: 'HTTP', label: 'HTTP' },
+];
 
 const form = reactive({
   name: '', proxy_type: 'SOCKS5', host: '', port: 1080,
@@ -64,7 +71,7 @@ async function submit() {
 .form-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
 .form-body { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
 .input { background: var(--bg-mantle); border: 1px solid var(--border); border-radius: 4px; padding: 8px; color: var(--text); font-size: 13px; outline: none; }
-.input:focus { border-color: var(--blue); }
+.input:focus { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
 .form-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; }
 .btn-cancel { background: var(--bg-surface1); color: var(--text-sub); }

@@ -11,23 +11,29 @@
         </div>
         <label>用户名 <input v-model="form.username" placeholder="root" /></label>
         <label>认证方式
-          <select v-model="form.auth_method">
-            <option value="password">密码</option>
-            <option value="key">SSH 密钥</option>
-          </select>
+          <AppSelect
+            v-model="form.auth_method"
+            :options="authMethodOptions"
+            class="dialog-select"
+            aria-label="认证方式"
+          />
         </label>
         <label v-if="form.auth_method === 'password'">密码 <input v-model="form.password" type="password" /></label>
         <label v-if="form.auth_method === 'key'">SSH 密钥
-          <select v-model="form.ssh_key_id">
-            <option :value="undefined">无</option>
-            <option v-for="k in sshKeys" :key="k.id" :value="k.id">{{ k.name }}</option>
-          </select>
+          <AppSelect
+            v-model="form.ssh_key_id"
+            :options="sshKeyOptions"
+            class="dialog-select"
+            aria-label="SSH 密钥"
+          />
         </label>
         <label>代理
-          <select v-model="form.proxy_id">
-            <option :value="undefined">直连（无代理）</option>
-            <option v-for="p in proxies" :key="p.id" :value="p.id">{{ p.name }} ({{ p.host }}:{{ p.port }})</option>
-          </select>
+          <AppSelect
+            v-model="form.proxy_id"
+            :options="proxyOptions"
+            class="dialog-select"
+            aria-label="代理"
+          />
         </label>
       </div>
       <div class="actions">
@@ -39,7 +45,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { computed, ref, reactive, onMounted } from 'vue';
+import AppSelect from './AppSelect.vue';
 import { connectionsApi } from '@/lib/api';
 import type { SshKey, Proxy } from '@/lib/api';
 
@@ -51,6 +58,20 @@ const error = ref('');
 const busy = ref(false);
 const sshKeys = ref<SshKey[]>([]);
 const proxies = ref<Proxy[]>([]);
+const authMethodOptions = [
+  { value: 'password', label: '密码' },
+  { value: 'key', label: 'SSH 密钥' },
+];
+
+const sshKeyOptions = computed(() => [
+  { value: undefined, label: '无' },
+  ...sshKeys.value.map((key) => ({ value: key.id, label: key.name })),
+]);
+
+const proxyOptions = computed(() => [
+  { value: undefined, label: '直连（无代理）' },
+  ...proxies.value.map((proxy) => ({ value: proxy.id, label: `${proxy.name} (${proxy.host}:${proxy.port})` })),
+]);
 
 const form = reactive({
   name: props.connection?.name ?? '',
@@ -96,31 +117,55 @@ async function handleSave() {
   display: flex; align-items: center; justify-content: center; z-index: 100;
 }
 .dialog {
-  background: #313244; border-radius: 12px; padding: 1.5rem;
+  background: var(--bg-surface0);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
   min-width: 400px; max-width: 480px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
 }
-h3 { margin: 0 0 1rem; color: #cdd6f4; font-weight: 500; }
+h3 { margin: 0 0 1rem; color: var(--text); font-weight: 500; }
 .form { display: flex; flex-direction: column; gap: 0.6rem; }
-label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: #a6adc8; }
-input, select {
-  padding: 0.5rem 0.6rem; border-radius: 6px; border: 1px solid #45475a;
-  background: #1e1e2e; color: #cdd6f4; font-size: 0.85rem; outline: none;
+label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--text-sub); }
+input {
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  color: var(--text);
+  font-size: 0.85rem;
+  outline: none;
 }
-input:focus, select:focus { border-color: #89b4fa; }
+input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue);
+}
+.dialog-select :deep(.app-select-trigger) {
+  padding: 0.5rem 0.6rem;
+  min-height: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+.dialog-select :deep(.app-select-trigger:focus-visible) {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue);
+}
 .row { display: flex; gap: 0.5rem; }
 .flex { flex: 1; }
 .port { width: 80px; }
 .actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
 .btn-cancel {
-  padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid #45475a;
-  background: transparent; color: #a6adc8; cursor: pointer; font-size: 0.85rem;
+  padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border);
+  background: transparent; color: var(--text-sub); cursor: pointer; font-size: 0.85rem;
 }
 .btn-save {
   padding: 0.5rem 1rem; border-radius: 6px; border: none;
-  background: #89b4fa; color: #1e1e2e; cursor: pointer; font-weight: 600; font-size: 0.85rem;
+  background: var(--blue); color: var(--button-text-color); cursor: pointer; font-weight: 600; font-size: 0.85rem;
 }
-.btn-save:hover { background: #74c7ec; }
+.btn-save:hover { filter: brightness(1.05); }
 .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-cancel:hover { background: #45475a; }
-.error { color: #f38ba8; font-size: 0.8rem; margin-bottom: 0.5rem; }
+.btn-cancel:hover { background: var(--bg-surface1); color: var(--text); }
+.error { color: var(--red); font-size: 0.8rem; margin-bottom: 0.5rem; }
 </style>

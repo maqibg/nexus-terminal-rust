@@ -99,6 +99,12 @@
   --ui-menu-hover: var(--link-active-bg-color);
   --ui-menu-danger-text: var(--color-error);
   --ui-menu-danger-hover: rgba(217, 83, 79, 0.2);
+
+  --ui-select-option-bg: var(--ui-menu-bg);
+  --ui-select-option-text: var(--text);
+  --ui-select-option-active-bg: var(--blue);
+  --ui-select-option-active-text: var(--button-text-color);
+  --ui-select-arrow-color: #6c757d;
 }
 
 *,
@@ -120,6 +126,41 @@ body {
   background: var(--bg-base);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+}
+
+select {
+  color-scheme: dark;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%236c757d' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-size: 16px 12px;
+  background-position: right 0.5rem center;
+  padding-right: 2rem;
+  cursor: pointer;
+}
+
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+select option {
+  background: var(--ui-select-option-bg);
+  color: var(--ui-select-option-text);
+}
+
+select option:checked {
+  background: var(--ui-select-option-active-bg) !important;
+  color: var(--ui-select-option-active-text) !important;
+  box-shadow: 0 0 0 9999px var(--ui-select-option-active-bg) inset;
+}
+
+select option:hover,
+select option:focus,
+select option:active {
+  background: var(--ui-select-option-active-bg) !important;
+  color: var(--ui-select-option-active-text) !important;
+  box-shadow: 0 0 0 9999px var(--ui-select-option-active-bg) inset;
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }

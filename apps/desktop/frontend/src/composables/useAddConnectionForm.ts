@@ -15,6 +15,12 @@ type AuthMethod = 'password' | 'key';
 interface ExtendedConnection extends Connection {
   jump_chain?: unknown;
   notes?: string | null;
+  provider?: string | null;
+  region?: string | null;
+  expiry_date?: string | null;
+  billing_cycle?: string | null;
+  billing_amount?: number | null;
+  billing_currency?: string | null;
   proxy_type?: 'proxy' | 'jump' | null;
 }
 
@@ -44,7 +50,9 @@ interface BuildPayloadOptions {
   jumpChain?: Array<number | null> | null;
   tagNames: string[];
   notes: string;
-}interface RdpGatewayFormData {
+}
+
+interface RdpGatewayFormData {
   enabled: boolean;
   host: string;
   port: number | null;
@@ -77,6 +85,15 @@ interface VncOptionsFormData {
   sharedConnection: boolean;
 }
 
+interface ServerManagementFormData {
+  provider: string;
+  region: string;
+  expiryDate: string;
+  billingCycle: '' | 'monthly' | 'quarterly' | 'semi-annually' | 'annually' | 'biennially' | 'triennially' | 'custom';
+  billingAmount: number | null;
+  billingCurrency: string;
+}
+
 export interface ConnectionFormData {
   id?: number;
   type: ConnectionType;
@@ -95,6 +112,7 @@ export interface ConnectionFormData {
   vncPassword: string;
   rdpOptions: RdpOptionsFormData;
   vncOptions: VncOptionsFormData;
+  serverInfo: ServerManagementFormData;
 }
 
 const scriptModeFormatInfo = `格式: user@host:port [-type TYPE] [-name NAME] [-p PASSWORD] [-k KEY_NAME] [-proxy PROXY_NAME] [-tags TAG1,TAG2] [-note NOTE]\n参数说明:\n  user@host:port  用户名@主机/IP:端口 (必填)\n  -type TYPE      连接类型，支持 SSH/RDP/VNC\n  -name NAME      显示名称\n  -p PASSWORD     密码\n  -k KEY_NAME     SSH 密钥名称\n  -proxy NAME     代理名称\n  -tags TAGS      标签（逗号分隔）\n  -note TEXT      备注`;
@@ -142,6 +160,14 @@ const createDefaultFormData = (): ConnectionFormData => ({
     compression: 2,
     localCursor: true,
     sharedConnection: true,
+  },
+  serverInfo: {
+    provider: '',
+    region: '',
+    expiryDate: '',
+    billingCycle: '',
+    billingAmount: null,
+    billingCurrency: 'CNY',
   },
 });
 
@@ -294,6 +320,26 @@ export function useAddConnectionForm(
     return typeof value === 'object' && value !== null ? value as Record<string, unknown> : {};
   };
 
+  const normalizeExpiryDateForInput = (value: unknown): string => {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      return '';
+    }
+    const normalized = value.trim().replace(' ', 'T');
+    if (normalized.length >= 16) {
+      return normalized.slice(0, 16);
+    }
+    return normalized;
+  };
+
+  const normalizeExpiryDateForPayload = (value: string): string | null => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const withSeconds = trimmed.length === 16 ? `${trimmed}:00` : trimmed;
+    return withSeconds.replace('T', ' ');
+  };
+
   const resetForm = () => {
     Object.assign(formData, createDefaultFormData());
     testStatus.value = 'idle';
@@ -359,6 +405,25 @@ export function useAddConnectionForm(
     formData.vncOptions.localCursor = vncOptionsRaw.localCursor !== false;
     formData.vncOptions.sharedConnection = vncOptionsRaw.sharedConnection !== false;
 
+    formData.serverInfo.provider = typeof connection.provider === 'string' ? connection.provider : '';
+    formData.serverInfo.region = typeof connection.region === 'string' ? connection.region : '';
+    formData.serverInfo.expiryDate = normalizeExpiryDateForInput(connection.expiry_date);
+    formData.serverInfo.billingCycle = (connection.billing_cycle === 'monthly'
+      || connection.billing_cycle === 'quarterly'
+      || connection.billing_cycle === 'semi-annually'
+      || connection.billing_cycle === 'annually'
+      || connection.billing_cycle === 'biennially'
+      || connection.billing_cycle === 'triennially'
+      || connection.billing_cycle === 'custom')
+      ? connection.billing_cycle
+      : '';
+    formData.serverInfo.billingAmount = typeof connection.billing_amount === 'number' && Number.isFinite(connection.billing_amount)
+      ? connection.billing_amount
+      : null;
+    formData.serverInfo.billingCurrency = typeof connection.billing_currency === 'string' && connection.billing_currency.trim().length > 0
+      ? connection.billing_currency.trim().toUpperCase()
+      : 'CNY';
+
     advancedConnectionMode.value = jumpChain && jumpChain.length > 0 ? 'jump' : 'proxy';
   };
 
@@ -406,6 +471,14 @@ export function useAddConnectionForm(
       jump_chain: options.jumpChain && options.jumpChain.length > 0
         ? JSON.stringify(options.jumpChain.filter((item): item is number => typeof item === 'number'))
         : null,
+      provider: formData.serverInfo.provider.trim() || null,
+      region: formData.serverInfo.region.trim() || null,
+      expiry_date: normalizeExpiryDateForPayload(formData.serverInfo.expiryDate),
+      billing_cycle: formData.serverInfo.billingCycle || null,
+      billing_amount: typeof formData.serverInfo.billingAmount === 'number' && Number.isFinite(formData.serverInfo.billingAmount)
+        ? formData.serverInfo.billingAmount
+        : null,
+      billing_currency: formData.serverInfo.billingCurrency.trim() || 'CNY',
     };
 
     if (options.type === 'SSH') {

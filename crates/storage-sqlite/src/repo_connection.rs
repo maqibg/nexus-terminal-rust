@@ -46,46 +46,60 @@ impl SqliteConnectionRepo {
     }
 }
 
-type ConnRow = (
-    i64,
-    String,
-    String,
-    String,
-    i32,
-    String,
-    String,
-    Option<String>,
-    Option<i64>,
-    Option<i64>,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    i32,
-);
+#[derive(sqlx::FromRow)]
+struct ConnRow {
+    id: i64,
+    name: String,
+    #[sqlx(rename = "type")]
+    conn_type: String,
+    host: String,
+    port: i32,
+    username: String,
+    auth_method: String,
+    encrypted_password: Option<String>,
+    ssh_key_id: Option<i64>,
+    proxy_id: Option<i64>,
+    jump_chain: Option<String>,
+    notes: Option<String>,
+    rdp_options: Option<String>,
+    vnc_options: Option<String>,
+    provider: Option<String>,
+    region: Option<String>,
+    expiry_date: Option<String>,
+    billing_cycle: Option<String>,
+    billing_amount: Option<f64>,
+    billing_currency: Option<String>,
+    sort_order: i32,
+}
 
 fn row_to_connection(r: ConnRow) -> Connection {
     Connection {
-        id: r.0,
-        name: r.1,
-        conn_type: r.2,
-        host: r.3,
-        port: r.4,
-        username: r.5,
-        auth_method: r.6,
-        encrypted_password: r.7,
-        ssh_key_id: r.8,
-        proxy_id: r.9,
-        jump_chain: r.10,
-        notes: r.11,
-        rdp_options: r.12,
-        vnc_options: r.13,
-        sort_order: r.14,
+        id: r.id,
+        name: r.name,
+        conn_type: r.conn_type,
+        host: r.host,
+        port: r.port,
+        username: r.username,
+        auth_method: r.auth_method,
+        encrypted_password: r.encrypted_password,
+        ssh_key_id: r.ssh_key_id,
+        proxy_id: r.proxy_id,
+        jump_chain: r.jump_chain,
+        notes: r.notes,
+        rdp_options: r.rdp_options,
+        vnc_options: r.vnc_options,
+        provider: r.provider,
+        region: r.region,
+        expiry_date: r.expiry_date,
+        billing_cycle: r.billing_cycle,
+        billing_amount: r.billing_amount,
+        billing_currency: r.billing_currency,
+        sort_order: r.sort_order,
         tags: vec![],
     }
 }
 
-const CONN_COLS: &str = "id, name, type, host, port, username, auth_method, encrypted_password, ssh_key_id, proxy_id, jump_chain, notes, rdp_options, vnc_options, sort_order";
+const CONN_COLS: &str = "id, name, type, host, port, username, auth_method, encrypted_password, ssh_key_id, proxy_id, jump_chain, notes, rdp_options, vnc_options, provider, region, expiry_date, billing_cycle, billing_amount, billing_currency, sort_order";
 
 #[async_trait]
 impl ConnectionRepository for SqliteConnectionRepo {
@@ -126,7 +140,7 @@ impl ConnectionRepository for SqliteConnectionRepo {
         encrypted_password: Option<&str>,
     ) -> Result<i64, String> {
         let result = sqlx::query(
-            "INSERT INTO connections (name, type, host, port, username, auth_method, encrypted_password, ssh_key_id, proxy_id, jump_chain, notes, rdp_options, vnc_options, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO connections (name, type, host, port, username, auth_method, encrypted_password, ssh_key_id, proxy_id, jump_chain, notes, rdp_options, vnc_options, provider, region, expiry_date, billing_cycle, billing_amount, billing_currency, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         )
          .bind(&input.name)
         .bind(input.conn_type.as_deref().unwrap_or("SSH"))
@@ -138,6 +152,8 @@ impl ConnectionRepository for SqliteConnectionRepo {
         .bind(input.ssh_key_id).bind(input.proxy_id)
         .bind(&input.jump_chain).bind(&input.notes)
         .bind(&input.rdp_options).bind(&input.vnc_options)
+        .bind(&input.provider).bind(&input.region).bind(&input.expiry_date)
+        .bind(&input.billing_cycle).bind(input.billing_amount).bind(&input.billing_currency)
         .bind(input.sort_order.unwrap_or(0))
         .execute(&self.pool).await.map_err(|e| e.to_string())?;
         let id = result.last_insert_rowid();
@@ -154,7 +170,7 @@ impl ConnectionRepository for SqliteConnectionRepo {
         encrypted_password: Option<&str>,
     ) -> Result<bool, String> {
         let result = sqlx::query(
-            "UPDATE connections SET name=?, type=?, host=?, port=?, username=?, auth_method=?, encrypted_password=COALESCE(?,encrypted_password), ssh_key_id=?, proxy_id=?, jump_chain=?, notes=?, rdp_options=?, vnc_options=?, sort_order=?, updated_at=datetime('now') WHERE id=?",
+            "UPDATE connections SET name=?, type=?, host=?, port=?, username=?, auth_method=?, encrypted_password=COALESCE(?,encrypted_password), ssh_key_id=?, proxy_id=?, jump_chain=?, notes=?, rdp_options=?, vnc_options=?, provider=?, region=?, expiry_date=?, billing_cycle=?, billing_amount=?, billing_currency=?, sort_order=?, updated_at=datetime('now') WHERE id=?",
         )
          .bind(&input.name)
         .bind(input.conn_type.as_deref().unwrap_or("SSH"))
@@ -166,6 +182,8 @@ impl ConnectionRepository for SqliteConnectionRepo {
         .bind(input.ssh_key_id).bind(input.proxy_id)
         .bind(&input.jump_chain).bind(&input.notes)
         .bind(&input.rdp_options).bind(&input.vnc_options)
+        .bind(&input.provider).bind(&input.region).bind(&input.expiry_date)
+        .bind(&input.billing_cycle).bind(input.billing_amount).bind(&input.billing_currency)
         .bind(input.sort_order.unwrap_or(0))
         .bind(id)
         .execute(&self.pool).await.map_err(|e| e.to_string())?;

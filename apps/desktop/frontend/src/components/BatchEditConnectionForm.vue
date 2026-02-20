@@ -10,18 +10,10 @@
           <input class="input" type="number" v-model.number="form.port" placeholder="留空不修改" />
 
           <label class="field-label">SSH 密钥</label>
-          <select class="input" v-model="form.ssh_key_id">
-            <option :value="undefined">不修改</option>
-            <option :value="0">无</option>
-            <option v-for="k in sshKeys" :key="k.id" :value="k.id">{{ k.name }}</option>
-          </select>
+          <AppSelect v-model="form.ssh_key_id" :options="sshKeyOptions" variant="input" aria-label="SSH 密钥" />
 
           <label class="field-label">代理</label>
-          <select class="input" v-model="form.proxy_id">
-            <option :value="undefined">不修改</option>
-            <option :value="0">无</option>
-            <option v-for="p in proxies" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
+          <AppSelect v-model="form.proxy_id" :options="proxyOptions" variant="input" aria-label="代理" />
 
           <label class="field-label">标签 (逗号分隔)</label>
           <input class="input" v-model="form.tags" placeholder="留空不修改" />
@@ -36,7 +28,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { computed, ref, reactive, onMounted } from 'vue';
+import AppSelect from './AppSelect.vue';
 import { connectionsApi, type SshKey, type Proxy } from '@/lib/api';
 import { useUINotificationStore } from '@/stores/uiNotifications';
 
@@ -50,6 +43,18 @@ const saving = ref(false);
 const form = reactive<{ port?: number; ssh_key_id?: number; proxy_id?: number; tags: string }>({
   port: undefined, ssh_key_id: undefined, proxy_id: undefined, tags: '',
 });
+
+const sshKeyOptions = computed(() => [
+  { value: undefined, label: '不修改' },
+  { value: 0, label: '无' },
+  ...sshKeys.value.map((key) => ({ value: key.id, label: key.name })),
+]);
+
+const proxyOptions = computed(() => [
+  { value: undefined, label: '不修改' },
+  { value: 0, label: '无' },
+  ...proxies.value.map((proxy) => ({ value: proxy.id, label: proxy.name })),
+]);
 
 onMounted(async () => {
   const [keys, pxs] = await Promise.all([connectionsApi.sshKeyList(), connectionsApi.proxyList()]);
@@ -86,7 +91,7 @@ async function submit() {
 .hint { font-size: 12px; color: var(--text-dim); margin: 0 0 4px; }
 .field-label { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
 .input { background: var(--bg-mantle); border: 1px solid var(--border); border-radius: 4px; padding: 8px; color: var(--text); font-size: 13px; outline: none; }
-.input:focus { border-color: var(--blue); }
+.input:focus { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
 .form-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; }
 .btn-cancel { background: var(--bg-surface1); color: var(--text-sub); }

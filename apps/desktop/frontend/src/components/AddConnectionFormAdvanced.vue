@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { type PropType } from 'vue';
+import { computed, ref, type PropType } from 'vue';
+import AppSelect from './AppSelect.vue';
 import TagInput from './TagInput.vue';
 
 interface ProxyInfo {
@@ -59,6 +60,14 @@ const props = defineProps({
         localCursor: boolean;
         sharedConnection: boolean;
       };
+      serverInfo: {
+        provider: string;
+        region: string;
+        expiryDate: string;
+        billingCycle: '' | 'monthly' | 'quarterly' | 'semi-annually' | 'annually' | 'biennially' | 'triennially' | 'custom';
+        billingAmount: number | null;
+        billingCurrency: string;
+      };
     }>,
     required: true,
   },
@@ -99,6 +108,124 @@ const getAvailableJumpHostsForIndex = (currentIndex: number): ConnectionInfo[] =
     return !props.formData.jump_chain?.some((jumpHostId, index) => index !== currentIndex && jumpHostId === conn.id);
   });
 };
+
+const proxyOptions = computed(() => [
+  { value: null, label: '无代理' },
+  ...props.proxies.map(proxy => ({
+    value: proxy.id,
+    label: `${proxy.name} (${proxy.proxy_type} - ${proxy.host}:${proxy.port})`,
+  })),
+]);
+
+const getJumpHostOptionsForIndex = (currentIndex: number) => ([
+  { value: null, label: '请选择跳板机' },
+  ...getAvailableJumpHostsForIndex(currentIndex).map(host => ({ value: host.id, label: host.name })),
+]);
+
+const rdpAudioOptions = [
+  { value: 'local', label: '本地播放' },
+  { value: 'remote', label: '远端播放' },
+  { value: 'none', label: '禁用音频' },
+];
+
+const rdpColorDepthOptions = [
+  { value: 15, label: '15-bit' },
+  { value: 16, label: '16-bit' },
+  { value: 24, label: '24-bit' },
+  { value: 32, label: '32-bit' },
+];
+
+const billingCycleOptions = [
+  { value: '', label: '未设置' },
+  { value: 'monthly', label: '月付' },
+  { value: 'quarterly', label: '季付' },
+  { value: 'semi-annually', label: '半年付' },
+  { value: 'annually', label: '年付' },
+  { value: 'biennially', label: '两年付' },
+  { value: 'triennially', label: '三年付' },
+  { value: 'custom', label: '自定义' },
+];
+
+const billingCurrencyOptions = [
+  { value: 'CNY', label: 'CNY' },
+  { value: 'USD', label: 'USD' },
+  { value: 'EUR', label: 'EUR' },
+];
+
+const expiryInputRef = ref<HTMLInputElement | null>(null);
+
+const formatDateTimeLocal = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hour}:${minute}`;
+};
+
+const setExpiryAtDaysFromNow = (days: number) => {
+  const target = new Date();
+  target.setDate(target.getDate() + days);
+  target.setHours(23, 59, 0, 0);
+  props.formData.serverInfo.expiryDate = formatDateTimeLocal(target);
+};
+
+const clearExpiryDate = () => {
+  props.formData.serverInfo.expiryDate = '';
+};
+
+const openExpiryPicker = () => {
+  const input = expiryInputRef.value;
+  if (!input) {
+    return;
+  }
+
+  const pickerInput = input as HTMLInputElement & { showPicker?: () => void };
+  if (typeof pickerInput.showPicker === 'function') {
+    pickerInput.showPicker();
+    return;
+  }
+
+  input.focus();
+  input.click();
+};
+
+const expiryPreviewText = computed(() => {
+  const rawValue = props.formData.serverInfo.expiryDate?.trim();
+  if (!rawValue) {
+    return '未设置到期时间';
+  }
+
+  const parsed = new Date(rawValue);
+  if (Number.isNaN(parsed.getTime())) {
+    return '到期时间格式无效';
+  }
+
+  const now = Date.now();
+  const diffMs = parsed.getTime() - now;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const hourMs = 60 * 60 * 1000;
+  const exactTime = parsed.toLocaleString('zh-CN', {
+    hour12: false,
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  if (diffMs < 0) {
+    const expiredDays = Math.max(1, Math.ceil(Math.abs(diffMs) / dayMs));
+    return `已过期 ${expiredDays} 天（${exactTime}）`;
+  }
+
+  if (diffMs < dayMs) {
+    const hoursLeft = Math.max(1, Math.ceil(diffMs / hourMs));
+    return `${hoursLeft} 小时后到期（${exactTime}）`;
+  }
+
+  const daysLeft = Math.ceil(diffMs / dayMs);
+  return `${daysLeft} 天后到期（${exactTime}）`;
+});
 </script>
 
 <template>
@@ -129,12 +256,13 @@ const getAvailableJumpHostsForIndex = (currentIndex: number): ConnectionInfo[] =
 
     <div v-if="formData.type === 'SSH' && advancedConnectionMode === 'proxy'" class="field-block">
       <label for="conn-proxy" class="field-label">代理（可选）</label>
-      <select id="conn-proxy" v-model="formData.proxy_id" class="field-select">
-        <option :value="null">无代理</option>
-        <option v-for="proxy in proxies" :key="proxy.id" :value="proxy.id">
-          {{ proxy.name }} ({{ proxy.proxy_type }} - {{ proxy.host }}:{{ proxy.port }})
-        </option>
-      </select>
+      <AppSelect
+        id="conn-proxy"
+        v-model="formData.proxy_id"
+        class="field-select"
+        :options="proxyOptions"
+        aria-label="代理（可选）"
+      />
       <div v-if="isProxyLoading" class="hint-text">代理加载中...</div>
       <div v-if="proxyStoreError" class="error-text">{{ proxyStoreError }}</div>
     </div>
@@ -153,16 +281,12 @@ const getAvailableJumpHostsForIndex = (currentIndex: number): ConnectionInfo[] =
           class="jump-item"
         >
           <span class="jump-label">跳板机 {{ index + 1 }}</span>
-          <select v-model="formData.jump_chain[index]" class="field-select jump-select">
-            <option :value="null">请选择跳板机</option>
-            <option
-              v-for="host in getAvailableJumpHostsForIndex(index)"
-              :key="host.id"
-              :value="host.id"
-            >
-              {{ host.name }}
-            </option>
-          </select>
+          <AppSelect
+            v-model="formData.jump_chain[index]"
+            class="field-select jump-select"
+            :options="getJumpHostOptionsForIndex(index)"
+            aria-label="跳板机"
+          />
           <button
             type="button"
             class="remove-jump-btn"
@@ -218,20 +342,21 @@ const getAvailableJumpHostsForIndex = (currentIndex: number): ConnectionInfo[] =
       <div class="option-grid option-grid-2">
         <div class="field-block option-inline">
           <label class="field-label">音频</label>
-          <select v-model="formData.rdpOptions.audio" class="field-select">
-            <option value="local">本地播放</option>
-            <option value="remote">远端播放</option>
-            <option value="none">禁用音频</option>
-          </select>
+          <AppSelect
+            v-model="formData.rdpOptions.audio"
+            class="field-select"
+            :options="rdpAudioOptions"
+            aria-label="RDP 音频"
+          />
         </div>
         <div class="field-block option-inline">
           <label class="field-label">色深</label>
-          <select v-model.number="formData.rdpOptions.colorDepth" class="field-select">
-            <option :value="15">15-bit</option>
-            <option :value="16">16-bit</option>
-            <option :value="24">24-bit</option>
-            <option :value="32">32-bit</option>
-          </select>
+          <AppSelect
+            v-model="formData.rdpOptions.colorDepth"
+            class="field-select"
+            :options="rdpColorDepthOptions"
+            aria-label="RDP 色深"
+          />
         </div>
       </div>
 
@@ -274,6 +399,72 @@ const getAvailableJumpHostsForIndex = (currentIndex: number): ConnectionInfo[] =
         <div class="field-block option-inline">
           <label class="field-label">压缩级别 (0-9)</label>
           <input v-model.number="formData.vncOptions.compression" type="number" min="0" max="9" class="field-input" />
+        </div>
+      </div>
+    </div>
+
+    <div class="field-block server-management-group">
+      <label class="field-label">服务器管理信息（可选）</label>
+      <div class="field-grid field-grid-2">
+        <div class="field-block option-inline">
+          <label class="field-label">提供商</label>
+          <input v-model="formData.serverInfo.provider" type="text" class="field-input" placeholder="如：阿里云、腾讯云、AWS" />
+        </div>
+        <div class="field-block option-inline">
+          <label class="field-label">所属地区</label>
+          <input v-model="formData.serverInfo.region" type="text" class="field-input" placeholder="如：CN / HK / US" />
+        </div>
+      </div>
+
+      <div class="field-grid field-grid-2">
+        <div class="field-block option-inline">
+          <label class="field-label">到期时间</label>
+          <div class="expiry-input-wrap">
+            <input
+              ref="expiryInputRef"
+              v-model="formData.serverInfo.expiryDate"
+              type="datetime-local"
+              step="300"
+              class="field-input"
+            />
+            <button type="button" class="expiry-picker-btn" title="选择到期时间" @click="openExpiryPicker">
+              <i class="fas fa-calendar-alt"></i>
+            </button>
+          </div>
+          <div class="expiry-quick-actions">
+            <button type="button" class="expiry-quick-btn" @click="setExpiryAtDaysFromNow(0)">今天 23:59</button>
+            <button type="button" class="expiry-quick-btn" @click="setExpiryAtDaysFromNow(7)">7 天后</button>
+            <button type="button" class="expiry-quick-btn" @click="setExpiryAtDaysFromNow(30)">30 天后</button>
+            <button type="button" class="expiry-quick-btn" @click="setExpiryAtDaysFromNow(90)">90 天后</button>
+            <button type="button" class="expiry-quick-btn" @click="setExpiryAtDaysFromNow(365)">1 年后</button>
+            <button type="button" class="expiry-quick-btn is-danger" @click="clearExpiryDate">清空</button>
+          </div>
+          <div class="expiry-preview-text">{{ expiryPreviewText }}</div>
+        </div>
+        <div class="field-block option-inline">
+          <label class="field-label">计费周期</label>
+          <AppSelect
+            v-model="formData.serverInfo.billingCycle"
+            class="field-select"
+            :options="billingCycleOptions"
+            aria-label="计费周期"
+          />
+        </div>
+      </div>
+
+      <div class="field-grid field-grid-2">
+        <div class="field-block option-inline">
+          <label class="field-label">计费金额</label>
+          <input v-model.number="formData.serverInfo.billingAmount" type="number" min="0" step="0.01" class="field-input" placeholder="0.00" />
+        </div>
+        <div class="field-block option-inline">
+          <label class="field-label">计费币种</label>
+          <AppSelect
+            v-model="formData.serverInfo.billingCurrency"
+            class="field-select"
+            :options="billingCurrencyOptions"
+            aria-label="计费币种"
+          />
         </div>
       </div>
     </div>
@@ -362,11 +553,10 @@ const getAvailableJumpHostsForIndex = (currentIndex: number): ConnectionInfo[] =
 
 .segment-btn.active {
   background: var(--blue);
-  color: #ffffff;
+  color: var(--button-text-color);
 }
 
 .field-input,
-.field-select,
 .field-textarea {
   width: 100%;
   padding: 8px 12px;
@@ -377,19 +567,86 @@ const getAvailableJumpHostsForIndex = (currentIndex: number): ConnectionInfo[] =
   font-size: 13px;
 }
 
-.field-select {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%238e98a0' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-size: 14px 10px;
-  background-position: right 10px center;
-  padding-right: 30px;
-}
-
 .field-input:focus,
-.field-select:focus,
 .field-textarea:focus {
   outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue);
+}
+
+.expiry-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.expiry-input-wrap .field-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.expiry-picker-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-base);
+  color: var(--text-sub);
+  cursor: pointer;
+}
+
+.expiry-picker-btn:hover {
+  background: var(--bg-surface1);
+  color: var(--text);
+}
+
+.expiry-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.expiry-quick-btn {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.expiry-quick-btn:hover {
+  border-color: color-mix(in srgb, var(--blue) 60%, var(--border));
+  color: var(--text);
+  background: color-mix(in srgb, var(--blue) 14%, transparent);
+}
+
+.expiry-quick-btn.is-danger:hover {
+  border-color: color-mix(in srgb, var(--red) 65%, var(--border));
+  background: color-mix(in srgb, var(--red) 18%, transparent);
+}
+
+.expiry-preview-text {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.3;
+}
+
+.field-select :deep(.app-select-trigger) {
+  width: 100%;
+  min-height: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-base);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.field-select :deep(.app-select-trigger:focus-visible) {
   border-color: var(--blue);
   box-shadow: 0 0 0 1px var(--blue);
 }
@@ -465,6 +722,23 @@ const getAvailableJumpHostsForIndex = (currentIndex: number): ConnectionInfo[] =
   color: var(--red);
 }
 
+.server-management-group {
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-base) 72%, transparent);
+}
+
+.field-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.field-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .option-group {
   gap: 12px;
 }
@@ -512,6 +786,7 @@ const getAvailableJumpHostsForIndex = (currentIndex: number): ConnectionInfo[] =
 
 
 @media (max-width: 920px) {
+  .field-grid-2,
   .option-grid-2,
   .option-grid-3 {
     grid-template-columns: 1fr;

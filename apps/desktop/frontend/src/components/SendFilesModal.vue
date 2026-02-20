@@ -8,10 +8,12 @@
           <input class="input" v-model="srcPath" placeholder="/path/to/file" />
 
           <label class="field-label">目标连接</label>
-          <select class="input" v-model="targetConnectionId">
-            <option :value="0" disabled>选择目标连接</option>
-            <option v-for="c in targetConnections" :key="c.id" :value="c.id">{{ c.name }} ({{ c.host }})</option>
-          </select>
+          <AppSelect
+            v-model="targetConnectionId"
+            :options="targetConnectionOptions"
+            variant="input"
+            aria-label="目标连接"
+          />
 
           <label class="field-label">目标路径</label>
           <input class="input" v-model="destPath" placeholder="/remote/path/filename" />
@@ -30,6 +32,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue';
+import AppSelect from './AppSelect.vue';
 import { connectionsApi, transferApi, type Connection } from '@/lib/api';
 import { useUINotificationStore } from '@/stores/uiNotifications';
 
@@ -48,6 +51,14 @@ const statusType = ref<'info' | 'success' | 'error'>('info');
 const targetConnections = computed(() =>
   connections.value.filter((conn) => String(conn.type ?? 'SSH').toUpperCase() === 'SSH')
 );
+
+const targetConnectionOptions = computed(() => [
+  { value: 0, label: '选择目标连接', disabled: true },
+  ...targetConnections.value.map(connection => ({
+    value: connection.id,
+    label: `${connection.name} (${connection.host})`,
+  })),
+]);
 
 onMounted(async () => {
   connections.value = await connectionsApi.list();
@@ -95,7 +106,7 @@ async function send() {
 .form-body { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .field-label { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
 .input { background: var(--bg-mantle); border: 1px solid var(--border); border-radius: 4px; padding: 8px; color: var(--text); font-size: 13px; outline: none; }
-.input:focus { border-color: var(--blue); }
+.input:focus { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
 .status { font-size: 12px; padding: 6px 8px; border-radius: 4px; margin-bottom: 8px; }
 .status.info { color: var(--blue); background: rgba(137,180,250,0.1); }
 .status.success { color: var(--green); background: rgba(166,227,161,0.1); }

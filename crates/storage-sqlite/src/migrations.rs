@@ -39,6 +39,11 @@ pub async fn run(pool: &SqlitePool) -> Result<(), sqlx::Error> {
             "add_desktop_options",
             include_str!("sql/005_add_desktop_options.sql"),
         ),
+        (
+            6,
+            "add_server_management_fields",
+            include_str!("sql/006_add_server_management_fields.sql"),
+        ),
     ];
 
     for (version, name, sql) in &migrations {

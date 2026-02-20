@@ -215,7 +215,7 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
   height: 24px;
   border: none;
   border-radius: 99px;
-  background: #5d6570;
+  background: var(--ui-switch-off);
   cursor: pointer;
 }
 
@@ -230,7 +230,7 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--ui-switch-knob);
   transition: transform 0.18s ease;
 }
 
@@ -308,8 +308,8 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
   max-width: 240px;
   padding: 6px 8px;
   border-radius: 6px;
-  background: #1f2430;
-  color: #ffffff;
+  background: var(--ui-menu-bg);
+  color: var(--text);
   font-size: 12px;
   line-height: 1.45;
   opacity: 0;
@@ -338,7 +338,7 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .btn-danger { border-color: var(--red); color: var(--red); background: transparent; }
 .btn-danger:hover { background: color-mix(in srgb, var(--red) 12%, transparent); }
-.btn-primary { border-color: var(--blue); background: var(--blue); color: #ffffff; }
+.btn-primary { border-color: var(--blue); background: var(--blue); color: var(--button-text-color); }
 .btn-primary:hover { filter: brightness(1.05); }
 .btn-secondary { border-color: var(--border); background: transparent; color: var(--text-sub); }
 .btn-secondary:hover { background: var(--bg-surface1); color: var(--text); }

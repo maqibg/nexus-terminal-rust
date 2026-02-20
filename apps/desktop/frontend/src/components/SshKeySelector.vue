@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
+import AppSelect from './AppSelect.vue';
 import SshKeyManagementModal from './SshKeyManagementModal.vue';
 import { useSshKeysStore } from '@/stores/sshKeys';
 
@@ -14,6 +15,10 @@ const selectedKeyId = ref<number | null>(props.modelValue);
 const isManagementModalVisible = ref(false);
 
 const keys = computed(() => items.value);
+const keyOptions = computed(() => [
+  { value: null, label: '请选择 SSH 密钥' },
+  ...keys.value.map(key => ({ value: key.id, label: key.name })),
+]);
 
 watch(() => props.modelValue, (newValue) => {
   selectedKeyId.value = newValue;
@@ -53,17 +58,14 @@ onMounted(async () => {
 <template>
   <div class="ssh-key-selector">
     <div class="selector-row">
-      <select
+      <AppSelect
         id="ssh-key-select"
         v-model="selectedKeyId"
-        class="selector-input"
+        class="selector-select"
+        :options="keyOptions"
         :disabled="loading"
-      >
-        <option :value="null">请选择 SSH 密钥</option>
-        <option v-for="key in keys" :key="key.id" :value="key.id">
-          {{ key.name }}
-        </option>
-      </select>
+        aria-label="SSH 密钥"
+      />
 
       <button
         type="button"
@@ -98,26 +100,24 @@ onMounted(async () => {
   gap: 10px;
 }
 
-.selector-input {
+.selector-select {
   flex: 1;
   min-width: 0;
+}
+
+.selector-select :deep(.app-select-trigger) {
   padding: 8px 12px;
+  min-height: 0;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--bg-base);
   color: var(--text);
   font-size: 13px;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%238e98a0' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
-  background-repeat: no-repeat;
-  background-size: 14px 10px;
-  background-position: right 10px center;
-  padding-right: 30px;
 }
 
-.selector-input:focus {
-  outline: none;
+.selector-select :deep(.app-select-trigger:focus-visible) {
   border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue);
 }
 
 .manage-btn {

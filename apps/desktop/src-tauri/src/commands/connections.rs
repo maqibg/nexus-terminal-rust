@@ -457,6 +457,12 @@ pub async fn connection_clone(state: State<'_, AppState>, id: i64) -> CmdResult<
         notes: conn.notes,
         rdp_options: conn.rdp_options,
         vnc_options: conn.vnc_options,
+        provider: conn.provider,
+        region: conn.region,
+        expiry_date: conn.expiry_date,
+        billing_cycle: conn.billing_cycle,
+        billing_amount: conn.billing_amount,
+        billing_currency: conn.billing_currency,
         sort_order: Some(conn.sort_order),
         tags: Some(conn.tags),
     };
@@ -484,6 +490,12 @@ pub struct ExportConnection {
     pub notes: Option<String>,
     pub rdp_options: Option<String>,
     pub vnc_options: Option<String>,
+    pub provider: Option<String>,
+    pub region: Option<String>,
+    pub expiry_date: Option<String>,
+    pub billing_cycle: Option<String>,
+    pub billing_amount: Option<f64>,
+    pub billing_currency: Option<String>,
     pub tags: Vec<String>,
 }
 
@@ -514,6 +526,12 @@ pub async fn connection_export(
             notes: c.notes,
             rdp_options: c.rdp_options,
             vnc_options: c.vnc_options,
+            provider: c.provider,
+            region: c.region,
+            expiry_date: c.expiry_date,
+            billing_cycle: c.billing_cycle,
+            billing_amount: c.billing_amount,
+            billing_currency: c.billing_currency,
             tags: c.tags,
         })
         .collect();
@@ -541,6 +559,12 @@ pub async fn connection_import(state: State<'_, AppState>, json: String) -> CmdR
             notes: item.notes,
             rdp_options: item.rdp_options,
             vnc_options: item.vnc_options,
+            provider: item.provider,
+            region: item.region,
+            expiry_date: item.expiry_date,
+            billing_cycle: item.billing_cycle,
+            billing_amount: item.billing_amount,
+            billing_currency: item.billing_currency,
             sort_order: None,
             tags: Some(item.tags),
         };

@@ -147,59 +147,60 @@ onMounted(load);
 .qc-panel { display: flex; flex-direction: column; height: 100%; }
 .qc-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 10px; border-bottom: 1px solid #313244; font-size: 0.8rem; color: #a6adc8;
+  padding: 6px 10px; border-bottom: 1px solid var(--border); font-size: 0.8rem; color: var(--text-sub);
 }
 .btn-icon {
-  width: 22px; height: 22px; border-radius: 4px; border: 1px solid #45475a;
-  background: transparent; color: #cdd6f4; cursor: pointer; font-size: 0.9rem;
+  width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--border);
+  background: transparent; color: var(--text); cursor: pointer; font-size: 0.9rem;
   display: flex; align-items: center; justify-content: center;
 }
-.btn-icon:hover { background: #313244; }
+.btn-icon:hover { background: var(--bg-surface1); }
 .qc-list { flex: 1; overflow-y: auto; padding: 4px; }
 .qc-item {
   padding: 6px 8px; border-radius: 4px; cursor: pointer;
   display: flex; flex-direction: column; gap: 1px; margin-bottom: 2px;
 }
-.qc-item:hover { background: #313244; }
-.qc-name { font-size: 0.8rem; color: #cdd6f4; }
-.qc-desc { font-size: 0.7rem; color: #6c7086; }
-.qc-cmd { font-size: 0.7rem; color: #89b4fa; font-family: monospace; }
-.status { padding: 8px; text-align: center; color: #6c7086; font-size: 0.75rem; }
+.qc-item:hover { background: var(--bg-surface1); }
+.qc-name { font-size: 0.8rem; color: var(--text); }
+.qc-desc { font-size: 0.7rem; color: var(--text-dim); }
+.qc-cmd { font-size: 0.7rem; color: var(--blue); font-family: monospace; }
+.status { padding: 8px; text-align: center; color: var(--text-dim); font-size: 0.75rem; }
 
 .ctx-backdrop { position: fixed; inset: 0; z-index: 99; }
 .ctx-menu {
-  position: fixed; z-index: 100; background: #313244; border-radius: 6px;
+  position: fixed; z-index: 100; background: var(--ui-menu-bg); border-radius: 6px;
   padding: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); min-width: 80px;
 }
-.ctx-item { padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; color: #cdd6f4; }
-.ctx-item:hover { background: #45475a; }
-.ctx-item.danger { color: #f38ba8; }
+.ctx-item { padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; color: var(--text); }
+.ctx-item:hover { background: var(--ui-menu-hover); }
+.ctx-item.danger { color: var(--red); }
 
 .mini-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,0.4);
   display: flex; align-items: center; justify-content: center; z-index: 100;
 }
 .mini-dialog {
-  background: #313244; border-radius: 8px; padding: 1rem; min-width: 300px;
+  background: var(--bg-surface0); border-radius: 8px; padding: 1rem; min-width: 300px;
+  border: 1px solid var(--border);
   display: flex; flex-direction: column; gap: 8px;
 }
-.mini-dialog h4 { margin: 0; font-size: 0.9rem; color: #cdd6f4; font-weight: 500; }
-.mini-dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: #a6adc8; }
+.mini-dialog h4 { margin: 0; font-size: 0.9rem; color: var(--text); font-weight: 500; }
+.mini-dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--text-sub); }
 .mini-dialog input {
-  padding: 6px 8px; border-radius: 4px; border: 1px solid #45475a;
-  background: #1e1e2e; color: #cdd6f4; font-size: 0.85rem; outline: none;
+  padding: 6px 8px; border-radius: 4px; border: 1px solid var(--border);
+  background: var(--bg-base); color: var(--text); font-size: 0.85rem; outline: none;
 }
-.mini-dialog input:focus { border-color: #89b4fa; }
+.mini-dialog input:focus { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
 .mini-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .btn-cancel {
-  padding: 4px 10px; border-radius: 4px; border: 1px solid #45475a;
-  background: transparent; color: #a6adc8; cursor: pointer; font-size: 0.8rem;
+  padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
+  background: transparent; color: var(--text-sub); cursor: pointer; font-size: 0.8rem;
 }
-.btn-cancel:hover { background: #45475a; }
+.btn-cancel:hover { background: var(--bg-surface1); color: var(--text); }
 .btn-save {
   padding: 4px 10px; border-radius: 4px; border: none;
-  background: #89b4fa; color: #1e1e2e; cursor: pointer; font-weight: 600; font-size: 0.8rem;
+  background: var(--blue); color: var(--button-text-color); cursor: pointer; font-weight: 600; font-size: 0.8rem;
 }
-.btn-save:hover { background: #74c7ec; }
-.error { color: #f38ba8; font-size: 0.8rem; }
+.btn-save:hover { filter: brightness(1.05); }
+.error { color: var(--red); font-size: 0.8rem; }
 </style>

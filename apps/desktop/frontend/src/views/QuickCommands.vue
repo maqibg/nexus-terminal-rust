@@ -81,7 +81,7 @@ onMounted(() => store.fetchAll());
 .table th { color: var(--text-sub); font-weight: 500; }
 .cmd-cell { font-family: monospace; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-actions { display: flex; gap: 4px; }
-.btn-primary { padding: 6px 14px; background: var(--blue); color: var(--bg-base); border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.btn-primary { padding: 6px 14px; background: var(--blue); color: var(--button-text-color); border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
 .btn-sm { padding: 3px 8px; background: var(--bg-surface1); color: var(--text-sub); border: none; border-radius: 3px; cursor: pointer; font-size: 12px; }
 .btn-danger { color: var(--red); }
 .empty { text-align: center; color: var(--text-dim); padding: 40px; font-size: 14px; }
@@ -96,5 +96,5 @@ onMounted(() => store.fetchAll());
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; }
 .btn-cancel { background: var(--bg-surface1); color: var(--text-sub); }
-.btn-confirm { background: var(--blue); color: var(--bg-base); }
+.btn-confirm { background: var(--blue); color: var(--button-text-color); }
 </style>

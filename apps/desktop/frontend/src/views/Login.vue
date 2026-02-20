@@ -81,25 +81,44 @@ async function handleVerify2fa() {
 <style scoped>
 .auth-page {
   display: flex; align-items: center; justify-content: center;
-  height: 100%; background: #1e1e2e;
+  height: 100%; background: var(--bg-base);
 }
 .auth-card {
   display: flex; flex-direction: column; gap: 0.75rem;
-  padding: 2rem; border-radius: 12px; background: #313244;
-  min-width: 320px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  padding: 2rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface0);
+  min-width: 320px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
 }
-h1 { text-align: center; font-weight: 300; color: #cdd6f4; margin: 0; }
-.subtitle { text-align: center; color: #a6adc8; font-size: 0.9rem; margin: 0; }
+h1 { text-align: center; font-weight: 300; color: var(--text); margin: 0; }
+.subtitle { text-align: center; color: var(--text-sub); font-size: 0.9rem; margin: 0; }
 input {
-  padding: 0.6rem 0.8rem; border-radius: 6px; border: 1px solid #45475a;
-  background: #1e1e2e; color: #cdd6f4; font-size: 0.9rem; outline: none;
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  color: var(--text);
+  font-size: 0.9rem;
+  outline: none;
 }
-input:focus { border-color: #89b4fa; }
+input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue);
+}
 button {
-  padding: 0.6rem; border-radius: 6px; border: none; cursor: pointer;
-  background: #89b4fa; color: #1e1e2e; font-weight: 600; font-size: 0.9rem;
+  padding: 0.6rem;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  background: var(--button-bg-color);
+  color: var(--button-text-color);
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: background 0.15s ease;
 }
-button:hover { background: #74c7ec; }
+button:hover { background: var(--button-hover-bg-color); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
-.error { color: #f38ba8; font-size: 0.85rem; text-align: center; }
+.error { color: var(--red); font-size: 0.85rem; text-align: center; }
 </style>

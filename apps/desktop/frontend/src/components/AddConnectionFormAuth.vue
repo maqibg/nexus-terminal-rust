@@ -166,6 +166,6 @@ defineProps<{
 
 .segment-btn.active {
   background: var(--blue);
-  color: #ffffff;
+  color: var(--button-text-color);
 }
 </style>

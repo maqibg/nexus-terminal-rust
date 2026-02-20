@@ -10,17 +10,15 @@
 
       <div class="editor-actions">
         <div v-if="!activeFile.isLoading" class="encoding-select-wrapper">
-          <select
-            ref="encodingSelectRef"
-            :value="activeFile.selectedEncoding || 'utf-8'"
+          <AppSelect
+            v-model="selectedEncodingValue"
+            :options="encodingOptions"
             class="encoding-select"
+            :style="{ width: encodingSelectWidth }"
             title="更改文件编码"
+            aria-label="更改文件编码"
             @change="handleEncodingChange"
-          >
-            <option v-for="option in encodingOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
+          />
         </div>
         <span v-else class="encoding-select-placeholder">加载中...</span>
 
@@ -77,6 +75,7 @@ import { storeToRefs } from 'pinia';
 import { sftpApi } from '@/lib/api';
 import MonacoEditor from './MonacoEditor.vue';
 import FileEditorTabs from './FileEditorTabs.vue';
+import AppSelect from './AppSelect.vue';
 import { useAppearanceStore } from '@/stores/appearance';
 import { useFileEditorStore } from '@/stores/fileEditor';
 import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
@@ -91,7 +90,7 @@ const appearanceStore = useAppearanceStore();
 const { activeFile, fileList, activeFileId } = storeToRefs(store);
 
 const monacoEditorRef = ref<{ focusEditor: () => boolean } | null>(null);
-const encodingSelectRef = ref<HTMLSelectElement | null>(null);
+const encodingSelectWidth = ref('90px');
 
 let unregisterFocusAction: (() => void) | null = null;
 let clearSaveStatusTimer: number | null = null;
@@ -128,6 +127,13 @@ const encodingOptions = [
   { value: 'tis-620', label: 'TIS-620' },
   { value: 'cp874', label: 'Windows-874' },
 ];
+
+const selectedEncodingValue = computed({
+  get: () => activeFile.value?.selectedEncoding || 'utf-8',
+  set: (value: string | number | null | undefined) => {
+    handleEncodingChange(value);
+  },
+});
 
 const activeSessionName = computed(() => {
   const file = activeFile.value;
@@ -199,34 +205,26 @@ function encodeContentToBase64(content: string, encoding: string): string {
 
 function updateEncodingSelectWidth() {
   nextTick(() => {
-    const select = encodingSelectRef.value;
-    if (!select) {
-      return;
-    }
-
-    const option = select.options[select.selectedIndex];
-    if (!option) {
+    const selectedEncoding = activeFile.value?.selectedEncoding || 'utf-8';
+    const selectedOption = encodingOptions.find(option => option.value === selectedEncoding);
+    if (!selectedOption) {
       return;
     }
 
     const temp = document.createElement('span');
-    const style = getComputedStyle(select);
     temp.style.position = 'absolute';
     temp.style.left = '-9999px';
     temp.style.visibility = 'hidden';
-    temp.style.fontFamily = style.fontFamily;
-    temp.style.fontSize = style.fontSize;
-    temp.style.fontWeight = style.fontWeight;
-    temp.style.letterSpacing = style.letterSpacing;
-    temp.style.paddingLeft = style.paddingLeft;
-    temp.style.paddingRight = style.paddingRight;
+    temp.style.fontFamily = 'inherit';
+    temp.style.fontSize = '0.85em';
+    temp.style.fontWeight = '400';
     temp.style.whiteSpace = 'nowrap';
-    temp.textContent = option.text || 'UTF-8';
+    temp.textContent = selectedOption.label || 'UTF-8';
     document.body.appendChild(temp);
 
     const width = temp.getBoundingClientRect().width;
     document.body.removeChild(temp);
-    select.style.width = `${Math.ceil(width + 25)}px`;
+    encodingSelectWidth.value = `${Math.ceil(width + 52)}px`;
   });
 }
 
@@ -264,13 +262,17 @@ async function handleEditorFontSizeUpdate(size: number) {
   }
 }
 
-function handleEncodingChange(event: Event) {
+function handleEncodingChange(value: string | number | null | undefined) {
   const file = activeFile.value;
   if (!file) {
     return;
   }
 
-  const nextEncoding = (event.target as HTMLSelectElement).value;
+  const nextEncoding = typeof value === 'string' ? value : String(value ?? '');
+  if (!nextEncoding) {
+    return;
+  }
+
   if (nextEncoding === (file.selectedEncoding || 'utf-8')) {
     return;
   }
@@ -434,28 +436,28 @@ onUnmounted(() => {
   vertical-align: middle;
 }
 
-.encoding-select {
-  background-color: #444;
-  color: #f0f0f0;
-  border: 1px solid #666;
+.encoding-select :deep(.app-select-trigger) {
+  background-color: var(--bg-base);
+  color: var(--text);
+  border: 1px solid var(--border);
+  min-height: 0;
   padding: 0.3rem 0.5rem;
-  border-radius: 3px;
+  border-radius: 6px;
   font-size: 0.85em;
-  cursor: pointer;
-  outline: none;
 }
 
-.encoding-select:hover {
-  background-color: #555;
+.encoding-select :deep(.app-select-trigger:hover) {
+  background-color: var(--bg-surface1);
 }
 
-.encoding-select:focus {
-  border-color: #888;
+.encoding-select :deep(.app-select-trigger:focus-visible) {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue);
 }
 
 .encoding-select-placeholder {
   font-size: 0.85em;
-  color: #888;
+  color: var(--text-dim);
   padding: 0.3rem 0.5rem;
   display: inline-block;
   min-width: 80px;
