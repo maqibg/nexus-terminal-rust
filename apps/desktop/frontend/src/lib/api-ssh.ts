@@ -11,6 +11,12 @@ export interface SshSession {
   connection_name: string;
 }
 
+export interface SshExecResult {
+  stdout: string;
+  stderr: string;
+  exit_code: number;
+}
+
 export const sshApi = {
   connect: (connectionId: number, cols?: number, rows?: number) =>
     tauriInvoke<string>('ssh_connect', {
@@ -30,6 +36,11 @@ export const sshApi = {
   close: (sessionId: string) =>
     tauriInvoke<void>('ssh_close', {
       req: { session_id: sessionId },
+    }),
+
+  executeCommand: (sessionId: string, command: string, timeoutMs?: number) =>
+    tauriInvoke<SshExecResult>('ssh_exec_command', {
+      req: { session_id: sessionId, command, timeout_ms: timeoutMs },
     }),
 
   list: () => tauriInvoke<SshSession[]>('ssh_session_list'),

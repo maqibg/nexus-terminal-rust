@@ -9,6 +9,15 @@
     <div v-else class="terminal-container" :style="terminalContainerStyle">
       <div ref="termRef" class="terminal-host"></div>
     </div>
+    <CommandAutocomplete
+      ref="autocompleteRef"
+      :visible="showAutocomplete"
+      :input="autocompleteInput"
+      :cursor-position="autocompleteCursorPosition"
+      :session-id="sessionId ?? ''"
+      @select="handleAutocompleteSelect"
+      @close="showAutocomplete = false"
+    />
 
     <Teleport to="body">
       <div
@@ -50,7 +59,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -59,6 +68,7 @@ import '@xterm/xterm/css/xterm.css';
 import { storeToRefs } from 'pinia';
 import { onSshOutput, sshApi } from '@/lib/api';
 import VncSessionView from '@/components/VncSessionView.vue';
+import CommandAutocomplete from '@/components/CommandAutocomplete.vue';
 import { useSessionStore } from '@/stores/session';
 import { useAIStore } from '@/stores/ai';
 import { useAppearanceStore } from '@/stores/appearance';
@@ -76,6 +86,21 @@ const { settings: runtimeSettings } = storeToRefs(settingsStore);
 const isVncSession = computed(() => activeSession.value?.protocol === 'VNC');
 
 const termRef = ref<HTMLElement>();
+interface CommandAutocompleteExpose {
+  selectNext: () => void;
+  selectPrevious: () => void;
+  selectCurrent: () => void;
+  hasSuggestions: () => boolean;
+  hasActiveSelection: () => boolean;
+  resetSelection: () => void;
+  forceReset: () => void;
+}
+const autocompleteRef = ref<CommandAutocompleteExpose | null>(null);
+const showAutocomplete = ref(false);
+const autocompleteInput = ref('');
+const autocompleteCursorPosition = ref({ x: 0, y: 0 });
+let terminalInputBuffer = '';
+
 let term: Terminal | null = null;
 let fitAddon: FitAddon | null = null;
 let searchAddon: SearchAddon | null = null;
@@ -114,6 +139,163 @@ const searchOptions = {
   regex: false,
   wholeWord: false,
 } as const;
+
+function encodeUtf8Base64(value: string): string {
+  return btoa(unescape(encodeURIComponent(value)));
+}
+
+function isCommandAutocompleteEnabled(): boolean {
+  return settingsStore.getBoolean('commandAutocomplete', true);
+}
+
+function resetAutocompleteState(forceResetComponent = true): void {
+  showAutocomplete.value = false;
+  autocompleteInput.value = '';
+  if (forceResetComponent) {
+    autocompleteRef.value?.forceReset?.();
+  }
+}
+
+function syncAutocompleteCursorPosition(): void {
+  if (!term || !termRef.value) {
+    return;
+  }
+  const rect = termRef.value.getBoundingClientRect();
+  const cols = Math.max(1, term.cols);
+  const rows = Math.max(1, term.rows);
+  const cellWidth = rect.width / cols;
+  const cellHeight = rect.height / rows;
+  const activeBuffer = term.buffer.active;
+  autocompleteCursorPosition.value = {
+    x: rect.left + Math.max(0, activeBuffer.cursorX) * cellWidth,
+    y: rect.top + Math.max(0, activeBuffer.cursorY) * cellHeight,
+  };
+}
+
+function refreshAutocompleteByBuffer(): void {
+  if (!sessionId.value || activeSession.value?.protocol !== 'SSH') {
+    resetAutocompleteState();
+    return;
+  }
+  if (!isCommandAutocompleteEnabled()) {
+    resetAutocompleteState();
+    return;
+  }
+  const input = terminalInputBuffer;
+  const trimmed = input.trim();
+  if (!trimmed) {
+    resetAutocompleteState();
+    return;
+  }
+  const shouldShow = trimmed.startsWith('/') ? trimmed.length >= 1 : trimmed.length >= 2;
+  if (!shouldShow) {
+    resetAutocompleteState();
+    return;
+  }
+  autocompleteInput.value = input;
+  showAutocomplete.value = true;
+  syncAutocompleteCursorPosition();
+}
+
+function applyTerminalInputDelta(data: string): void {
+  if (!data) {
+    return;
+  }
+  if (data === '\r' || data === '\n' || data.includes('\r') || data.includes('\n')) {
+    terminalInputBuffer = '';
+    resetAutocompleteState();
+    return;
+  }
+  if (data === '\u0015' || data === '\u0003') {
+    terminalInputBuffer = '';
+    resetAutocompleteState();
+    return;
+  }
+  if (/^\x1b\[[0-9;]*[A-Za-z~]$/.test(data) || /^\x1bO[A-Za-z]$/.test(data)) {
+    return;
+  }
+  for (const ch of data) {
+    const code = ch.charCodeAt(0);
+    if (ch === '\u007f' || ch === '\b') {
+      terminalInputBuffer = terminalInputBuffer.slice(0, -1);
+      continue;
+    }
+    if (ch === '\t') {
+      continue;
+    }
+    if (code < 32 || code === 127) {
+      continue;
+    }
+    terminalInputBuffer += ch;
+  }
+  refreshAutocompleteByBuffer();
+}
+
+async function handleAutocompleteSelect(text: string): Promise<void> {
+  if (!sessionId.value || !text) {
+    return;
+  }
+  const currentInput = autocompleteInput.value;
+  const words = currentInput.split(/\s+/);
+  const lastWord = words[words.length - 1] ?? '';
+  const deleteCount = currentInput.startsWith('/') ? currentInput.length : lastWord.length;
+  const payload = '\u007f'.repeat(deleteCount) + text;
+  await sshApi.write(sessionId.value, encodeUtf8Base64(payload)).catch(() => undefined);
+
+  terminalInputBuffer = currentInput.slice(0, currentInput.length - deleteCount) + text;
+  if (text.endsWith(' ')) {
+    autocompleteInput.value = terminalInputBuffer;
+    showAutocomplete.value = true;
+    await nextTick();
+    syncAutocompleteCursorPosition();
+  } else {
+    resetAutocompleteState();
+  }
+  term?.focus();
+}
+
+function handleAutocompleteKeydown(event: KeyboardEvent): boolean {
+  if (!showAutocomplete.value) {
+    return true;
+  }
+  if (event.ctrlKey || event.altKey || event.metaKey) {
+    return true;
+  }
+  const hasSuggestions = autocompleteRef.value?.hasSuggestions?.() ?? false;
+  const hasActiveSelection = autocompleteRef.value?.hasActiveSelection?.() ?? false;
+  switch (event.key) {
+    case 'Enter':
+      if (hasSuggestions && hasActiveSelection) {
+        autocompleteRef.value?.selectCurrent?.();
+        return false;
+      }
+      resetAutocompleteState();
+      return true;
+    case 'Tab':
+      if (!hasSuggestions) {
+        return true;
+      }
+      autocompleteRef.value?.selectCurrent?.();
+      return false;
+    case 'ArrowDown':
+      if (!hasSuggestions) {
+        return true;
+      }
+      autocompleteRef.value?.selectNext?.();
+      return false;
+    case 'ArrowUp':
+      if (!hasSuggestions) {
+        return true;
+      }
+      autocompleteRef.value?.selectPrevious?.();
+      return false;
+    case 'Escape':
+      resetAutocompleteState();
+      return false;
+    default:
+      return true;
+  }
+}
 
 const terminalContextMenuStyle = computed<Record<string, string>>(() => {
   const menuWidth = 244;
@@ -483,6 +665,8 @@ async function handleContextMenuAction(action: TerminalContextMenuAction): Promi
 function initTerminal(sid: string): void {
   cleanup();
   if (!termRef.value) return;
+  terminalInputBuffer = '';
+  resetAutocompleteState();
 
   const activeTheme = effectiveTerminalTheme.value;
   term = new Terminal({
@@ -506,6 +690,8 @@ function initTerminal(sid: string): void {
   term.loadAddon(new WebLinksAddon());
 
   term.open(termRef.value);
+  term.attachCustomKeyEventHandler(handleAutocompleteKeydown);
+  syncAutocompleteCursorPosition();
   selectionDisposable = term.onSelectionChange(() => {
     if (!isTerminalAutoCopyOnSelectEnabled()) {
       return;
@@ -522,7 +708,8 @@ function initTerminal(sid: string): void {
   applyTerminalAppearance();
 
   term.onData((data) => {
-    const b64 = btoa(data);
+    applyTerminalInputDelta(data);
+    const b64 = encodeUtf8Base64(data);
     sshApi.write(sid, b64).catch(() => {});
   });
 
@@ -548,6 +735,7 @@ function initTerminal(sid: string): void {
     if (term) {
       const { cols, rows } = term;
       sshApi.resize(sid, cols, rows).catch(() => {});
+      syncAutocompleteCursorPosition();
     }
   });
   resizeObserver.observe(termRef.value);
@@ -580,19 +768,19 @@ async function handleTerminalContextMenu(event: MouseEvent): Promise<void> {
 }
 
 function handleGlobalPointerDown(event: MouseEvent): void {
-  if (!terminalContextMenu.value.visible) {
-    return;
-  }
   const target = event.target as HTMLElement | null;
-  if (target?.closest('.terminal-context-menu')) {
-    return;
+  if (terminalContextMenu.value.visible && !target?.closest('.terminal-context-menu')) {
+    closeTerminalContextMenu();
   }
-  closeTerminalContextMenu();
+  if (showAutocomplete.value && !target?.closest('.autocomplete-popup')) {
+    resetAutocompleteState(false);
+  }
 }
 
 function handleGlobalKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
     closeTerminalContextMenu();
+    resetAutocompleteState(false);
   }
 }
 
@@ -607,6 +795,8 @@ function cleanup(): void {
   selectionDisposable = null;
   termRef.value?.removeEventListener('contextmenu', handleTerminalContextMenu);
   closeTerminalContextMenu();
+  resetAutocompleteState();
+  terminalInputBuffer = '';
 
   term?.dispose();
   term = null;

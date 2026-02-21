@@ -3,7 +3,7 @@
 use api_contract::error::AppError;
 use connection_core::repository::ConnectionRepository;
 use settings_core::repository::SettingsRepository;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::time::Duration;
 
@@ -34,6 +34,20 @@ pub struct SshResizeRequest {
 #[derive(Deserialize)]
 pub struct SshCloseRequest {
     pub session_id: String,
+}
+
+#[derive(Deserialize)]
+pub struct SshExecRequest {
+    pub session_id: String,
+    pub command: String,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Serialize)]
+pub struct SshExecResponse {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: u32,
 }
 
 #[tauri::command]
@@ -184,5 +198,30 @@ pub async fn ssh_session_list(state: State<'_, AppState>) -> CmdResult<Vec<serde
             serde_json::json!({ "session_id": id, "connection_id": conn_id, "connection_name": name })
         })
         .collect())
+}
+
+#[tauri::command]
+pub async fn ssh_exec_command(
+    state: State<'_, AppState>,
+    req: SshExecRequest,
+) -> CmdResult<SshExecResponse> {
+    state.auth.require_auth().await?;
+
+    let timeout_ms = req.timeout_ms.unwrap_or(3000).clamp(200, 120_000);
+    let output = state
+        .ssh_manager
+        .exec_command(
+            &req.session_id,
+            &req.command,
+            Duration::from_millis(timeout_ms),
+        )
+        .await
+        .map_err(AppError::Ssh)?;
+
+    Ok(SshExecResponse {
+        stdout: output.stdout,
+        stderr: output.stderr,
+        exit_code: output.exit_code,
+    })
 }
 

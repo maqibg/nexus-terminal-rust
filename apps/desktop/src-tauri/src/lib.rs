@@ -159,6 +159,7 @@ pub fn run() {
             commands::ssh::ssh_resize,
             commands::ssh::ssh_close,
             commands::ssh::ssh_session_list,
+            commands::ssh::ssh_exec_command,
             // SFTP
             commands::sftp::sftp_open,
             commands::sftp::sftp_open_override,
