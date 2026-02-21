@@ -18,6 +18,7 @@ export { statusApi } from './api-status';
 export type { BackendHealth } from './api-status';
 export { settingsApi } from './api-settings';
 export type { Setting, TerminalTheme, NotificationChannel } from './api-settings';
+export { aiApi } from './api-ai';
 export { auditApi, historyApi, pathHistoryApi, favoritePathApi, quickCommandApi, quickCommandTagApi } from './api-auxiliary';
 export type { AuditLog, CommandHistory, PathHistory, FavoritePath, QuickCommand, QuickCommandTag } from './api-auxiliary';
 export { sshSuspendApi } from './api-ssh-suspend';

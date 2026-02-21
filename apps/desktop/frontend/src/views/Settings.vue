@@ -277,6 +277,12 @@
             </div>
           </div>
         </section>
+        <section v-if="activeTab === 'ai'" class="settings-card">
+          <h2 class="card-title">AI 助手</h2>
+          <div class="card-body">
+            <AISettingsPanel />
+          </div>
+        </section>
         <section v-if="activeTab === 'system'" class="settings-card">
           <h2 class="card-title">系统设置</h2>
           <div class="card-body">
@@ -379,6 +385,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import AppSelect from '@/components/AppSelect.vue';
+import AISettingsPanel from '@/components/AI/AISettingsPanel.vue';
 import { authApi, connectionsApi } from '@/lib/api';
 import { useUiNotificationsStore } from '@/stores/uiNotifications';
 import { useAppearanceStore } from '@/stores/appearance';
@@ -388,13 +395,14 @@ type AppVersionHost = {
   __APP_VERSION__?: unknown;
 };
 
-type TabKey = 'workspace' | 'system' | 'security' | 'dataManagement' | 'appearance' | 'about';
+type TabKey = 'workspace' | 'ai' | 'system' | 'security' | 'dataManagement' | 'appearance' | 'about';
 
 
 const tabs = computed<Array<{ key: TabKey; label: string }>>(() => {
   if (locale.value === 'zh-CN') {
     return [
       { key: 'workspace', label: '工作区' },
+      { key: 'ai', label: 'AI 助手' },
       { key: 'system', label: '系统' },
       { key: 'security', label: '安全' },
       { key: 'dataManagement', label: '数据管理' },
@@ -406,6 +414,7 @@ const tabs = computed<Array<{ key: TabKey; label: string }>>(() => {
   if (locale.value === 'ja-JP') {
     return [
       { key: 'workspace', label: 'ワークスペース' },
+      { key: 'ai', label: 'AI アシスタント' },
       { key: 'system', label: 'システム' },
       { key: 'security', label: 'セキュリティ' },
       { key: 'dataManagement', label: 'データ管理' },
@@ -416,6 +425,7 @@ const tabs = computed<Array<{ key: TabKey; label: string }>>(() => {
 
   return [
     { key: 'workspace', label: 'Workspace' },
+    { key: 'ai', label: 'AI Assistant' },
     { key: 'system', label: 'System' },
     { key: 'security', label: 'Security' },
     { key: 'dataManagement', label: 'Data' },

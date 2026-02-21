@@ -33,12 +33,20 @@
         >
           <i class="fab fa-docker"></i>
         </button>
+        <button
+          class="workspace-left-tool-btn"
+          :class="{ 'workspace-left-tool-btn-active': activeLeftToolPane === 'ai' }"
+          title="AI 助手"
+          @click="toggleLeftToolPane('ai')"
+        >
+          <i class="fas fa-robot"></i>
+        </button>
       </div>
 
-      <div v-if="activeLeftToolPane" class="workspace-left-panel" @click.stop>
+      <div v-if="activeLeftToolPane" class="workspace-left-panel" :class="{ 'workspace-left-panel-ai': activeLeftToolPane === 'ai' }" @click.stop>
         <div class="workspace-left-panel-header">
           <div class="workspace-left-panel-title">
-            {{ activeLeftToolPane === 'connections' ? '连接列表' : 'Docker 管理器' }}
+            {{ leftPaneTitle }}
           </div>
           <div class="workspace-left-panel-actions">
             <button
@@ -55,6 +63,14 @@
           v-if="activeLeftToolPane === 'connections'"
           class="workspace-left-panel-content"
           @select="handleConnect"
+        />
+
+        <TerminalAIChatPanel
+          v-else-if="activeLeftToolPane === 'ai'"
+          class="workspace-left-panel-content"
+          :session-id="activeSession?.id ?? null"
+          :session-name="activeSession?.connectionName"
+          :storage-id="activeSession?.id ?? undefined"
         />
 
         <div v-else class="workspace-left-panel-content workspace-docker-empty">
@@ -142,12 +158,13 @@ import TransferProgressModal from '@/components/TransferProgressModal.vue';
 import LayoutConfigurator from '@/components/LayoutConfigurator.vue';
 import SftpBrowser from '@/components/SftpBrowser.vue';
 import FileEditorOverlay from '@/components/FileEditorOverlay.vue';
+import TerminalAIChatPanel from '@/components/AI/TerminalAIChatPanel.vue';
 
 const sessionStore = useSessionStore();
 const layoutStore = useLayoutStore();
 const settingsStore = useSettingsStore();
 const fileEditorStore = useFileEditorStore();
-const { activeSessionId, sessionList } = storeToRefs(sessionStore);
+const { activeSessionId, activeSession, sessionList } = storeToRefs(sessionStore);
 const { layoutConfig, leftSidebarVisible, rightSidebarVisible, leftSidebarSize, rightSidebarSize, headerVisible, layoutLocked } =
   storeToRefs(layoutStore);
 const showConnList = ref(false);
@@ -155,7 +172,7 @@ const showTransferModal = ref(false);
 const showLayoutConfigurator = ref(false);
 const showFileManagerPopup = ref(false);
 
-type LeftToolPane = 'connections' | 'docker';
+type LeftToolPane = 'connections' | 'docker' | 'ai';
 const activeLeftToolPane = ref<LeftToolPane | null>(null);
 const { taskList, startListening, cancelTask, cleanup } = useTransferProgress();
 const workspaceSidebarPersistent = computed(() => settingsStore.getBoolean('workspaceSidebarPersistent', false));
@@ -286,6 +303,16 @@ function handleOpenFileEditorPopup() {
 }
 
 const effectiveLeftSidebarVisible = computed(() => leftSidebarVisible.value && !activeLeftToolPane.value);
+
+const leftPaneTitle = computed(() => {
+  if (activeLeftToolPane.value === 'connections') {
+    return '连接列表';
+  }
+  if (activeLeftToolPane.value === 'ai') {
+    return 'AI 助手';
+  }
+  return 'Docker 管理器';
+});
 
 const mainSize = computed(() => {
   let size = 100;
@@ -517,6 +544,12 @@ onUnmounted(() => {
   flex-direction: column;
   border-right: 1px solid var(--border);
   background: var(--bg-mantle);
+}
+
+.workspace-left-panel-ai {
+  width: 420px;
+  min-width: 340px;
+  max-width: 560px;
 }
 
 .workspace-left-panel-header {
