@@ -16,6 +16,14 @@ pub struct SftpOpenRequest {
 }
 
 #[derive(Deserialize)]
+pub struct SftpOpenOverrideRequest {
+    pub connection_id: i64,
+    pub username: Option<String>,
+    pub auth_method: Option<String>,
+    pub password: Option<String>,
+}
+
+#[derive(Deserialize)]
 pub struct SftpPathRequest {
     pub session_id: String,
     pub path: String,
@@ -96,6 +104,116 @@ async fn build_creds(
     })
 }
 
+async fn build_creds_override(
+    state: &AppState,
+    connection_id: i64,
+    username: Option<String>,
+    auth_method: Option<String>,
+    password: Option<String>,
+) -> Result<ssh_core::session::SshCredentials, AppError> {
+    let conn = state
+        .conn_repo
+        .get_connection(connection_id)
+        .await
+        .map_err(AppError::Database)?
+        .ok_or(AppError::NotFound("connection not found".into()))?;
+
+    let normalized_username = username
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| conn.username.clone());
+
+    let normalized_auth_method = auth_method
+        .map(|value| value.trim().to_ascii_lowercase())
+        .filter(|value| !value.is_empty());
+
+    let auth = match normalized_auth_method.as_deref() {
+        Some("password") => {
+            let normalized_password = password
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+                .ok_or(AppError::Validation(
+                    "password auth requires non-empty password".into(),
+                ))?;
+            ssh_core::session::SshAuth::Password(normalized_password)
+        }
+        Some("key") => {
+            let key_id = conn
+                .ssh_key_id
+                .ok_or(AppError::Validation("no SSH key configured".into()))?;
+            let key = state
+                .conn_repo
+                .get_ssh_key(key_id)
+                .await
+                .map_err(AppError::Database)?
+                .ok_or(AppError::NotFound("SSH key not found".into()))?;
+            let private_key = state
+                .crypto
+                .decrypt(&key.encrypted_private_key)
+                .map_err(|e| AppError::Crypto(e.to_string()))?;
+            let passphrase = key
+                .encrypted_passphrase
+                .as_deref()
+                .map(|p| state.crypto.decrypt(p))
+                .transpose()
+                .map_err(|e| AppError::Crypto(e.to_string()))?;
+            ssh_core::session::SshAuth::Key {
+                private_key_pem: private_key,
+                passphrase,
+            }
+        }
+        Some(other) => {
+            return Err(AppError::Validation(format!(
+                "unsupported auth method: {other}"
+            )))
+        }
+        None => {
+            if conn.auth_method == "key" {
+                let key_id = conn
+                    .ssh_key_id
+                    .ok_or(AppError::Validation("no SSH key configured".into()))?;
+                let key = state
+                    .conn_repo
+                    .get_ssh_key(key_id)
+                    .await
+                    .map_err(AppError::Database)?
+                    .ok_or(AppError::NotFound("SSH key not found".into()))?;
+                let private_key = state
+                    .crypto
+                    .decrypt(&key.encrypted_private_key)
+                    .map_err(|e| AppError::Crypto(e.to_string()))?;
+                let passphrase = key
+                    .encrypted_passphrase
+                    .as_deref()
+                    .map(|p| state.crypto.decrypt(p))
+                    .transpose()
+                    .map_err(|e| AppError::Crypto(e.to_string()))?;
+                ssh_core::session::SshAuth::Key {
+                    private_key_pem: private_key,
+                    passphrase,
+                }
+            } else {
+                let stored_password = conn
+                    .encrypted_password
+                    .as_deref()
+                    .ok_or(AppError::Validation("no password configured".into()))?;
+                let decrypted = state
+                    .crypto
+                    .decrypt(stored_password)
+                    .map_err(|e| AppError::Crypto(e.to_string()))?;
+                ssh_core::session::SshAuth::Password(decrypted)
+            }
+        }
+    };
+
+    Ok(ssh_core::session::SshCredentials {
+        host: conn.host,
+        port: conn.port as u16,
+        username: normalized_username,
+        auth,
+    })
+}
+
 #[tauri::command]
 pub async fn sftp_open(state: State<'_, AppState>, req: SftpOpenRequest) -> CmdResult<String> {
     state.auth.require_auth().await?;
@@ -106,6 +224,67 @@ pub async fn sftp_open(state: State<'_, AppState>, req: SftpOpenRequest) -> CmdR
         .open_sftp(session_id.clone(), creds, req.connection_id)
         .await
         .map_err(AppError::Ssh)?;
+    Ok(session_id)
+}
+
+#[tauri::command]
+pub async fn sftp_open_override(
+    state: State<'_, AppState>,
+    req: SftpOpenOverrideRequest,
+) -> CmdResult<String> {
+    state.auth.require_auth().await?;
+    let connection_id = req.connection_id;
+    let username = req.username.clone();
+    let auth_method = req.auth_method.clone();
+    let password = req.password.clone();
+
+    let creds = build_creds_override(
+        &state,
+        connection_id,
+        username.clone(),
+        auth_method.clone(),
+        password,
+    )
+    .await?;
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let open_result = state
+        .ssh_manager
+        .open_sftp(session_id.clone(), creds, connection_id)
+        .await;
+
+    if let Err(primary_err) = open_result {
+        let normalized_method = auth_method
+            .as_deref()
+            .map(|value| value.trim().to_ascii_lowercase());
+        let should_try_key_fallback = matches!(normalized_method.as_deref(), Some("password") | None);
+
+        if primary_err.contains("authentication rejected") && should_try_key_fallback {
+            if let Ok(key_creds) = build_creds_override(
+                &state,
+                connection_id,
+                username.clone(),
+                Some("key".to_string()),
+                None,
+            )
+            .await
+            {
+                state
+                    .ssh_manager
+                    .open_sftp(session_id.clone(), key_creds, connection_id)
+                    .await
+                    .map_err(AppError::Ssh)?;
+                return Ok(session_id);
+            }
+        }
+
+        let detailed = if primary_err.contains("authentication rejected") {
+            "认证被拒绝：目标主机可能禁用 root SSH 密码登录。请检查 PermitRootLogin / PasswordAuthentication，或改用密钥认证。".to_string()
+        } else {
+            primary_err
+        };
+        return Err(AppError::Ssh(detailed));
+    }
+
     Ok(session_id)
 }
 

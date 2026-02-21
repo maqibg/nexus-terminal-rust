@@ -19,6 +19,15 @@
               <i class="fas fa-terminal"></i>
             </button>
             <button
+              class="icon-btn root-mode-btn"
+              :class="{ active: rootModeEnabled }"
+              @click="handleRootModeButtonClick"
+              :disabled="!connectionId || rootModeSwitching"
+              :title="rootModeEnabled ? '退出 Root 模式' : '进入 Root 模式'"
+            >
+              <i class="fas fa-user-shield"></i>
+            </button>
+            <button
               class="icon-btn"
               @click="refresh"
               :disabled="!activeSftpSessionId || isEditingPath"
@@ -272,6 +281,38 @@
         </div>
       </div>
 
+      <div v-if="showRootModeDialog" class="mini-dialog-backdrop" @click.self="closeRootModeDialog">
+        <div class="mini-dialog">
+          <div class="mini-dialog-title">
+            <i class="fas fa-user-shield"></i>
+            <span>Root 模式</span>
+          </div>
+          <div class="root-mode-hint">
+            <span>将使用独立 SFTP 连接访问 root 目录。</span>
+          </div>
+          <input
+            class="mini-dialog-input"
+            v-model.trim="rootModeUsername"
+            placeholder="用户名（默认 root）"
+            :disabled="rootModeSwitching"
+          />
+          <input
+            class="mini-dialog-input"
+            v-model="rootModePassword"
+            type="password"
+            placeholder="Root 密码"
+            :disabled="rootModeSwitching"
+            @keydown.enter="enableRootMode"
+          />
+          <div class="mini-actions">
+            <button class="btn-cancel" :disabled="rootModeSwitching" @click="closeRootModeDialog">取消</button>
+            <button class="btn-save" :disabled="rootModeSwitching" @click="enableRootMode">
+              {{ rootModeSwitching ? '切换中...' : '进入 Root 模式' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div v-if="showNewFile" class="mini-dialog-backdrop" @click.self="showNewFile = false">
         <div class="mini-dialog">
           <div class="mini-dialog-title">
@@ -386,6 +427,11 @@ const showMkdir = ref(false);
 const mkdirName = ref('');
 const showNewFile = ref(false);
 const newFileName = ref('');
+const rootModeEnabled = ref(false);
+const rootModeSwitching = ref(false);
+const showRootModeDialog = ref(false);
+const rootModeUsername = ref('root');
+const rootModePassword = ref('');
 
 const isEditingPath = ref(false);
 const showPathHistoryDropdown = ref(false);
@@ -495,6 +541,10 @@ function resetBrowserState() {
   showNewFile.value = false;
   mkdirName.value = '';
   newFileName.value = '';
+  rootModeEnabled.value = false;
+  rootModeSwitching.value = false;
+  showRootModeDialog.value = false;
+  rootModePassword.value = '';
   ctxVisible.value = false;
   ctxEntry.value = null;
   ctxSubmenuKey.value = null;
@@ -517,6 +567,103 @@ async function ensureSftpSession(sshSid: string): Promise<string> {
   const sftpSessionId = await sftpApi.open(session.connectionId);
   sessionStore.setSftpSession(sshSid, sftpSessionId);
   return sftpSessionId;
+}
+
+function closeRootModeDialog(): void {
+  if (rootModeSwitching.value) {
+    return;
+  }
+  showRootModeDialog.value = false;
+  rootModePassword.value = '';
+}
+
+async function handleRootModeButtonClick(): Promise<void> {
+  if (!connectionId.value || rootModeSwitching.value) {
+    return;
+  }
+
+  if (rootModeEnabled.value) {
+    await disableRootMode();
+    return;
+  }
+
+  rootModeUsername.value = rootModeUsername.value || 'root';
+  rootModePassword.value = '';
+  showRootModeDialog.value = true;
+}
+
+async function enableRootMode(): Promise<void> {
+  if (!connectionId.value || !sshSessionId.value || rootModeSwitching.value) {
+    return;
+  }
+
+  const username = rootModeUsername.value.trim() || 'root';
+  const password = rootModePassword.value;
+  if (!password) {
+    notify.addNotification('warning', '请输入 Root 密码');
+    return;
+  }
+
+  rootModeSwitching.value = true;
+  const previousSessionId = activeSftpSessionId.value;
+
+  try {
+    const rootSftpSessionId = await sftpApi.openOverride(connectionId.value, {
+      username,
+      authMethod: 'password',
+      password,
+    });
+
+    sessionStore.setSftpSession(sshSessionId.value, rootSftpSessionId);
+    rootModeEnabled.value = true;
+    showRootModeDialog.value = false;
+    rootModePassword.value = '';
+
+    if (previousSessionId && previousSessionId !== rootSftpSessionId) {
+      void sftpApi.close(previousSessionId).catch(() => undefined);
+    }
+
+    notify.addNotification('success', `已进入 Root 模式（${username}）`);
+    await navigateTo('/root');
+  } catch (e: any) {
+    const message = String(e?.message || '');
+    if (message.includes('authentication rejected') || message.includes('认证被拒绝')) {
+      notify.addNotification(
+        'error',
+        'Root 认证被拒绝：请检查目标机 SSH 是否允许 root 登录，或改用密钥认证。'
+      );
+    } else {
+      notify.addNotification('error', message || '进入 Root 模式失败');
+    }
+  } finally {
+    rootModeSwitching.value = false;
+  }
+}
+
+async function disableRootMode(): Promise<void> {
+  if (!connectionId.value || !sshSessionId.value || rootModeSwitching.value) {
+    return;
+  }
+
+  rootModeSwitching.value = true;
+  const previousSessionId = activeSftpSessionId.value;
+
+  try {
+    const normalSftpSessionId = await sftpApi.open(connectionId.value);
+    sessionStore.setSftpSession(sshSessionId.value, normalSftpSessionId);
+    rootModeEnabled.value = false;
+
+    if (previousSessionId && previousSessionId !== normalSftpSessionId) {
+      void sftpApi.close(previousSessionId).catch(() => undefined);
+    }
+
+    notify.addNotification('success', '已退出 Root 模式');
+    await navigateTo(currentPath.value || '/');
+  } catch (e: any) {
+    notify.addNotification('error', e?.message || '退出 Root 模式失败');
+  } finally {
+    rootModeSwitching.value = false;
+  }
 }
 
 async function addPathToHistory(path: string): Promise<void> {
@@ -1912,6 +2059,15 @@ watch(
   color: var(--text-sub, #a6adc8);
 }
 
+.root-mode-btn.active {
+  color: var(--yellow, #f9e2af);
+  background: rgba(249, 226, 175, 0.14);
+}
+
+.root-mode-btn.active:hover {
+  background: rgba(249, 226, 175, 0.2);
+}
+
 .search-zone {
   display: flex;
   align-items: center;
@@ -2456,6 +2612,12 @@ watch(
 
 .mini-dialog-input::placeholder {
   color: var(--text-dim, #6c7086);
+}
+
+.root-mode-hint {
+  margin: -2px 0 10px;
+  font-size: 12px;
+  color: var(--text-sub, #a6adc8);
 }
 
 .mini-actions {

@@ -387,6 +387,12 @@ const toBase64Utf8 = (value: string): string => {
   return btoa(binary);
 };
 
+const fromBase64Utf8 = (base64: string): string => {
+  const binary = atob(base64);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+};
+
 const decodeEncodedCode = (encoded: string): string => {
   try {
     return decodeURIComponent(encoded);
@@ -642,7 +648,8 @@ const attachFile = async (file: RemoteFileEntry) => {
   }
 
   try {
-    const content = await sftpApi.readFile(sid, file.path);
+    const fileBase64 = await sftpApi.readFile(sid, file.path);
+    const content = fromBase64Utf8(fileBase64);
     attachedFiles.value.push({
       name: file.name,
       path: file.path,

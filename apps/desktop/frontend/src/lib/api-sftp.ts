@@ -12,10 +12,26 @@ export interface FileEntry {
   permissions?: number;
 }
 
+export interface SftpOpenOverrideOptions {
+  username?: string;
+  authMethod?: 'password' | 'key';
+  password?: string;
+}
+
 export const sftpApi = {
   open: (connectionId: number) =>
     tauriInvoke<string>('sftp_open', {
       req: { connection_id: connectionId },
+    }),
+
+  openOverride: (connectionId: number, options: SftpOpenOverrideOptions) =>
+    tauriInvoke<string>('sftp_open_override', {
+      req: {
+        connection_id: connectionId,
+        username: options.username,
+        auth_method: options.authMethod,
+        password: options.password,
+      },
     }),
 
   close: (sessionId: string) =>
