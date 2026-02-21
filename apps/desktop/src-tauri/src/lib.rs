@@ -4,7 +4,7 @@ mod commands;
 mod state;
 mod status_monitor;
 
-use state::AppState;
+use state::{AppState, RuntimePaths};
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -16,13 +16,19 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            let app_dir = app
-                .path()
-                .app_data_dir()
-                .expect("failed to get app data dir");
-            std::fs::create_dir_all(&app_dir).ok();
-            let db_path = app_dir.join("nexus.db");
-            let key_path = app_dir.join(".encryption_key");
+            let executable_path =
+                std::env::current_exe().expect("failed to get current executable path");
+            let executable_dir = executable_path
+                .parent()
+                .expect("failed to get executable directory")
+                .to_path_buf();
+            let runtime_paths = RuntimePaths::new(executable_dir);
+            runtime_paths
+                .ensure_dirs()
+                .expect("failed to initialize runtime directories");
+
+            let db_path = runtime_paths.data_dir.join("nexus.db");
+            let key_path = runtime_paths.data_dir.join(".encryption_key");
 
             // Init or load encryption key
             let crypto = if key_path.exists() {
@@ -43,7 +49,7 @@ pub fn run() {
                     .expect("failed to init database")
             });
 
-            let app_state = AppState::new(storage, crypto);
+            let app_state = AppState::new(storage, crypto, runtime_paths);
             tauri::async_runtime::block_on(app_state.init_auth_state());
 
             app.manage(app_state);
@@ -53,6 +59,7 @@ pub fn run() {
             // Status
             commands::status::get_backend_health,
             commands::status::get_connection_runtime_status,
+            commands::status::get_runtime_paths,
             // Auth
             commands::auth::auth_status,
             commands::auth::auth_setup,

@@ -1,7 +1,6 @@
 /target
 **/target
 **/*.rs.bk
-Cargo.lock
 .env
 *.log
 apps/desktop/src-tauri/gen/

@@ -344,6 +344,7 @@ pub async fn desktop_open_rdp(
     state.auth.require_auth().await?;
     let options = req.options.unwrap_or_default();
     open_rdp_on_platform(
+        &state,
         req.host.trim(),
         req.port,
         req.username.as_deref(),
@@ -384,6 +385,7 @@ pub async fn desktop_open_rdp_connection(
     let port = u16::try_from(conn.port).ok().filter(|v| *v > 0);
 
     open_rdp_on_platform(
+        &state,
         conn.host.trim(),
         port,
         Some(conn.username.as_str()),
@@ -700,6 +702,7 @@ async fn handle_vnc_client(
 
 #[cfg(not(windows))]
 fn open_rdp_on_platform(
+    _state: &AppState,
     _host: &str,
     _port: Option<u16>,
     _username: Option<&str>,
@@ -715,6 +718,7 @@ fn open_rdp_on_platform(
 
 #[cfg(windows)]
 fn open_rdp_on_platform(
+    state: &AppState,
     host: &str,
     port: Option<u16>,
     username: Option<&str>,
@@ -722,7 +726,8 @@ fn open_rdp_on_platform(
     options: &DesktopRdpOptions,
     connection_id: Option<i64>,
     connection_name: Option<&str>,
-) -> CmdResult<()> {    use std::os::windows::process::CommandExt;
+) -> CmdResult<()> {
+    use std::os::windows::process::CommandExt;
     use std::process::Command;
 
     const DETACHED_PROCESS: u32 = 0x00000008;
@@ -758,7 +763,11 @@ fn open_rdp_on_platform(
     let temp_key = connection_id
         .map(|id| format!("conn-{id}"))
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    let rdp_file_path = write_rdp_temp_file(&temp_key, &build_rdp_file_content(&server, username, options))?;
+    let rdp_file_path = write_rdp_temp_file(
+        state,
+        &temp_key,
+        &build_rdp_file_content(&server, username, options),
+    )?;
 
     let mut args = vec![rdp_file_path.to_string_lossy().to_string()];
     if options.admin.unwrap_or(false) {
@@ -838,8 +847,12 @@ fn open_rdp_on_platform(
 }
 
 #[cfg(windows)]
-fn write_rdp_temp_file(key: &str, content: &str) -> CmdResult<std::path::PathBuf> {
-    let dir = std::env::temp_dir().join("nexus-terminal-rdp");
+fn write_rdp_temp_file(
+    state: &AppState,
+    key: &str,
+    content: &str,
+) -> CmdResult<std::path::PathBuf> {
+    let dir = state.runtime_paths.temp_dir.join("nexus-terminal-rdp");
     std::fs::create_dir_all(&dir)
         .map_err(|e| AppError::Internal(format!("failed to create rdp temp dir: {e}")))?;
 
@@ -901,12 +914,20 @@ fn build_rdp_file_content(
 
     lines.push(format!(
         "redirectprinters:i:{}",
-        if options.printers.unwrap_or(true) { 1 } else { 0 }
+        if options.printers.unwrap_or(true) {
+            1
+        } else {
+            0
+        }
     ));
 
     lines.push(format!(
         "redirectclipboard:i:{}",
-        if options.clipboard.unwrap_or(true) { 1 } else { 0 }
+        if options.clipboard.unwrap_or(true) {
+            1
+        } else {
+            0
+        }
     ));
 
     match options.audio.as_deref().unwrap_or("local") {
@@ -917,7 +938,11 @@ fn build_rdp_file_content(
 
     lines.push(format!(
         "compression:i:{}",
-        if options.compression.unwrap_or(true) { 1 } else { 0 }
+        if options.compression.unwrap_or(true) {
+            1
+        } else {
+            0
+        }
     ));
 
     if let Some(gateway) = &options.gateway {

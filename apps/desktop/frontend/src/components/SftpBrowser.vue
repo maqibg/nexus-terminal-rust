@@ -349,7 +349,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
-import { pathHistoryApi, sftpApi, sshApi, type FileEntry, type PathHistory } from '@/lib/api';
+import { pathHistoryApi, sftpApi, sshApi, statusApi, type FileEntry, type PathHistory } from '@/lib/api';
 import { save } from '@tauri-apps/plugin-dialog';
 import { useFileEditorStore } from '@/stores/fileEditor';
 import { useUINotificationStore } from '@/stores/uiNotifications';
@@ -454,6 +454,7 @@ const favoritePopoverStyle = ref<Record<string, string>>({ left: '0px', top: '0p
 
 const VIEWPORT_PADDING = 8;
 const CONTEXT_SUBMENU_MIN_WIDTH = 190;
+const defaultDownloadDir = ref('');
 
 let unregisterFileManagerSearch: (() => void) | null = null;
 let unregisterFileManagerPathInput: (() => void) | null = null;
@@ -489,6 +490,28 @@ function joinRemotePath(basePath: string, childName: string): string {
   const safeChild = childName.trim().replace(/^\/+/, '');
   const normalizedBase = basePath === '/' ? '/' : basePath.replace(/\/+$/, '');
   return normalizedBase === '/' ? `/${safeChild}` : `${normalizedBase}/${safeChild}`;
+}
+
+function joinLocalPath(basePath: string, childName: string): string {
+  const normalizedBase = basePath.trim().replace(/[\\/]+$/, '');
+  const safeChild = childName.trim().replace(/^[\\/]+/, '');
+  if (!normalizedBase) {
+    return safeChild || childName;
+  }
+  const separator = normalizedBase.includes('\\') ? '\\' : '/';
+  return `${normalizedBase}${separator}${safeChild}`;
+}
+
+async function resolveDownloadDefaultPath(fileName: string): Promise<string> {
+  if (!defaultDownloadDir.value) {
+    try {
+      const runtimePaths = await statusApi.getRuntimePaths();
+      defaultDownloadDir.value = runtimePaths.downloadDir;
+    } catch {
+      defaultDownloadDir.value = '';
+    }
+  }
+  return joinLocalPath(defaultDownloadDir.value, fileName);
 }
 
 function getPathName(path: string): string {
@@ -1756,7 +1779,8 @@ async function downloadFile(entry: FileEntry) {
   if (!sid) return;
 
   try {
-    const localPath = await save({ defaultPath: entry.name });
+    const defaultPath = await resolveDownloadDefaultPath(entry.name || 'file');
+    const localPath = await save({ defaultPath });
     if (!localPath) return;
 
     const taskId = await sftpApi.downloadToDisk(sid, entry.path, localPath);
@@ -1773,8 +1797,9 @@ async function downloadDirectory(entry: FileEntry) {
 
   try {
     const defaultName = `${entry.name || 'directory'}.zip`;
+    const defaultPath = await resolveDownloadDefaultPath(defaultName);
     const localPath = await save({
-      defaultPath: defaultName,
+      defaultPath,
       filters: [{ name: 'Zip Archive', extensions: ['zip'] }],
     });
     if (!localPath) return;

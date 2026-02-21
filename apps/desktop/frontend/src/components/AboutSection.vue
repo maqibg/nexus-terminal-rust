@@ -4,7 +4,8 @@
     <div class="info-row"><span class="label">应用名称</span><span>Nexus Terminal</span></div>
     <div class="info-row"><span class="label">版本</span><span>{{ version }}</span></div>
     <div class="info-row"><span class="label">框架</span><span>Tauri 2 + Vue 3</span></div>
-    <div class="info-row"><span class="label">许可证</span><span>MIT</span></div>
+    <div class="info-row"><span class="label">许可证</span><span>GPL-3.0</span></div>
+    <div class="info-row"><span class="label">上游项目</span><a class="link" href="https://github.com/Heavrnl/nexus-terminal" target="_blank">nexus-terminal</a></div>
   </section>
 </template>
 
@@ -27,4 +28,6 @@ const version = (() => {
 .section-title { font-size: 15px; font-weight: 600; margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 .info-row { display: flex; gap: 12px; font-size: 13px; color: var(--text); }
 .info-row .label { color: var(--text-sub); min-width: 80px; }
+.info-row .link { color: var(--accent, #4a9eff); text-decoration: none; }
+.info-row .link:hover { text-decoration: underline; }
 </style>

@@ -2,10 +2,8 @@
 
 use std::{
     collections::HashMap,
-    sync::{
-        atomic::AtomicBool,
-        Arc,
-    },
+    path::PathBuf,
+    sync::{atomic::AtomicBool, Arc},
 };
 
 use auth_core::service::AuthService;
@@ -20,6 +18,38 @@ use tokio::sync::Mutex;
 use transfer_core::TransferManager;
 
 use crate::status_monitor::StatusMonitorService;
+
+#[derive(Clone, Debug)]
+pub struct RuntimePaths {
+    pub exe_dir: PathBuf,
+    pub data_dir: PathBuf,
+    pub download_dir: PathBuf,
+    pub temp_dir: PathBuf,
+}
+
+impl RuntimePaths {
+    pub fn new(exe_dir: PathBuf) -> Self {
+        let data_dir = exe_dir.join("data");
+        let download_dir = data_dir.join("download");
+        let temp_dir = data_dir.join("temp");
+        Self {
+            exe_dir,
+            data_dir,
+            download_dir,
+            temp_dir,
+        }
+    }
+
+    pub fn ensure_dirs(&self) -> Result<(), String> {
+        std::fs::create_dir_all(&self.data_dir)
+            .map_err(|error| format!("failed to create data dir: {error}"))?;
+        std::fs::create_dir_all(&self.download_dir)
+            .map_err(|error| format!("failed to create download dir: {error}"))?;
+        std::fs::create_dir_all(&self.temp_dir)
+            .map_err(|error| format!("failed to create temp dir: {error}"))?;
+        Ok(())
+    }
+}
 
 /// Application state managed by Tauri.
 pub struct AppState {
@@ -37,11 +67,12 @@ pub struct AppState {
     pub status_monitor: StatusMonitorService,
     pub crypto: CryptoService,
     pub storage: SqliteStorage,
+    pub runtime_paths: RuntimePaths,
     pub ai_cancel_flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
 }
 
 impl AppState {
-    pub fn new(storage: SqliteStorage, crypto: CryptoService) -> Self {
+    pub fn new(storage: SqliteStorage, crypto: CryptoService, runtime_paths: RuntimePaths) -> Self {
         let pool = storage.pool.clone();
         let auth_repo = Arc::new(SqliteAuthRepo::new(pool.clone()));
         let auth_state = AuthStateStore::new(AuthState::NeedsSetup);
@@ -61,6 +92,7 @@ impl AppState {
             status_monitor: StatusMonitorService::new(),
             crypto,
             storage,
+            runtime_paths,
             ai_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
         }
     }

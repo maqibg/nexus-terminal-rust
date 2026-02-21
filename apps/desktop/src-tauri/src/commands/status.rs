@@ -11,6 +11,15 @@ pub struct HealthResponse {
     pub version: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimePathsResponse {
+    pub exe_dir: String,
+    pub data_dir: String,
+    pub download_dir: String,
+    pub temp_dir: String,
+}
+
 #[tauri::command]
 pub async fn get_backend_health() -> Result<HealthResponse, String> {
     Ok(HealthResponse {
@@ -46,4 +55,18 @@ pub async fn get_connection_runtime_status(
     collect_status_once(&state.ssh_manager, &target_session_id)
         .await
         .map_err(AppError::Ssh)
+}
+
+#[tauri::command]
+pub async fn get_runtime_paths(state: State<'_, AppState>) -> Result<RuntimePathsResponse, String> {
+    Ok(RuntimePathsResponse {
+        exe_dir: state.runtime_paths.exe_dir.to_string_lossy().to_string(),
+        data_dir: state.runtime_paths.data_dir.to_string_lossy().to_string(),
+        download_dir: state
+            .runtime_paths
+            .download_dir
+            .to_string_lossy()
+            .to_string(),
+        temp_dir: state.runtime_paths.temp_dir.to_string_lossy().to_string(),
+    })
 }

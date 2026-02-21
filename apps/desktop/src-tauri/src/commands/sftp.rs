@@ -256,7 +256,8 @@ pub async fn sftp_open_override(
         let normalized_method = auth_method
             .as_deref()
             .map(|value| value.trim().to_ascii_lowercase());
-        let should_try_key_fallback = matches!(normalized_method.as_deref(), Some("password") | None);
+        let should_try_key_fallback =
+            matches!(normalized_method.as_deref(), Some("password") | None);
 
         if primary_err.contains("authentication rejected") && should_try_key_fallback {
             if let Ok(key_creds) = build_creds_override(
@@ -792,8 +793,10 @@ pub async fn sftp_download_directory_to_disk(
     let ah = app_handle.clone();
     let remote_root = req.remote_path.clone();
     let zip_path = PathBuf::from(req.local_zip_path.clone());
-    let temp_dir =
-        std::env::temp_dir().join(format!("nexus-dir-download-{}", uuid::Uuid::new_v4()));
+    let temp_dir = state
+        .runtime_paths
+        .temp_dir
+        .join(format!("nexus-dir-download-{}", uuid::Uuid::new_v4()));
 
     tokio::spawn(async move {
         use tauri::Emitter;

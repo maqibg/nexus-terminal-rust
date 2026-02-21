@@ -5,6 +5,14 @@ export interface BackendHealth {
   version: string;
 }
 
+export interface RuntimePaths {
+  exeDir: string;
+  dataDir: string;
+  downloadDir: string;
+  tempDir: string;
+}
+
 export const statusApi = {
   getBackendHealth: () => tauriInvoke<BackendHealth>('get_backend_health'),
+  getRuntimePaths: () => tauriInvoke<RuntimePaths>('get_runtime_paths'),
 };
