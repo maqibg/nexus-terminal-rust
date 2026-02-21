@@ -9,6 +9,43 @@
     <div v-else class="terminal-container" :style="terminalContainerStyle">
       <div ref="termRef" class="terminal-host"></div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="terminalContextMenu.visible"
+        class="terminal-context-menu"
+        :style="terminalContextMenuStyle"
+        @click.stop
+        @contextmenu.prevent
+      >
+        <button class="terminal-menu-item" :disabled="!terminalContextMenu.hasSelection" @click="handleContextMenuAction('copy')">
+          复制
+        </button>
+        <button class="terminal-menu-item" @click="handleContextMenuAction('paste')">粘贴</button>
+        <div class="terminal-menu-separator"></div>
+        <button class="terminal-menu-item" @click="handleContextMenuAction('select-all')">全选</button>
+        <button class="terminal-menu-item" @click="handleContextMenuAction('clear')">清屏</button>
+        <div class="terminal-menu-separator"></div>
+        <div class="terminal-menu-group-title">{{ aiMenuTitle }}</div>
+        <button class="terminal-menu-item" :disabled="!terminalContextMenu.aiEnabled" @click="handleContextMenuAction('ai-write')">
+          AI 撰写代码
+        </button>
+        <button
+          class="terminal-menu-item"
+          :disabled="!terminalContextMenu.aiEnabled || !terminalContextMenu.hasSelection"
+          @click="handleContextMenuAction('ai-explain')"
+        >
+          {{ aiExplainLabel }}
+        </button>
+        <button
+          class="terminal-menu-item"
+          :disabled="!terminalContextMenu.aiEnabled || !terminalContextMenu.hasSelection"
+          @click="handleContextMenuAction('ai-optimize')"
+        >
+          {{ aiOptimizeLabel }}
+        </button>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -23,12 +60,16 @@ import { storeToRefs } from 'pinia';
 import { onSshOutput, sshApi } from '@/lib/api';
 import VncSessionView from '@/components/VncSessionView.vue';
 import { useSessionStore } from '@/stores/session';
+import { useAIStore } from '@/stores/ai';
 import { useAppearanceStore } from '@/stores/appearance';
 import { useSettingsStore } from '@/stores/settings';
+import { useUiNotificationsStore } from '@/stores/uiNotifications';
 
 const sessionStore = useSessionStore();
+const aiStore = useAIStore();
 const appearanceStore = useAppearanceStore();
 const settingsStore = useSettingsStore();
+const notifications = useUiNotificationsStore();
 const { activeSessionId: sessionId, activeSession } = storeToRefs(sessionStore);
 const { appearance, effectiveTerminalTheme } = storeToRefs(appearanceStore);
 const { settings: runtimeSettings } = storeToRefs(settingsStore);
@@ -42,10 +83,30 @@ let unlisten: (() => void) | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let currentSearchTerm = '';
 let selectionDisposable: { dispose: () => void } | null = null;
+type TerminalContextMenuAction = 'copy' | 'paste' | 'select-all' | 'clear' | 'ai-write' | 'ai-explain' | 'ai-optimize';
+const terminalContextMenu = ref({
+  visible: false,
+  x: 0,
+  y: 0,
+  hasSelection: false,
+  aiEnabled: false,
+});
+
+const FALLBACK_PROMPT_EXPLAIN =
+  '请作为一名资深开发人员，详细分析并解释以下代码片段的主要功能和目的。\n\n```{language}\n{content}\n```';
+const FALLBACK_PROMPT_OPTIMIZE =
+  'Optimize this code:\n\n```{language}\n{content}\n```\n\nReturn only the optimized code without explanations or markdown code blocks.';
+const FALLBACK_PROMPT_WRITE =
+  'Write code based on this description: {content}\n\nLanguage: {language}\n\nReturn only the code without explanations or markdown code blocks.';
 
 interface TerminalSearchEventDetail {
   sessionId?: string;
   term?: string;
+}
+
+interface WorkspaceAiActionDetail {
+  prompt?: string;
+  autoSend?: boolean;
 }
 
 const searchOptions = {
@@ -53,6 +114,27 @@ const searchOptions = {
   regex: false,
   wholeWord: false,
 } as const;
+
+const terminalContextMenuStyle = computed<Record<string, string>>(() => {
+  const menuWidth = 244;
+  const menuHeight = 270;
+  const viewportWidth = typeof window === 'undefined' ? menuWidth : window.innerWidth;
+  const viewportHeight = typeof window === 'undefined' ? menuHeight : window.innerHeight;
+  const left = Math.max(8, Math.min(terminalContextMenu.value.x, viewportWidth - menuWidth - 8));
+  const top = Math.max(8, Math.min(terminalContextMenu.value.y, viewportHeight - menuHeight - 8));
+  return {
+    left: `${left}px`,
+    top: `${top}px`,
+  };
+});
+
+const aiMenuTitle = computed(() => (terminalContextMenu.value.aiEnabled ? 'AI 助手' : 'AI 助手 (未配置)'));
+const aiExplainLabel = computed(() =>
+  terminalContextMenu.value.hasSelection ? 'AI 解释代码' : 'AI 解释代码 (需要选中代码)',
+);
+const aiOptimizeLabel = computed(() =>
+  terminalContextMenu.value.hasSelection ? 'AI 优化代码' : 'AI 优化代码 (需要选中代码)',
+);
 
 function getAppearanceValue(keys: string[], fallback: string): string {
   for (const key of keys) {
@@ -275,6 +357,129 @@ function handleSearchClear(event: Event): void {
   clearSearchDecorations();
 }
 
+function closeTerminalContextMenu(): void {
+  terminalContextMenu.value.visible = false;
+}
+
+async function ensureAiConfigLoaded(): Promise<void> {
+  if (aiStore.channels.length === 0 && aiStore.models.length === 0) {
+    await aiStore.loadAll().catch(() => undefined);
+    return;
+  }
+  if (!aiStore.config.prompts) {
+    await aiStore.loadConfig().catch(() => undefined);
+  }
+}
+
+function getSelectedText(): string {
+  return term?.getSelection() ?? '';
+}
+
+function hasSelectedText(): boolean {
+  return getSelectedText().trim().length > 0;
+}
+
+function getPromptTemplate(action: 'write' | 'explain' | 'optimize'): string {
+  const prompts = aiStore.config.prompts;
+  if (action === 'write') {
+    return prompts?.write || FALLBACK_PROMPT_WRITE;
+  }
+  if (action === 'explain') {
+    return prompts?.explain || FALLBACK_PROMPT_EXPLAIN;
+  }
+  return prompts?.optimize || FALLBACK_PROMPT_OPTIMIZE;
+}
+
+function buildAiPrompt(action: 'write' | 'explain' | 'optimize', content: string): string {
+  return getPromptTemplate(action).replace('{content}', content).replace(/{language}/g, 'unknown');
+}
+
+function openWorkspaceAiAssistant(prompt: string): void {
+  const detail: WorkspaceAiActionDetail = { prompt, autoSend: true };
+  window.dispatchEvent(new CustomEvent<WorkspaceAiActionDetail>('nexus:workspace:open-ai-assistant', { detail }));
+}
+
+async function pasteClipboardToTerminal(): Promise<void> {
+  if (!sessionId.value) {
+    return;
+  }
+  const clipboardText = await navigator.clipboard.readText();
+  if (!clipboardText) {
+    return;
+  }
+  await sshApi.write(sessionId.value, btoa(clipboardText));
+}
+
+async function openTerminalContextMenu(event: MouseEvent): Promise<void> {
+  await ensureAiConfigLoaded();
+  terminalContextMenu.value = {
+    visible: true,
+    x: event.clientX,
+    y: event.clientY,
+    hasSelection: hasSelectedText(),
+    aiEnabled: Boolean(aiStore.hasDefaultModel),
+  };
+}
+
+async function handleContextMenuAction(action: TerminalContextMenuAction): Promise<void> {
+  closeTerminalContextMenu();
+  if (!sessionId.value) {
+    return;
+  }
+
+  const selection = getSelectedText();
+
+  if (action === 'copy') {
+    if (!selection.trim()) {
+      return;
+    }
+    await navigator.clipboard.writeText(selection).catch(() => undefined);
+    return;
+  }
+
+  if (action === 'paste') {
+    await pasteClipboardToTerminal().catch(() => undefined);
+    return;
+  }
+
+  if (action === 'select-all') {
+    term?.selectAll();
+    return;
+  }
+
+  if (action === 'clear') {
+    term?.clear();
+    return;
+  }
+
+  await ensureAiConfigLoaded();
+  if (!aiStore.hasDefaultModel) {
+    notifications.addNotification('warning', '请先在设置- AI 助手中配置默认模型');
+    return;
+  }
+
+  if (action === 'ai-write') {
+    if (!selection.trim()) {
+      notifications.addNotification('warning', '请先选中需求描述后再使用 AI 撰写代码');
+      return;
+    }
+    openWorkspaceAiAssistant(buildAiPrompt('write', selection));
+    return;
+  }
+
+  if (!selection.trim()) {
+    notifications.addNotification('warning', '请先选中代码后再执行该 AI 操作');
+    return;
+  }
+
+  if (action === 'ai-explain') {
+    openWorkspaceAiAssistant(buildAiPrompt('explain', selection));
+    return;
+  }
+
+  openWorkspaceAiAssistant(buildAiPrompt('optimize', selection));
+}
+
 function initTerminal(sid: string): void {
   cleanup();
   if (!termRef.value) return;
@@ -350,22 +555,47 @@ function initTerminal(sid: string): void {
 
 
 async function handleTerminalContextMenu(event: MouseEvent): Promise<void> {
-  if (!sessionId.value || !isTerminalRightClickPasteEnabled()) {
+  if (!sessionId.value) {
     return;
   }
 
-  event.preventDefault();
-  event.stopPropagation();
+  if (event.ctrlKey) {
+    event.preventDefault();
+    event.stopPropagation();
+    await openTerminalContextMenu(event);
+    return;
+  }
+
+  closeTerminalContextMenu();
+  if (!isTerminalRightClickPasteEnabled()) {
+    return;
+  }
 
   try {
-    const clipboardText = await navigator.clipboard.readText();
-    if (!clipboardText) {
-      return;
-    }
-    await sshApi.write(sessionId.value, btoa(clipboardText));
+    event.preventDefault();
+    event.stopPropagation();
+    await pasteClipboardToTerminal();
   } catch {
   }
 }
+
+function handleGlobalPointerDown(event: MouseEvent): void {
+  if (!terminalContextMenu.value.visible) {
+    return;
+  }
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('.terminal-context-menu')) {
+    return;
+  }
+  closeTerminalContextMenu();
+}
+
+function handleGlobalKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    closeTerminalContextMenu();
+  }
+}
+
 function cleanup(): void {
   unlisten?.();
   unlisten = null;
@@ -376,6 +606,7 @@ function cleanup(): void {
   selectionDisposable?.dispose();
   selectionDisposable = null;
   termRef.value?.removeEventListener('contextmenu', handleTerminalContextMenu);
+  closeTerminalContextMenu();
 
   term?.dispose();
   term = null;
@@ -430,6 +661,8 @@ onMounted(async () => {
   window.addEventListener('nexus:terminal-search:next', handleSearchNext as EventListener);
   window.addEventListener('nexus:terminal-search:previous', handleSearchPrevious as EventListener);
   window.addEventListener('nexus:terminal-search:clear', handleSearchClear as EventListener);
+  window.addEventListener('mousedown', handleGlobalPointerDown);
+  window.addEventListener('keydown', handleGlobalKeydown);
 });
 
 onBeforeUnmount(() => {
@@ -437,6 +670,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('nexus:terminal-search:next', handleSearchNext as EventListener);
   window.removeEventListener('nexus:terminal-search:previous', handleSearchPrevious as EventListener);
   window.removeEventListener('nexus:terminal-search:clear', handleSearchClear as EventListener);
+  window.removeEventListener('mousedown', handleGlobalPointerDown);
+  window.removeEventListener('keydown', handleGlobalKeydown);
 
   cleanup();
 });
@@ -483,6 +718,56 @@ onBeforeUnmount(() => {
 .placeholder-text {
   color: var(--text-dim);
   font-size: 14px;
+}
+
+.terminal-context-menu {
+  position: fixed;
+  z-index: 12000;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-surface0) 92%, var(--bg-mantle) 8%);
+  box-shadow: 0 16px 32px color-mix(in srgb, var(--bg-base) 74%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.terminal-menu-item {
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+.terminal-menu-item:hover:not(:disabled) {
+  background: var(--link-active-bg-color);
+  color: var(--link-active-color);
+}
+
+.terminal-menu-item:disabled {
+  color: var(--text-dim);
+  cursor: not-allowed;
+}
+
+.terminal-menu-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border);
+}
+
+.terminal-menu-group-title {
+  padding: 4px 10px 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-sub);
 }
 </style>
 

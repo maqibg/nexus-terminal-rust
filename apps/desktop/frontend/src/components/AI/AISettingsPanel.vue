@@ -303,8 +303,8 @@ const channelFilterOptions = computed(() => [
 const localConfig = ref<AIConfig>({
   defaultModelId: undefined,
   temperature: 0.7,
-  maxTokens: 2000,
-  timeout: 30000,
+  maxTokens: 4000,
+  timeout: 60000,
   prompts: {
     explain: DEFAULT_PROMPT_EXPLAIN,
     optimize: DEFAULT_PROMPT_OPTIMIZE,
@@ -373,7 +373,7 @@ const normalizeTemperature = () => {
 };
 
 const normalizeMaxTokens = () => {
-  const raw = Number.isFinite(localConfig.value.maxTokens) ? localConfig.value.maxTokens : 2000;
+  const raw = Number.isFinite(localConfig.value.maxTokens) ? localConfig.value.maxTokens : 4000;
   const normalized = Math.round(clampValue(raw, 100, 100000));
   if (normalized !== localConfig.value.maxTokens) {
     localConfig.value.maxTokens = normalized;
@@ -382,7 +382,7 @@ const normalizeMaxTokens = () => {
 };
 
 const normalizeTimeout = () => {
-  const raw = Number.isFinite(localConfig.value.timeout) ? localConfig.value.timeout : 30000;
+  const raw = Number.isFinite(localConfig.value.timeout) ? localConfig.value.timeout : 60000;
   const normalized = Math.round(clampValue(raw, 5000, 120000));
   if (normalized !== localConfig.value.timeout) {
     localConfig.value.timeout = normalized;

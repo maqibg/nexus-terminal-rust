@@ -13,8 +13,8 @@ const DEFAULT_PROMPT_WRITE =
 const defaultConfig = (): AIConfig => ({
   defaultModelId: undefined,
   temperature: 0.7,
-  maxTokens: 2000,
-  timeout: 30000,
+  maxTokens: 4000,
+  timeout: 60000,
   prompts: {
     explain: DEFAULT_PROMPT_EXPLAIN,
     optimize: DEFAULT_PROMPT_OPTIMIZE,
@@ -284,10 +284,10 @@ export const useAIStore = defineStore('ai', () => {
     }
   }
 
-  async function sendRequest(action: AIAction, content: string, language?: string): Promise<string> {
+  async function sendRequest(action: AIAction, content: string, language?: string, requestId?: string): Promise<string> {
     error.value = null;
     try {
-      return await aiApi.request(action, content, language);
+      return await aiApi.request(action, content, language, requestId);
     } catch (err) {
       setError(err, 'AI 请求失败');
       throw err;
@@ -299,10 +299,11 @@ export const useAIStore = defineStore('ai', () => {
     content: string,
     modelId: string,
     language?: string,
+    requestId?: string,
   ): Promise<string> {
     error.value = null;
     try {
-      return await aiApi.requestWithModel(action, content, modelId, language);
+      return await aiApi.requestWithModel(action, content, modelId, language, requestId);
     } catch (err) {
       setError(err, 'AI 请求失败');
       throw err;

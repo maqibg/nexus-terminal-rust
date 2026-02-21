@@ -27,6 +27,14 @@
           >
             <i class="fab fa-github"></i>
           </a>
+          <button
+            class="nav-icon-btn"
+            :class="{ active: showGlobalAiPanel }"
+            :title="uiText.aiAssistant"
+            @click="toggleGlobalAiPanel"
+          >
+            <i class="fas fa-robot"></i>
+          </button>
           <button class="nav-icon-btn" :title="uiText.customizeAppearance" @click="appearanceStore.toggleStyleCustomizer(true)">
             <i class="fas fa-paint-brush"></i>
           </button>
@@ -66,6 +74,12 @@
       <router-view />
     </main>
 
+    <transition name="global-ai-slide">
+      <aside v-if="showGlobalAiPanel && isAuthenticated" class="global-ai-panel no-drag" :style="globalAiPanelStyle">
+        <TerminalAIChatPanel ref="globalAiPanelRef" storage-id="global" :closable="true" @close="showGlobalAiPanel = false" />
+      </aside>
+    </transition>
+
     <StyleCustomizer v-if="isStyleCustomizerVisible" :visible="isStyleCustomizerVisible" @close="appearanceStore.toggleStyleCustomizer(false)" />
 
     <FocusSwitcherConfigurator
@@ -76,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -91,6 +105,7 @@ import GlobalAlertDialog from '@/components/GlobalAlertDialog.vue';
 import GlobalConfirmDialog from '@/components/GlobalConfirmDialog.vue';
 import FocusSwitcherConfigurator from '@/components/FocusSwitcherConfigurator.vue';
 import StyleCustomizer from '@/components/StyleCustomizer.vue';
+import TerminalAIChatPanel from '@/components/AI/TerminalAIChatPanel.vue';
 import logoPng from '@/assets/logo.png';
 
 const route = useRoute();
@@ -114,6 +129,7 @@ const uiText = computed(() => {
       navProxy: '代理管理',
       navStatistics: '统计分析',
       navSettings: '设置',
+      aiAssistant: 'AI 助手',
       customizeAppearance: '外观自定义',
       logout: '登出',
       minimize: '最小化',
@@ -132,6 +148,7 @@ const uiText = computed(() => {
       navProxy: 'プロキシ管理',
       navStatistics: '統計分析',
       navSettings: '設定',
+      aiAssistant: 'AI アシスタント',
       customizeAppearance: '外観カスタマイズ',
       logout: 'ログアウト',
       minimize: '最小化',
@@ -149,6 +166,7 @@ const uiText = computed(() => {
     navProxy: 'Proxies',
     navStatistics: 'Statistics',
     navSettings: 'Settings',
+    aiAssistant: 'AI Assistant',
     customizeAppearance: 'Customize Appearance',
     logout: 'Logout',
     minimize: 'Minimize',
@@ -180,6 +198,25 @@ const startupError = ref('');
 const isAltPressed = ref(false);
 const altShortcutKey = ref<string | null>(null);
 const lastFocusedIdBySwitcher = ref<string | null>(null);
+const showGlobalAiPanel = ref(false);
+
+interface GlobalAiPanelExpose {
+  setInput: (value: string) => void;
+  sendMessage: (override?: string) => Promise<void>;
+}
+interface GlobalAiOpenDetail {
+  prompt?: string;
+  autoSend?: boolean;
+}
+const globalAiPanelRef = ref<GlobalAiPanelExpose | null>(null);
+
+const globalAiPanelStyle = computed<Record<string, string>>(() => {
+  const panelTop = showHeader.value ? 55 : 0;
+  return {
+    top: `${panelTop}px`,
+    height: `calc(100vh - ${panelTop}px)`,
+  };
+});
 
 async function checkBackendStartup() {
   startupState.value = 'starting';
@@ -311,6 +348,43 @@ async function closeWindow() {
   await appWindow.close();
 }
 
+async function openGlobalAiPanel(detail?: GlobalAiOpenDetail) {
+  if (!isAuthenticated.value) {
+    return;
+  }
+  showGlobalAiPanel.value = true;
+
+  const prompt = detail?.prompt?.trim();
+  if (!prompt) {
+    return;
+  }
+
+  await nextTick();
+  const panel = globalAiPanelRef.value;
+  if (!panel) {
+    return;
+  }
+
+  if (detail?.autoSend) {
+    await panel.sendMessage(prompt);
+    return;
+  }
+
+  panel.setInput(prompt);
+}
+
+function toggleGlobalAiPanel() {
+  if (!isAuthenticated.value) {
+    return;
+  }
+  showGlobalAiPanel.value = !showGlobalAiPanel.value;
+}
+
+function handleOpenGlobalAiPanel(event: Event): void {
+  const detail = (event as CustomEvent<GlobalAiOpenDetail>).detail;
+  void openGlobalAiPanel(detail);
+}
+
 async function handleLogout() {
   await authStore.logout();
   router.push('/login');
@@ -326,6 +400,7 @@ const loadAppearanceData = async () => {
 
 watch(isAuthenticated, (authenticated) => {
   if (!authenticated) {
+    showGlobalAiPanel.value = false;
     return;
   }
   void loadAppearanceData();
@@ -342,12 +417,14 @@ onMounted(() => {
   window.addEventListener('keydown', handleAltKeyDown);
   window.addEventListener('keyup', handleAltKeyUp);
   window.addEventListener('contextmenu', preventBrowserContextMenu);
+  window.addEventListener('nexus:global-ai-assistant:open', handleOpenGlobalAiPanel as EventListener);
 });
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleAltKeyDown);
   window.removeEventListener('keyup', handleAltKeyUp);
   window.removeEventListener('contextmenu', preventBrowserContextMenu);
+  window.removeEventListener('nexus:global-ai-assistant:open', handleOpenGlobalAiPanel as EventListener);
 });
 </script>
 
@@ -448,6 +525,11 @@ onUnmounted(() => {
   background: var(--bg-surface1);
 }
 
+.nav-icon-btn.active {
+  color: var(--link-active-color);
+  background: var(--link-active-bg-color);
+}
+
 .window-controls {
   display: flex;
   align-items: center;
@@ -520,6 +602,29 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+.global-ai-panel {
+  position: fixed;
+  right: 0;
+  width: min(430px, 42vw);
+  min-width: 360px;
+  max-width: 520px;
+  border-left: 1px solid var(--border);
+  background: var(--bg-surface0);
+  z-index: 30;
+  box-shadow: -16px 0 32px color-mix(in srgb, var(--bg-base) 82%, transparent);
+}
+
+.global-ai-slide-enter-active,
+.global-ai-slide-leave-active {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.global-ai-slide-enter-from,
+.global-ai-slide-leave-to {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
 @media (max-width: 900px) {
   .app-nav {
     padding-right: 4px;
@@ -536,6 +641,11 @@ onUnmounted(() => {
 
   .nav-link-desktop {
     display: none;
+  }
+
+  .global-ai-panel {
+    width: min(420px, 86vw);
+    min-width: 320px;
   }
 }
 </style>

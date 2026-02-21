@@ -1,6 +1,12 @@
 //! Tauri AppState - wires storage + auth + session + ssh into managed state.
 
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::AtomicBool,
+        Arc,
+    },
+};
 
 use auth_core::service::AuthService;
 use session_core::{AuthState, AuthStateStore, SessionRegistry};
@@ -10,6 +16,7 @@ use storage_sqlite::{
     SqliteAuditRepo, SqliteAuthRepo, SqliteConnectionRepo, SqliteHistoryRepo,
     SqliteQuickCommandRepo, SqliteSettingsRepo, SqliteStorage,
 };
+use tokio::sync::Mutex;
 use transfer_core::TransferManager;
 
 use crate::status_monitor::StatusMonitorService;
@@ -30,6 +37,7 @@ pub struct AppState {
     pub status_monitor: StatusMonitorService,
     pub crypto: CryptoService,
     pub storage: SqliteStorage,
+    pub ai_cancel_flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
 }
 
 impl AppState {
@@ -53,6 +61,7 @@ impl AppState {
             status_monitor: StatusMonitorService::new(),
             crypto,
             storage,
+            ai_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 

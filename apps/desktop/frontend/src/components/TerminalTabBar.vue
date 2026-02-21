@@ -16,6 +16,10 @@
     </div>
 
     <div class="tab-actions">
+      <button class="tab-action" title="AI 助手" @click="emit('openAiAssistant')">
+        <i class="fas fa-robot"></i>
+      </button>
+
       <button class="tab-action" :title="headerToggleTitle" @click="emit('toggleHeader')">
         <i :class="headerToggleIconClass"></i>
       </button>
@@ -60,6 +64,7 @@ const emit = defineEmits<{
   closeRight: [id: string];
   closeLeft: [id: string];
   openTransfers: [];
+  openAiAssistant: [];
   toggleHeader: [];
   openLayoutConfigurator: [];
 }>();

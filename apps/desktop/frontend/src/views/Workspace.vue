@@ -9,6 +9,7 @@
       @close-others="closeOthers"
       @close-right="closeRight"
       @close-left="closeLeft"
+      @open-ai-assistant="openAiAssistant()"
       @toggle-header="layoutStore.toggleHeaderVisibility()"
       @open-transfers="showTransferModal = true"
       @open-layout-configurator="showLayoutConfigurator = true"
@@ -35,15 +36,15 @@
         </button>
         <button
           class="workspace-left-tool-btn"
-          :class="{ 'workspace-left-tool-btn-active': activeLeftToolPane === 'ai' }"
+          :class="{ 'workspace-left-tool-btn-active': showTerminalAiPanel }"
           title="AI 助手"
-          @click="toggleLeftToolPane('ai')"
+          @click="toggleTerminalAiPanel()"
         >
           <i class="fas fa-robot"></i>
         </button>
       </div>
 
-      <div v-if="activeLeftToolPane" class="workspace-left-panel" :class="{ 'workspace-left-panel-ai': activeLeftToolPane === 'ai' }" @click.stop>
+      <div v-if="activeLeftToolPane" class="workspace-left-panel" @click.stop>
         <div class="workspace-left-panel-header">
           <div class="workspace-left-panel-title">
             {{ leftPaneTitle }}
@@ -65,15 +66,7 @@
           @select="handleConnect"
         />
 
-        <TerminalAIChatPanel
-          v-else-if="activeLeftToolPane === 'ai'"
-          class="workspace-left-panel-content"
-          :session-id="activeSession?.id ?? null"
-          :session-name="activeSession?.connectionName"
-          :storage-id="activeSession?.id ?? undefined"
-        />
-
-        <div v-else class="workspace-left-panel-content workspace-docker-empty">
+        <div class="workspace-left-panel-content workspace-docker-empty">
           <i class="fab fa-docker workspace-docker-icon"></i>
           <div class="workspace-docker-title">远程主机 Docker 不可用</div>
           <div class="workspace-docker-desc">请确保远程主机上已安装并运行 Docker。</div>
@@ -97,6 +90,19 @@
           <LayoutRenderer v-if="layoutConfig.rightSidebar" :node="layoutConfig.rightSidebar" />
         </Pane>
       </Splitpanes>
+
+      <div v-if="showTerminalAiPanel" class="workspace-right-ai-panel" @click.stop>
+        <TerminalAIChatPanel
+          ref="terminalAiPanelRef"
+          class="workspace-right-ai-panel-content"
+          :session-id="activeSession?.id ?? null"
+          :connection-id="activeSession?.connectionId ?? null"
+          :session-name="activeSession?.connectionName"
+          :storage-id="activeSession?.id ?? undefined"
+          :closable="true"
+          @close="showTerminalAiPanel = false"
+        />
+      </div>
     </div>
 
     <Teleport to="body">
@@ -141,7 +147,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { Splitpanes, Pane } from 'splitpanes';
 import 'splitpanes/dist/splitpanes.css';
@@ -172,8 +178,18 @@ const showTransferModal = ref(false);
 const showLayoutConfigurator = ref(false);
 const showFileManagerPopup = ref(false);
 
-type LeftToolPane = 'connections' | 'docker' | 'ai';
+type LeftToolPane = 'connections' | 'docker';
 const activeLeftToolPane = ref<LeftToolPane | null>(null);
+const showTerminalAiPanel = ref(false);
+interface TerminalAiActionDetail {
+  prompt?: string;
+  autoSend?: boolean;
+}
+interface TerminalAiPanelExpose {
+  setInput: (value: string) => void;
+  sendMessage: (override?: string) => Promise<void>;
+}
+const terminalAiPanelRef = ref<TerminalAiPanelExpose | null>(null);
 const { taskList, startListening, cancelTask, cleanup } = useTransferProgress();
 const workspaceSidebarPersistent = computed(() => settingsStore.getBoolean('workspaceSidebarPersistent', false));
 const dockerStatusIntervalSeconds = computed(() => settingsStore.getInteger('dockerStatusIntervalSeconds', 2, 1));
@@ -275,6 +291,37 @@ function closeLeftToolPane() {
   activeLeftToolPane.value = null;
 }
 
+function toggleTerminalAiPanel() {
+  showTerminalAiPanel.value = !showTerminalAiPanel.value;
+}
+
+async function openAiAssistant(detail?: TerminalAiActionDetail) {
+  const prompt = detail?.prompt?.trim();
+  if (!prompt) {
+    showTerminalAiPanel.value = !showTerminalAiPanel.value;
+    return;
+  }
+
+  showTerminalAiPanel.value = true;
+  await nextTick();
+  const panel = terminalAiPanelRef.value;
+  if (!panel) {
+    return;
+  }
+
+  if (detail?.autoSend) {
+    await panel.sendMessage(prompt);
+    return;
+  }
+
+  panel.setInput(prompt);
+}
+
+function handleOpenAiAssistantEvent(event: Event) {
+  const detail = (event as CustomEvent<TerminalAiActionDetail>).detail;
+  void openAiAssistant(detail);
+}
+
 function handleWorkspaceBodyClick() {
   if (workspaceSidebarPersistent.value) {
     return;
@@ -307,9 +354,6 @@ const effectiveLeftSidebarVisible = computed(() => leftSidebarVisible.value && !
 const leftPaneTitle = computed(() => {
   if (activeLeftToolPane.value === 'connections') {
     return '连接列表';
-  }
-  if (activeLeftToolPane.value === 'ai') {
-    return 'AI 助手';
   }
   return 'Docker 管理器';
 });
@@ -465,6 +509,7 @@ onMounted(() => {
   window.addEventListener('transfer-created', handleTransferCreated);
   window.addEventListener('nexus:workspace:file-manager-popup:open', handleOpenFileManagerPopup as EventListener);
   window.addEventListener('nexus:workspace:file-editor-popup:open', handleOpenFileEditorPopup as EventListener);
+  window.addEventListener('nexus:workspace:open-ai-assistant', handleOpenAiAssistantEvent as EventListener);
   startDockerStatusRefreshTimer();
 });
 
@@ -476,6 +521,7 @@ onUnmounted(() => {
   window.removeEventListener('transfer-created', handleTransferCreated);
   window.removeEventListener('nexus:workspace:file-manager-popup:open', handleOpenFileManagerPopup as EventListener);
   window.removeEventListener('nexus:workspace:file-editor-popup:open', handleOpenFileEditorPopup as EventListener);
+  window.removeEventListener('nexus:workspace:open-ai-assistant', handleOpenAiAssistantEvent as EventListener);
   if (workspaceResizeDispatchRaf) {
     window.cancelAnimationFrame(workspaceResizeDispatchRaf);
     workspaceResizeDispatchRaf = 0;
@@ -544,12 +590,6 @@ onUnmounted(() => {
   flex-direction: column;
   border-right: 1px solid var(--border);
   background: var(--bg-mantle);
-}
-
-.workspace-left-panel-ai {
-  width: 420px;
-  min-width: 340px;
-  max-width: 560px;
 }
 
 .workspace-left-panel-header {
@@ -624,6 +664,22 @@ onUnmounted(() => {
 }
 
 .workspace-layout {
+  flex: 1;
+  min-height: 0;
+}
+
+.workspace-right-ai-panel {
+  width: 420px;
+  min-width: 340px;
+  max-width: 560px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--bg-mantle);
+}
+
+.workspace-right-ai-panel-content {
   flex: 1;
   min-height: 0;
 }

@@ -2,6 +2,10 @@
 
 use std::{
     collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -10,7 +14,8 @@ use reqwest::{Client, StatusCode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
 use settings_core::repository::SettingsRepository;
-use tauri::State;
+use tauri::{Emitter, State};
+use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::state::AppState;
@@ -114,8 +119,8 @@ impl Default for AiConfig {
         Self {
             default_model_id: None,
             temperature: 0.7,
-            max_tokens: 2000,
-            timeout: 30000,
+            max_tokens: 4000,
+            timeout: 60000,
             prompts: AiPrompts::default(),
         }
     }
@@ -174,6 +179,33 @@ pub struct AiChatMessage {
     pub model_id: Option<String>,
     pub status: Option<String>,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AiStreamChunkPayload {
+    request_id: String,
+    chunk: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AiStreamCompletePayload {
+    request_id: String,
+    response: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AiStreamErrorPayload {
+    request_id: String,
+    error: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AiStreamCancelledPayload {
+    request_id: String,
 }
 
 fn now_ms() -> i64 {
@@ -386,6 +418,95 @@ fn strip_markdown_code_fences(content: &str) -> String {
     trimmed.trim().to_string()
 }
 
+fn split_text_chunks(text: &str, max_chars: usize) -> Vec<String> {
+    if text.is_empty() {
+        return Vec::new();
+    }
+
+    let chunk_size = max_chars.max(1);
+    let mut chunks = Vec::new();
+    let mut current = String::new();
+    let mut current_len = 0usize;
+
+    for ch in text.chars() {
+        current.push(ch);
+        current_len += 1;
+        if current_len >= chunk_size {
+            chunks.push(std::mem::take(&mut current));
+            current_len = 0;
+        }
+    }
+
+    if !current.is_empty() {
+        chunks.push(current);
+    }
+
+    chunks
+}
+
+async fn register_cancel_flag(state: &AppState, request_id: &str) -> Arc<AtomicBool> {
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    let mut flags = state.ai_cancel_flags.lock().await;
+    flags.insert(request_id.to_string(), cancel_flag.clone());
+    cancel_flag
+}
+
+async fn remove_cancel_flag(state: &AppState, request_id: &str) {
+    let mut flags = state.ai_cancel_flags.lock().await;
+    flags.remove(request_id);
+}
+
+fn emit_ai_error(app_handle: &tauri::AppHandle, request_id: &str, message: &str) {
+    let _ = app_handle.emit(
+        "ai:error",
+        AiStreamErrorPayload {
+            request_id: request_id.to_string(),
+            error: message.to_string(),
+        },
+    );
+}
+
+fn emit_ai_cancelled(app_handle: &tauri::AppHandle, request_id: &str) {
+    let _ = app_handle.emit(
+        "ai:cancelled",
+        AiStreamCancelledPayload {
+            request_id: request_id.to_string(),
+        },
+    );
+}
+
+async fn stream_response_chunks(
+    app_handle: &tauri::AppHandle,
+    request_id: &str,
+    response: &str,
+    cancel_flag: &Arc<AtomicBool>,
+) -> CmdResult<()> {
+    for chunk in split_text_chunks(response, 160) {
+        if cancel_flag.load(Ordering::Relaxed) {
+            emit_ai_cancelled(app_handle, request_id);
+            return Err(AppError::Validation("请求已取消".into()));
+        }
+
+        let _ = app_handle.emit(
+            "ai:stream-chunk",
+            AiStreamChunkPayload {
+                request_id: request_id.to_string(),
+                chunk,
+            },
+        );
+        sleep(Duration::from_millis(10)).await;
+    }
+
+    let _ = app_handle.emit(
+        "ai:complete",
+        AiStreamCompletePayload {
+            request_id: request_id.to_string(),
+            response: response.to_string(),
+        },
+    );
+    Ok(())
+}
+
 fn build_prompt(action: AiAction, content: &str, language: Option<&str>, config: &AiConfig) -> String {
     let language = language.unwrap_or("unknown");
 
@@ -529,9 +650,6 @@ async fn load_config(state: &AppState) -> CmdResult<AiConfig> {
     let mut config = load_json_setting::<AiConfig>(state, AI_CONFIG_KEY)
         .await?
         .unwrap_or_default();
-    let prompts_were_empty = config.prompts.explain.trim().is_empty()
-        && config.prompts.optimize.trim().is_empty()
-        && config.prompts.write.trim().is_empty();
 
     if config.prompts.explain.trim().is_empty() {
         config.prompts.explain = DEFAULT_PROMPT_EXPLAIN.to_string();
@@ -541,10 +659,6 @@ async fn load_config(state: &AppState) -> CmdResult<AiConfig> {
     }
     if config.prompts.write.trim().is_empty() {
         config.prompts.write = DEFAULT_PROMPT_WRITE.to_string();
-    }
-    if prompts_were_empty && config.max_tokens == 4000 && config.timeout == 60000 {
-        config.max_tokens = 2000;
-        config.timeout = 30000;
     }
 
     Ok(config)
@@ -983,11 +1097,15 @@ async fn request_model_response(
 
 async fn perform_request_with_model(
     state: &AppState,
+    app_handle: &tauri::AppHandle,
     action: AiAction,
     content: String,
     model_id: String,
     language: Option<String>,
+    request_id: String,
 ) -> CmdResult<String> {
+    let cancel_flag = register_cancel_flag(state, &request_id).await;
+
     let channels = load_channels(state).await?;
     let models = load_models(state).await?;
     let config = load_config(state).await?;
@@ -1006,12 +1124,34 @@ async fn perform_request_with_model(
     }
 
     let prompt = build_prompt(action, &content, language.as_deref(), &config);
-    let mut response = request_model_response(channel, model, &config, &prompt).await?;
+    let mut response = match request_model_response(channel, model, &config, &prompt).await {
+        Ok(value) => value,
+        Err(error) => {
+            emit_ai_error(app_handle, &request_id, &error.to_string());
+            remove_cancel_flag(state, &request_id).await;
+            return Err(error);
+        }
+    };
+
+    if cancel_flag.load(Ordering::Relaxed) {
+        emit_ai_cancelled(app_handle, &request_id);
+        remove_cancel_flag(state, &request_id).await;
+        return Err(AppError::Validation("请求已取消".into()));
+    }
 
     if matches!(action, AiAction::Write | AiAction::Optimize) {
         response = strip_markdown_code_fences(&response);
     }
 
+    if let Err(error) = stream_response_chunks(app_handle, &request_id, &response, &cancel_flag).await {
+        if !matches!(&error, AppError::Validation(message) if message == "请求已取消") {
+            emit_ai_error(app_handle, &request_id, &error.to_string());
+        }
+        remove_cancel_flag(state, &request_id).await;
+        return Err(error);
+    }
+
+    remove_cancel_flag(state, &request_id).await;
     Ok(response)
 }
 
@@ -1300,9 +1440,11 @@ pub async fn ai_update_config(state: State<'_, AppState>, updates: AiConfigUpdat
 #[tauri::command]
 pub async fn ai_request(
     state: State<'_, AppState>,
+    app_handle: tauri::AppHandle,
     action: AiAction,
     content: String,
     language: Option<String>,
+    request_id: Option<String>,
 ) -> CmdResult<String> {
     state.auth.require_auth().await?;
 
@@ -1312,24 +1454,49 @@ pub async fn ai_request(
         .clone()
         .ok_or_else(|| AppError::Validation("请先设置默认 AI 模型".into()))?;
 
-    perform_request_with_model(&state, action, content, default_model_id, language).await
+    perform_request_with_model(
+        &state,
+        &app_handle,
+        action,
+        content,
+        default_model_id,
+        language,
+        request_id.unwrap_or_else(|| Uuid::new_v4().to_string()),
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn ai_request_with_model(
     state: State<'_, AppState>,
+    app_handle: tauri::AppHandle,
     action: AiAction,
     content: String,
     model_id: String,
     language: Option<String>,
+    request_id: Option<String>,
 ) -> CmdResult<String> {
     state.auth.require_auth().await?;
-    perform_request_with_model(&state, action, content, model_id, language).await
+    perform_request_with_model(
+        &state,
+        &app_handle,
+        action,
+        content,
+        model_id,
+        language,
+        request_id.unwrap_or_else(|| Uuid::new_v4().to_string()),
+    )
+    .await
 }
 
 #[tauri::command]
-pub async fn ai_cancel_request(state: State<'_, AppState>, _request_id: String) -> CmdResult<()> {
+pub async fn ai_cancel_request(state: State<'_, AppState>, request_id: String) -> CmdResult<()> {
     state.auth.require_auth().await?;
+    let mut flags = state.ai_cancel_flags.lock().await;
+    if let Some(flag) = flags.get(&request_id) {
+        flag.store(true, Ordering::Relaxed);
+    }
+    flags.remove(&request_id);
     Ok(())
 }
 

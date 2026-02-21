@@ -1,4 +1,5 @@
 import { tauriInvoke } from './invoke';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
   AIAction,
   AIChannel,
@@ -40,6 +41,25 @@ interface AIConfigUpdate {
   prompts?: AIConfig['prompts'];
 }
 
+export interface AIStreamChunkEvent {
+  requestId: string;
+  chunk: string;
+}
+
+export interface AIStreamCompleteEvent {
+  requestId: string;
+  response: string;
+}
+
+export interface AIStreamCancelledEvent {
+  requestId: string;
+}
+
+export interface AIStreamErrorEvent {
+  requestId: string;
+  error: string;
+}
+
 export const aiApi = {
   getAllChannels: () => tauriInvoke<AIChannel[]>('ai_get_all_channels'),
   addChannel: (req: AddChannelRequest) => tauriInvoke<AIChannel>('ai_add_channel', { req }),
@@ -58,11 +78,25 @@ export const aiApi = {
   getConfig: () => tauriInvoke<AIConfig>('ai_get_config'),
   updateConfig: (updates: AIConfigUpdate) => tauriInvoke<void>('ai_update_config', { updates }),
 
-  request: (action: AIAction, content: string, language?: string) =>
-    tauriInvoke<string>('ai_request', { action, content, language }),
-  requestWithModel: (action: AIAction, content: string, modelId: string, language?: string) =>
-    tauriInvoke<string>('ai_request_with_model', { action, content, modelId, language }),
+  request: (action: AIAction, content: string, language?: string, requestId?: string) =>
+    tauriInvoke<string>('ai_request', { action, content, language, requestId }),
+  requestWithModel: (
+    action: AIAction,
+    content: string,
+    modelId: string,
+    language?: string,
+    requestId?: string,
+  ) => tauriInvoke<string>('ai_request_with_model', { action, content, modelId, language, requestId }),
   cancelRequest: (requestId: string) => tauriInvoke<void>('ai_cancel_request', { requestId }),
+
+  onStreamChunk: (handler: (payload: AIStreamChunkEvent) => void): Promise<UnlistenFn> =>
+    listen<AIStreamChunkEvent>('ai:stream-chunk', (event) => handler(event.payload)),
+  onComplete: (handler: (payload: AIStreamCompleteEvent) => void): Promise<UnlistenFn> =>
+    listen<AIStreamCompleteEvent>('ai:complete', (event) => handler(event.payload)),
+  onCancelled: (handler: (payload: AIStreamCancelledEvent) => void): Promise<UnlistenFn> =>
+    listen<AIStreamCancelledEvent>('ai:cancelled', (event) => handler(event.payload)),
+  onError: (handler: (payload: AIStreamErrorEvent) => void): Promise<UnlistenFn> =>
+    listen<AIStreamErrorEvent>('ai:error', (event) => handler(event.payload)),
 
   getChatHistory: () => tauriInvoke<AIChatMessage[]>('ai_get_chat_history'),
   saveChatHistory: (messages: AIChatMessage[]) =>
