@@ -49,6 +49,11 @@ const SETTINGS_KEYS = {
   layoutLocked: 'layoutLocked',
 } as const;
 
+const LEGACY_STATUS_COLUMN_SIZE = 14.6;
+const LEGACY_MAIN_COLUMN_SIZE = 58;
+const DEFAULT_STATUS_COLUMN_SIZE = 15.55;
+const DEFAULT_MAIN_COLUMN_SIZE = 57.05;
+
 const DEFAULT_LEFT_SIZE = 14.6;
 const DEFAULT_RIGHT_SIZE = 27.4;
 
@@ -60,7 +65,7 @@ const DEFAULT_LAYOUT: LayoutConfig = {
       {
         type: 'split',
         direction: 'vertical',
-        size: 14.6,
+        size: DEFAULT_STATUS_COLUMN_SIZE,
         children: [
           { type: 'pane', pane: 'statusMonitor', size: 44.6 },
           { type: 'pane', pane: 'commandHistory', size: 26.2 },
@@ -70,7 +75,7 @@ const DEFAULT_LAYOUT: LayoutConfig = {
       {
         type: 'split',
         direction: 'vertical',
-        size: 58,
+        size: DEFAULT_MAIN_COLUMN_SIZE,
         children: [
           { type: 'pane', pane: 'terminal', size: 59.9 },
           { type: 'pane', pane: 'commandBar', size: 5 },
@@ -118,6 +123,41 @@ function deepCloneLayoutConfig(config: LayoutConfig): LayoutConfig {
   return JSON.parse(JSON.stringify(config)) as LayoutConfig;
 }
 
+function approximatelyEqual(value: number | undefined, target: number, tolerance = 0.05): boolean {
+  if (!Number.isFinite(value)) {
+    return false;
+  }
+  return Math.abs((value as number) - target) <= tolerance;
+}
+
+function patchLegacyStatusColumnWidth(config: LayoutConfig): void {
+  const root = config.root;
+  if (root.type !== 'split' || !Array.isArray(root.children) || root.children.length < 2) {
+    return;
+  }
+
+  const statusColumn = root.children[0];
+  const mainColumn = root.children[1];
+
+  if (statusColumn.type !== 'split' || mainColumn.type !== 'split') {
+    return;
+  }
+
+  const hasStatusMonitor = Array.isArray(statusColumn.children)
+    && statusColumn.children.some((child) => child.type === 'pane' && child.pane === 'statusMonitor');
+  if (!hasStatusMonitor) {
+    return;
+  }
+
+  if (
+    approximatelyEqual(statusColumn.size, LEGACY_STATUS_COLUMN_SIZE)
+    && approximatelyEqual(mainColumn.size, LEGACY_MAIN_COLUMN_SIZE)
+  ) {
+    statusColumn.size = DEFAULT_STATUS_COLUMN_SIZE;
+    mainColumn.size = DEFAULT_MAIN_COLUMN_SIZE;
+  }
+}
+
 export const useLayoutStore = defineStore('layout', () => {
   const layoutConfig = ref<LayoutConfig>(deepCloneLayoutConfig(DEFAULT_LAYOUT));
   const leftSidebarVisible = ref(false);
@@ -156,6 +196,7 @@ export const useLayoutStore = defineStore('layout', () => {
         layoutConfig.value = deepCloneLayoutConfig(DEFAULT_LAYOUT);
       }
     }
+    patchLegacyStatusColumnWidth(layoutConfig.value);
 
     leftSidebarVisible.value = parseBoolean(settings.get(SETTINGS_KEYS.leftVisible, 'false'), false);
     rightSidebarVisible.value = parseBoolean(settings.get(SETTINGS_KEYS.rightVisible, 'false'), false);

@@ -416,8 +416,8 @@ async function copyIpToClipboard() {
   width: 100%;
   height: 1rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  background: rgba(17, 23, 34, 0.95);
+  border: 1px solid color-mix(in srgb, var(--border, #d1d5db) 82%, #ffffff 18%);
+  background: color-mix(in srgb, var(--border, #d1d5db) 70%, #f8fafc 30%);
   overflow: hidden;
 }
 

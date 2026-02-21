@@ -14,6 +14,7 @@
       :key="i"
       :size="child.size"
       :min-size="5"
+      :class="paneClass(child)"
     >
       <LayoutRenderer :node="child" />
     </Pane>
@@ -92,6 +93,17 @@ export default defineComponent({
       });
     };
 
+    const paneClass = (child: LayoutNode): string => {
+      if (child.type !== 'split' || !Array.isArray(child.children)) {
+        return '';
+      }
+
+      const hasStatusMonitor = child.children.some(
+        (subChild) => subChild.type === 'pane' && subChild.pane === 'statusMonitor',
+      );
+      return hasStatusMonitor ? 'layout-pane-status-column' : '';
+    };
+
     onBeforeUnmount(() => {
       if (resizeDispatchRaf) {
         window.cancelAnimationFrame(resizeDispatchRaf);
@@ -99,7 +111,7 @@ export default defineComponent({
       }
     });
 
-    return { paneComponent, notifyLayoutResized, layoutLocked };
+    return { paneComponent, paneClass, notifyLayoutResized, layoutLocked };
   },
 });
 </script>
@@ -115,6 +127,7 @@ export default defineComponent({
 :deep(.splitpanes--horizontal > .splitpanes__splitter) { height: 4px; margin: -2px 0; }
 :deep(.splitpanes--vertical > .splitpanes__splitter) { width: 4px; margin: 0 -2px; }
 :deep(.splitpanes__splitter:hover) { background: var(--blue); }
+:deep(.layout-pane-status-column) { min-width: 235px; }
 
 .layout-locked :deep(.splitpanes__splitter) {
   pointer-events: none;
@@ -152,4 +165,3 @@ export default defineComponent({
   color: var(--text-sub);
 }
 </style>
-

@@ -71,19 +71,19 @@ const UI_THEME_FIELD_ORDER: string[] = [
   '--color-error',
   '--color-warning',
 ];
-const darkModeTheme: Record<string, string> = {
-  '--app-bg-color': '#212529',
-  '--text-color': '#e9ecef',
-  '--text-color-secondary': '#adb5bd',
-  '--border-color': '#495057',
-  '--link-color': '#BB86FC',
-  '--link-hover-color': '#D1A9FF',
+const dayModeTheme: Record<string, string> = {
+  '--app-bg-color': '#ffffff',
+  '--text-color': '#333333',
+  '--text-color-secondary': '#666666',
+  '--border-color': '#cccccc',
+  '--link-color': '#8E44AD',
+  '--link-hover-color': '#B180E0',
   '--link-active-color': '#A06CD5',
-  '--link-active-bg-color': 'rgba(160, 108, 213, 0.2)',
+  '--link-active-bg-color': '#F3EBFB',
   '--nav-item-active-bg-color': 'var(--link-active-bg-color)',
-  '--header-bg-color': '#343a40',
-  '--footer-bg-color': '#343a40',
-  '--button-bg-color': 'var(--link-active-color)',
+  '--header-bg-color': '#f0f0f0',
+  '--footer-bg-color': '#f0f0f0',
+  '--button-bg-color': '#A06CD5',
   '--button-text-color': '#ffffff',
   '--button-hover-bg-color': '#8E44AD',
   '--icon-color': 'var(--text-color-secondary)',
@@ -92,7 +92,7 @@ const darkModeTheme: Record<string, string> = {
   '--split-line-hover-color': 'var(--border-color)',
   '--input-focus-border-color': 'var(--link-active-color)',
   '--input-focus-glow': 'var(--link-active-color)',
-  '--overlay-bg-color': 'rgba(0, 0, 0, 0.8)',
+  '--overlay-bg-color': 'rgba(0, 0, 0, 0.6)',
   '--color-success': '#5cb85c',
   '--color-error': '#d9534f',
   '--color-warning': '#f0ad4e',
@@ -179,13 +179,13 @@ const handleResetUiTheme = async () => {
   }
 };
 
-const applyDarkMode = async () => {
+const applyDayMode = async () => {
   try {
-    editableUiTheme.value = JSON.parse(JSON.stringify(darkModeTheme));
+    editableUiTheme.value = JSON.parse(JSON.stringify(dayModeTheme));
     await appearanceStore.saveCustomUiTheme(editableUiTheme.value);
-    notificationsStore.addNotification({ type: 'success', message: '黑暗模式已应用' });
+    notificationsStore.addNotification({ type: 'success', message: '白天模式已应用' });
   } catch (error: any) {
-    notificationsStore.addNotification({ type: 'error', message: error?.message ?? '应用黑暗模式失败' });
+    notificationsStore.addNotification({ type: 'error', message: error?.message ?? '应用白天模式失败' });
   }
 };
 
@@ -286,7 +286,7 @@ defineExpose({
       <label class="mode-label">主题模式:</label>
       <div class="mode-actions">
         <button type="button" class="mode-btn" @click="handleResetUiTheme">默认模式</button>
-        <button type="button" class="mode-btn" @click="applyDarkMode">黑暗模式</button>
+        <button type="button" class="mode-btn" @click="applyDayMode">白天模式</button>
       </div>
     </div>
 

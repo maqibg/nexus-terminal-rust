@@ -2313,15 +2313,15 @@ watch(
   gap: 8px;
   padding: 7px 12px;
   font-size: 12px;
-  font-weight: 700;
-  color: #d3dcf8;
+  font-weight: 600;
+  color: var(--text-sub, #6b7280);
   border-bottom: 1px solid var(--border, #313244);
   background: var(--bg-mantle, #181825);
   position: sticky;
   top: 0;
   z-index: 1;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .fh-icon {
@@ -2360,7 +2360,7 @@ watch(
   font-size: 13px;
   line-height: 1.35;
   cursor: default;
-  border-bottom: 1px solid rgba(49, 50, 68, 0.5);
+  border-bottom: 1px solid color-mix(in srgb, var(--border, #d1d5db) 78%, transparent);
   transition: background 0.12s;
 }
 
@@ -2387,7 +2387,7 @@ watch(
 .file-item.selected .file-size,
 .file-item.selected .file-perms,
 .file-item.selected .file-modified {
-  color: var(--text, #cdd6f4);
+  color: var(--text, #111827);
 }
 
 .file-icon {
@@ -2402,7 +2402,7 @@ watch(
 }
 
 .file-color {
-  color: var(--text-dim, #6c7086);
+  color: var(--text-sub, #6b7280);
 }
 
 .file-name {
@@ -2410,9 +2410,9 @@ watch(
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #e5ecff;
+  color: var(--text, #111827);
   font-size: 13px;
-  font-weight: 550;
+  font-weight: 500;
 }
 
 .file-item.dir .file-name {
@@ -2420,7 +2420,7 @@ watch(
 }
 
 .file-size {
-  color: #aeb8d8;
+  color: var(--text-sub, #6b7280);
   font-size: 12px;
   flex-shrink: 0;
   min-width: 84px;
@@ -2429,7 +2429,7 @@ watch(
 }
 
 .file-perms {
-  color: #aeb8d8;
+  color: var(--text-sub, #6b7280);
   font-size: 12px;
   font-family: 'Cascadia Mono', 'Consolas', monospace;
   flex-shrink: 0;
@@ -2438,7 +2438,7 @@ watch(
 }
 
 .file-modified {
-  color: #aeb8d8;
+  color: var(--text-sub, #6b7280);
   font-size: 12px;
   flex-shrink: 0;
   min-width: 142px;

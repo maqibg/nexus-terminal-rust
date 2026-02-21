@@ -28,18 +28,18 @@ export const defaultXtermTheme: ITheme = {
 };
 
 export const defaultUiTheme: Record<string, string> = {
-  '--app-bg-color': '#ffffff',
-  '--text-color': '#333333',
-  '--text-color-secondary': '#666666',
-  '--border-color': '#cccccc',
-  '--link-color': '#8E44AD',
-  '--link-hover-color': '#B180E0',
+  '--app-bg-color': '#212529',
+  '--text-color': '#e9ecef',
+  '--text-color-secondary': '#adb5bd',
+  '--border-color': '#495057',
+  '--link-color': '#BB86FC',
+  '--link-hover-color': '#D1A9FF',
   '--link-active-color': '#A06CD5',
-  '--link-active-bg-color': '#F3EBFB',
+  '--link-active-bg-color': 'rgba(160, 108, 213, 0.2)',
   '--nav-item-active-bg-color': 'var(--link-active-bg-color)',
-  '--header-bg-color': '#f0f0f0',
-  '--footer-bg-color': '#f0f0f0',
-  '--button-bg-color': '#A06CD5',
+  '--header-bg-color': '#343a40',
+  '--footer-bg-color': '#343a40',
+  '--button-bg-color': 'var(--link-active-color)',
   '--button-text-color': '#ffffff',
   '--button-hover-bg-color': '#8E44AD',
   '--icon-color': 'var(--text-color-secondary)',
@@ -48,7 +48,7 @@ export const defaultUiTheme: Record<string, string> = {
   '--split-line-hover-color': 'var(--border-color)',
   '--input-focus-border-color': 'var(--link-active-color)',
   '--input-focus-glow': 'var(--link-active-color)',
-  '--overlay-bg-color': 'rgba(0, 0, 0, 0.6)',
+  '--overlay-bg-color': 'rgba(0, 0, 0, 0.8)',
   '--color-success': '#5cb85c',
   '--color-error': '#d9534f',
   '--color-warning': '#f0ad4e',
@@ -310,6 +310,10 @@ export const useAppearanceStore = defineStore('appearance', () => {
         return activeTheme.themeData;
       }
     }
+    const defaultTheme = allTerminalThemes.value.find(theme => theme.name === '默认');
+    if (defaultTheme) {
+      return defaultTheme.themeData;
+    }
     const firstTheme = allTerminalThemes.value[0];
     return firstTheme ? firstTheme.themeData : defaultXtermTheme;
   });
@@ -519,8 +523,12 @@ export const useAppearanceStore = defineStore('appearance', () => {
 
     const hasActive = activeTerminalThemeId.value !== null
       && allTerminalThemes.value.some(theme => theme._id === String(activeTerminalThemeId.value));
-    if (!hasActive && allTerminalThemes.value[0]?._id) {
-      await persistAliases(APPEARANCE_ALIASES.activeTerminalThemeId, allTerminalThemes.value[0]._id);
+    if (!hasActive) {
+      const defaultTheme = allTerminalThemes.value.find(theme => theme.name === '默认');
+      const fallbackThemeId = defaultTheme?._id ?? allTerminalThemes.value[0]?._id;
+      if (fallbackThemeId) {
+        await persistAliases(APPEARANCE_ALIASES.activeTerminalThemeId, fallbackThemeId);
+      }
     }
   };
 

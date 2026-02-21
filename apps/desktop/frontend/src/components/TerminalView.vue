@@ -404,14 +404,26 @@ function normalizeImageUrl(pathValue: string): string {
   return normalized;
 }
 
-const terminalContainerStyle = computed<Record<string, string>>(() => {
+function getTerminalBackgroundImageUrl(): string {
   const enabled = parseBoolean(getAppearanceValue(['terminalBackgroundEnabled', 'terminal_background_enabled'], 'true'));
-  const imagePath = getAppearanceValue(['terminalBackgroundImage', 'terminal_background_image'], '');
-  if (!enabled || !imagePath) {
-    return {} as Record<string, string>;
+  if (!enabled) {
+    return '';
   }
 
-  const imageUrl = normalizeImageUrl(imagePath);
+  const imagePath = getAppearanceValue(['terminalBackgroundImage', 'terminal_background_image'], '');
+  if (!imagePath) {
+    return '';
+  }
+
+  return normalizeImageUrl(imagePath);
+}
+
+function shouldUseTransparentTerminalBackground(): boolean {
+  return getTerminalBackgroundImageUrl() !== '';
+}
+
+const terminalContainerStyle = computed<Record<string, string>>(() => {
+  const imageUrl = getTerminalBackgroundImageUrl();
   if (!imageUrl) {
     return {} as Record<string, string>;
   }
@@ -468,9 +480,7 @@ function applyTerminalAppearance() {
   term.options.fontFamily = getTerminalFontFamily();
   term.options.fontSize = getTerminalFontSize();
 
-  const transparentBackground = parseBoolean(
-    getAppearanceValue(['terminalBackgroundEnabled', 'terminal_background_enabled'], 'true'),
-  );
+  const transparentBackground = shouldUseTransparentTerminalBackground();
   const activeTheme = effectiveTerminalTheme.value;
   term.options.theme = {
     ...activeTheme,
@@ -692,9 +702,10 @@ function initTerminal(sid: string): void {
     scrollback: getTerminalScrollbackLimit(),
     fontSize: getTerminalFontSize(),
     fontFamily: getTerminalFontFamily(),
+    allowTransparency: true,
     theme: {
       ...activeTheme,
-      background: parseBoolean(getAppearanceValue(['terminalBackgroundEnabled', 'terminal_background_enabled'], 'true'))
+      background: shouldUseTransparentTerminalBackground()
         ? '#00000000'
         : (activeTheme.background ?? '#1e1e2e'),
     },
