@@ -17,6 +17,12 @@ export interface SshExecResult {
   exit_code: number;
 }
 
+export interface SshOutputChunk {
+  seq: number;
+  stream: 'stdout' | 'stderr' | string;
+  data: string;
+}
+
 export const sshApi = {
   connect: (connectionId: number, cols?: number, rows?: number) =>
     tauriInvoke<string>('ssh_connect', {
@@ -43,6 +49,11 @@ export const sshApi = {
       req: { session_id: sessionId, command, timeout_ms: timeoutMs },
     }),
 
+  takeOutputBacklog: (sessionId: string) =>
+    tauriInvoke<SshOutputChunk[]>('ssh_take_output_backlog', {
+      req: { session_id: sessionId },
+    }),
+
   list: () => tauriInvoke<SshSession[]>('ssh_session_list'),
 };
 
@@ -59,22 +70,38 @@ export const sshApi = {
 export async function onSshOutput(
   sessionId: string,
   handlers: {
-    onData?: (base64: string) => void;
-    onStderr?: (base64: string) => void;
+    onData?: (base64: string, chunk?: SshOutputChunk) => void;
+    onStderr?: (base64: string, chunk?: SshOutputChunk) => void;
     onExit?: (code: number) => void;
     onClose?: () => void;
   },
 ): Promise<UnlistenFn> {
   const unlisteners: UnlistenFn[] = [];
+  const normalizeChunk = (payload: string | SshOutputChunk, stream: 'stdout' | 'stderr'): SshOutputChunk => {
+    if (typeof payload === 'string') {
+      return {
+        seq: -1,
+        stream,
+        data: payload,
+      };
+    }
+    return payload;
+  };
 
   if (handlers.onData) {
     unlisteners.push(
-      await listen<string>(`ssh:output:${sessionId}`, (e) => handlers.onData!(e.payload)),
+      await listen<string | SshOutputChunk>(`ssh:output:${sessionId}`, (e) => {
+        const chunk = normalizeChunk(e.payload, 'stdout');
+        handlers.onData!(chunk.data, chunk);
+      }),
     );
   }
   if (handlers.onStderr) {
     unlisteners.push(
-      await listen<string>(`ssh:stderr:${sessionId}`, (e) => handlers.onStderr!(e.payload)),
+      await listen<string | SshOutputChunk>(`ssh:stderr:${sessionId}`, (e) => {
+        const chunk = normalizeChunk(e.payload, 'stderr');
+        handlers.onStderr!(chunk.data, chunk);
+      }),
     );
   }
   if (handlers.onExit) {

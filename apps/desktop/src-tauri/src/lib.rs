@@ -160,6 +160,7 @@ pub fn run() {
             commands::ssh::ssh_close,
             commands::ssh::ssh_session_list,
             commands::ssh::ssh_exec_command,
+            commands::ssh::ssh_take_output_backlog,
             // SFTP
             commands::sftp::sftp_open,
             commands::sftp::sftp_open_override,

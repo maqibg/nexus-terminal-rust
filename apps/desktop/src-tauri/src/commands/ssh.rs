@@ -37,6 +37,11 @@ pub struct SshCloseRequest {
 }
 
 #[derive(Deserialize)]
+pub struct SshTakeOutputBacklogRequest {
+    pub session_id: String,
+}
+
+#[derive(Deserialize)]
 pub struct SshExecRequest {
     pub session_id: String,
     pub command: String,
@@ -198,6 +203,15 @@ pub async fn ssh_session_list(state: State<'_, AppState>) -> CmdResult<Vec<serde
             serde_json::json!({ "session_id": id, "connection_id": conn_id, "connection_name": name })
         })
         .collect())
+}
+
+#[tauri::command]
+pub async fn ssh_take_output_backlog(
+    state: State<'_, AppState>,
+    req: SshTakeOutputBacklogRequest,
+) -> CmdResult<Vec<ssh_core::manager::SshOutputChunk>> {
+    state.auth.require_auth().await?;
+    Ok(state.ssh_manager.take_output_backlog(&req.session_id).await)
 }
 
 #[tauri::command]

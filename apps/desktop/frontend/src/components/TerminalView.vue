@@ -67,6 +67,7 @@ import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { storeToRefs } from 'pinia';
 import { onSshOutput, sshApi } from '@/lib/api';
+import type { SshOutputChunk } from '@/lib/api';
 import VncSessionView from '@/components/VncSessionView.vue';
 import CommandAutocomplete from '@/components/CommandAutocomplete.vue';
 import { useSessionStore } from '@/stores/session';
@@ -100,6 +101,7 @@ const showAutocomplete = ref(false);
 const autocompleteInput = ref('');
 const autocompleteCursorPosition = ref({ x: 0, y: 0 });
 let terminalInputBuffer = '';
+let lastOutputSeq = -1;
 
 let term: Terminal | null = null;
 let fitAddon: FitAddon | null = null;
@@ -142,6 +144,10 @@ const searchOptions = {
 
 function encodeUtf8Base64(value: string): string {
   return btoa(unescape(encodeURIComponent(value)));
+}
+
+function decodeBase64ToBytes(value: string): Uint8Array {
+  return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
 }
 
 function isCommandAutocompleteEnabled(): boolean {
@@ -252,6 +258,17 @@ async function handleAutocompleteSelect(text: string): Promise<void> {
     resetAutocompleteState();
   }
   term?.focus();
+}
+
+function shouldConsumeChunk(chunk?: SshOutputChunk): boolean {
+  if (!chunk || chunk.seq < 0) {
+    return true;
+  }
+  if (chunk.seq <= lastOutputSeq) {
+    return false;
+  }
+  lastOutputSeq = chunk.seq;
+  return true;
 }
 
 function handleAutocompleteKeydown(event: KeyboardEvent): boolean {
@@ -666,6 +683,7 @@ function initTerminal(sid: string): void {
   cleanup();
   if (!termRef.value) return;
   terminalInputBuffer = '';
+  lastOutputSeq = -1;
   resetAutocompleteState();
 
   const activeTheme = effectiveTerminalTheme.value;
@@ -714,11 +732,17 @@ function initTerminal(sid: string): void {
   });
 
   onSshOutput(sid, {
-    onData: (b64) => {
-      term?.write(Uint8Array.from(atob(b64), (char) => char.charCodeAt(0)));
+    onData: (b64, chunk) => {
+      if (!shouldConsumeChunk(chunk)) {
+        return;
+      }
+      term?.write(decodeBase64ToBytes(b64));
     },
-    onStderr: (b64) => {
-      term?.write(Uint8Array.from(atob(b64), (char) => char.charCodeAt(0)));
+    onStderr: (b64, chunk) => {
+      if (!shouldConsumeChunk(chunk)) {
+        return;
+      }
+      term?.write(decodeBase64ToBytes(b64));
     },
     onExit: (code) => {
       term?.writeln(`\r\n[Process exited with code ${code}]`);
@@ -726,9 +750,21 @@ function initTerminal(sid: string): void {
     onClose: () => {
       term?.writeln('\r\n[Connection closed]');
     },
-  }).then((fn) => {
-    unlisten = fn;
-  });
+  })
+    .then((fn) => {
+      unlisten = fn;
+      return sshApi.takeOutputBacklog(sid).catch(() => [] as SshOutputChunk[]);
+    })
+    .then((chunks) => {
+      const ordered = chunks.slice().sort((a, b) => a.seq - b.seq);
+      for (const chunk of ordered) {
+        if (!shouldConsumeChunk(chunk)) {
+          continue;
+        }
+        term?.write(decodeBase64ToBytes(chunk.data));
+      }
+    })
+    .catch(() => undefined);
 
   resizeObserver = new ResizeObserver(() => {
     fitAddon?.fit();
@@ -797,6 +833,7 @@ function cleanup(): void {
   closeTerminalContextMenu();
   resetAutocompleteState();
   terminalInputBuffer = '';
+  lastOutputSeq = -1;
 
   term?.dispose();
   term = null;

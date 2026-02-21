@@ -7,7 +7,7 @@ export type { AuthState, TwoFactorSetupResponse, PasskeyInfo } from './api-auth'
 export { connectionsApi } from './api-connections';
 export type { Connection, Tag, SshKey, Proxy } from './api-connections';
 export { sshApi, onSshOutput } from './api-ssh';
-export type { SshSession } from './api-ssh';
+export type { SshSession, SshOutputChunk } from './api-ssh';
 export { sftpApi } from './api-sftp';
 export type { FileEntry } from './api-sftp';
 export { desktopApi } from './api-desktop';

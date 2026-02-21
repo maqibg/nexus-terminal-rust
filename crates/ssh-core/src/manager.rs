@@ -1,10 +1,12 @@
 //! SSH session manager - owns active SSH channels, bridges Tauri events.
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use russh::ChannelMsg;
 use russh_sftp::client::SftpSession;
+use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::time::{timeout, Duration};
 use tracing::info;
@@ -34,11 +36,27 @@ struct ActiveSftpSession {
     connection_id: i64,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct SshOutputChunk {
+    pub seq: u64,
+    pub stream: String,
+    pub data: String,
+}
+
+#[derive(Default)]
+struct OutputBacklogState {
+    next_seq: u64,
+    chunks: VecDeque<SshOutputChunk>,
+}
+
+const OUTPUT_BACKLOG_LIMIT: usize = 512;
+
 /// Manages all active SSH sessions.
 #[derive(Clone)]
 pub struct SshSessionManager {
     sessions: Arc<Mutex<HashMap<String, ActiveSession>>>,
     sftp_sessions: Arc<Mutex<HashMap<String, ActiveSftpSession>>>,
+    output_backlogs: Arc<Mutex<HashMap<String, OutputBacklogState>>>,
 }
 
 impl SshSessionManager {
@@ -46,6 +64,7 @@ impl SshSessionManager {
         Self {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             sftp_sessions: Arc::new(Mutex::new(HashMap::new())),
+            output_backlogs: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -74,12 +93,17 @@ impl SshSessionManager {
             .lock()
             .await
             .insert(session_id.clone(), active);
+        self.output_backlogs
+            .lock()
+            .await
+            .insert(session_id.clone(), OutputBacklogState::default());
 
         // Spawn reader task to forward SSH output -> Tauri event
         let sessions = self.sessions.clone();
+        let output_backlogs = self.output_backlogs.clone();
         let sid = session_id.clone();
         tokio::spawn(async move {
-            Self::read_loop(sessions, sid, app_handle).await;
+            Self::read_loop(sessions, output_backlogs, sid, app_handle).await;
         });
 
         info!(session_id, connection_name, "SSH session opened");
@@ -90,6 +114,7 @@ impl SshSessionManager {
     /// before emitting to reduce IPC overhead on high-throughput streams.
     async fn read_loop(
         sessions: Arc<Mutex<HashMap<String, ActiveSession>>>,
+        output_backlogs: Arc<Mutex<HashMap<String, OutputBacklogState>>>,
         session_id: String,
         app_handle: tauri::AppHandle,
     ) {
@@ -105,14 +130,6 @@ impl SshSessionManager {
         let mut flush_timer = interval(FLUSH_INTERVAL);
         let mut ended = false;
 
-        let flush = |buf: &mut Vec<u8>, event: &str, handle: &tauri::AppHandle| {
-            if !buf.is_empty() {
-                let b64 = B64.encode(&buf);
-                let _ = handle.emit(event, &b64);
-                buf.clear();
-            }
-        };
-
         let out_event = format!("ssh:output:{session_id}");
         let err_event = format!("ssh:stderr:{session_id}");
 
@@ -120,8 +137,28 @@ impl SshSessionManager {
             tokio::select! {
                 biased;
                 _ = flush_timer.tick() => {
-                    flush(&mut stdout_buf, &out_event, &app_handle);
-                    flush(&mut stderr_buf, &err_event, &app_handle);
+                    if !stdout_buf.is_empty() {
+                        let chunk = Self::append_output_chunk(
+                            &output_backlogs,
+                            &session_id,
+                            "stdout",
+                            B64.encode(&stdout_buf),
+                        )
+                        .await;
+                        let _ = app_handle.emit(&out_event, &chunk);
+                        stdout_buf.clear();
+                    }
+                    if !stderr_buf.is_empty() {
+                        let chunk = Self::append_output_chunk(
+                            &output_backlogs,
+                            &session_id,
+                            "stderr",
+                            B64.encode(&stderr_buf),
+                        )
+                        .await;
+                        let _ = app_handle.emit(&err_event, &chunk);
+                        stderr_buf.clear();
+                    }
                     if ended { break; }
                 }
                 msg = async {
@@ -133,21 +170,57 @@ impl SshSessionManager {
                         Some(ChannelMsg::Data { ref data }) => {
                             stdout_buf.extend_from_slice(data.as_ref());
                             if stdout_buf.len() >= MAX_BATCH_BYTES {
-                                flush(&mut stdout_buf, &out_event, &app_handle);
+                                let chunk = Self::append_output_chunk(
+                                    &output_backlogs,
+                                    &session_id,
+                                    "stdout",
+                                    B64.encode(&stdout_buf),
+                                )
+                                .await;
+                                let _ = app_handle.emit(&out_event, &chunk);
+                                stdout_buf.clear();
                             }
                         }
                         Some(ChannelMsg::ExtendedData { ref data, .. }) => {
                             stderr_buf.extend_from_slice(data.as_ref());
                             if stderr_buf.len() >= MAX_BATCH_BYTES {
-                                flush(&mut stderr_buf, &err_event, &app_handle);
+                                let chunk = Self::append_output_chunk(
+                                    &output_backlogs,
+                                    &session_id,
+                                    "stderr",
+                                    B64.encode(&stderr_buf),
+                                )
+                                .await;
+                                let _ = app_handle.emit(&err_event, &chunk);
+                                stderr_buf.clear();
                             }
                         }
                         Some(ChannelMsg::ExitStatus { exit_status }) => {
                             let _ = app_handle.emit(&format!("ssh:exit:{session_id}"), &exit_status);
                         }
                         Some(ChannelMsg::Eof | ChannelMsg::Close) | None => {
-                            flush(&mut stdout_buf, &out_event, &app_handle);
-                            flush(&mut stderr_buf, &err_event, &app_handle);
+                            if !stdout_buf.is_empty() {
+                                let chunk = Self::append_output_chunk(
+                                    &output_backlogs,
+                                    &session_id,
+                                    "stdout",
+                                    B64.encode(&stdout_buf),
+                                )
+                                .await;
+                                let _ = app_handle.emit(&out_event, &chunk);
+                                stdout_buf.clear();
+                            }
+                            if !stderr_buf.is_empty() {
+                                let chunk = Self::append_output_chunk(
+                                    &output_backlogs,
+                                    &session_id,
+                                    "stderr",
+                                    B64.encode(&stderr_buf),
+                                )
+                                .await;
+                                let _ = app_handle.emit(&err_event, &chunk);
+                                stderr_buf.clear();
+                            }
                             let _ = app_handle.emit(&format!("ssh:close:{session_id}"), &());
                             ended = true;
                         }
@@ -159,6 +232,27 @@ impl SshSessionManager {
 
         sessions.lock().await.remove(&session_id);
         info!(session_id, "SSH read loop ended");
+    }
+
+    async fn append_output_chunk(
+        output_backlogs: &Arc<Mutex<HashMap<String, OutputBacklogState>>>,
+        session_id: &str,
+        stream: &str,
+        data: String,
+    ) -> SshOutputChunk {
+        let mut map = output_backlogs.lock().await;
+        let state = map.entry(session_id.to_string()).or_default();
+        let chunk = SshOutputChunk {
+            seq: state.next_seq,
+            stream: stream.to_string(),
+            data,
+        };
+        state.next_seq = state.next_seq.saturating_add(1);
+        state.chunks.push_back(chunk.clone());
+        while state.chunks.len() > OUTPUT_BACKLOG_LIMIT {
+            state.chunks.pop_front();
+        }
+        chunk
     }
 
     /// Write data to session stdin.
@@ -266,6 +360,7 @@ impl SshSessionManager {
             let _ = session.channel.close().await;
             info!(session_id, "SSH session closed");
         }
+        self.output_backlogs.lock().await.remove(session_id);
         Ok(())
     }
 
@@ -316,5 +411,15 @@ impl SshSessionManager {
         let map = self.sftp_sessions.lock().await;
         let session = map.get(session_id).ok_or("SFTP session not found")?;
         Ok(session.sftp.clone())
+    }
+
+    /// Return and clear buffered output chunks for a session.
+    pub async fn take_output_backlog(&self, session_id: &str) -> Vec<SshOutputChunk> {
+        let mut map = self.output_backlogs.lock().await;
+        if let Some(state) = map.get_mut(session_id) {
+            let chunks: Vec<SshOutputChunk> = state.chunks.drain(..).collect();
+            return chunks;
+        }
+        Vec::new()
     }
 }
