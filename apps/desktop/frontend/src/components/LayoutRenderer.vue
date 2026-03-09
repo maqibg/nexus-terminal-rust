@@ -36,9 +36,11 @@ import StatusMonitor from '@/components/StatusMonitor.vue';
 import CommandHistoryPanel from '@/components/CommandHistoryPanel.vue';
 import QuickCommandsPanel from '@/components/QuickCommandsPanel.vue';
 import WorkspaceConnectionList from '@/components/WorkspaceConnectionList.vue';
+import DockerManager from '@/components/DockerManager.vue';
 
 const componentMap: Record<PaneName, unknown> = {
   connections: WorkspaceConnectionList,
+  dockerManager: DockerManager,
   terminal: TerminalView,
   fileManager: SftpBrowser,
   editor: FileEditorContainer,

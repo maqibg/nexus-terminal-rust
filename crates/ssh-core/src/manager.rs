@@ -352,6 +352,8 @@ impl SshSessionManager {
         &self,
         session_id: &str,
         command: &str,
+        stdin: Option<Vec<u8>>,
+        request_pty: bool,
         timeout_duration: Duration,
     ) -> Result<ExecOutput, String> {
         // Short scope: clone handle from DashMap, drop entry before async work
@@ -366,10 +368,41 @@ impl SshSessionManager {
                 .await
                 .map_err(|e| format!("open channel failed: {e}"))?;
 
+            if request_pty {
+                channel
+                    .request_pty(false, "xterm-256color", 80, 24, 0, 0, &[])
+                    .await
+                    .map_err(|e| format!("pty request failed: {e}"))?;
+            }
+
             channel
                 .exec(false, command)
                 .await
                 .map_err(|e| format!("exec command failed: {e}"))?;
+
+            if let Some(stdin_bytes) = stdin {
+                use tokio::io::AsyncWriteExt;
+
+                let mut writer = channel.make_writer();
+                writer
+                    .write_all(&stdin_bytes)
+                    .await
+                    .map_err(|e| format!("write stdin failed: {e}"))?;
+                writer
+                    .shutdown()
+                    .await
+                    .or_else(|error| {
+                        if matches!(
+                            error.kind(),
+                            std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::ConnectionReset
+                        ) {
+                            Ok(())
+                        } else {
+                            Err(error)
+                        }
+                    })
+                    .map_err(|e| format!("shutdown stdin failed: {e}"))?;
+            }
 
             let mut stdout = Vec::new();
             let mut stderr = Vec::new();

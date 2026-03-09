@@ -383,7 +383,7 @@ async fn run_remote_metrics_command(
     command: &str,
 ) -> Result<String, String> {
     let output = ssh_manager
-        .exec_command(session_id, command, METRICS_COMMAND_TIMEOUT)
+        .exec_command(session_id, command, None, false, METRICS_COMMAND_TIMEOUT)
         .await?;
 
     if output.exit_code != 0 && output.stdout.trim().is_empty() {

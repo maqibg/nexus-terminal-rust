@@ -256,6 +256,44 @@
               </form>
             </div>
 
+            <hr class="section-divider">
+
+            <div id="docker-settings" ref="dockerSettingsSectionRef" class="settings-section-content">
+              <h3 class="section-heading">Docker 管理器</h3>
+              <form class="section-form" @submit.prevent="saveDockerStatusInterval">
+                <div class="form-field">
+                  <label class="form-label" for="workspace-docker-interval">Docker 刷新间隔 (秒):</label>
+                  <input id="workspace-docker-interval" v-model.number="workspaceForm.dockerStatusIntervalSeconds" class="form-control" type="number" min="1" step="1">
+                  <small class="section-desc">原项目默认周期性轮询远端 Docker 状态；这里保持同类行为。</small>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">保存</button>
+                  <p v-if="feedback.dockerStatusInterval?.message" :class="['feedback-msg', feedback.dockerStatusInterval.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.dockerStatusInterval.message }}</p>
+                </div>
+              </form>
+              <form class="section-form" @submit.prevent="saveWorkspaceBoolean('dockerDefaultExpand', workspaceForm.dockerDefaultExpand, 'dockerDefaultExpand', 'Docker 默认展开设置已保存')">
+                <div class="checkbox-row">
+                  <input id="workspace-docker-default-expand" v-model="workspaceForm.dockerDefaultExpand" class="checkbox-input" type="checkbox">
+                  <label for="workspace-docker-default-expand">默认展开所有容器详情</label>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">保存</button>
+                  <p v-if="feedback.dockerDefaultExpand?.message" :class="['feedback-msg', feedback.dockerDefaultExpand.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.dockerDefaultExpand.message }}</p>
+                </div>
+              </form>
+              <form class="section-form" @submit.prevent="saveWorkspaceBoolean('dockerUseSudo', workspaceForm.dockerUseSudo, 'dockerUseSudo', 'Docker sudo 设置已保存')">
+                <div class="checkbox-row">
+                  <input id="workspace-docker-use-sudo" v-model="workspaceForm.dockerUseSudo" class="checkbox-input" type="checkbox">
+                  <label for="workspace-docker-use-sudo">Docker 尝试使用 sudo</label>
+                </div>
+                <small class="section-desc">如果 SSH 登录账户无使用 Docker 的权限，请开启 sudo 获取。</small>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">保存</button>
+                  <p v-if="feedback.dockerUseSudo?.message" :class="['feedback-msg', feedback.dockerUseSudo.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.dockerUseSudo.message }}</p>
+                </div>
+              </form>
+            </div>
+
           </div>
         </section>
         <section v-if="activeTab === 'ai'" class="settings-card">
@@ -410,8 +448,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
+import { useRoute } from 'vue-router';
 import AppSelect from '@/components/AppSelect.vue';
 import AISettingsPanel from '@/components/AI/AISettingsPanel.vue';
 import { authApi, connectionsApi } from '@/lib/api';
@@ -426,6 +465,7 @@ type AppVersionHost = {
 
 type TabKey = 'workspace' | 'ai' | 'system' | 'security' | 'dataManagement' | 'appearance' | 'about';
 const SETTINGS_TAB_STORAGE_KEY = 'settings_active_tab';
+const SETTINGS_FOCUS_SECTION_STORAGE_KEY = 'settings_focus_section';
 const RELEASES_BASE_URL = 'https://github.com/maqibg/nexus-terminal-rust/releases';
 const LATEST_RELEASE_API_URL = 'https://api.github.com/repos/maqibg/nexus-terminal-rust/releases/latest';
 
@@ -450,12 +490,14 @@ function getInitialActiveTab(): TabKey {
 const notifications = useUiNotificationsStore();
 const appearanceStore = useAppearanceStore();
 const settingsStore = useSettingsStore();
+const route = useRoute();
 const { settings: runtimeSettings } = storeToRefs(settingsStore);
 
 const activeTab = ref<TabKey>(getInitialActiveTab());
 
 watch(activeTab, (value) => {
   localStorage.setItem(SETTINGS_TAB_STORAGE_KEY, value);
+  void maybeFocusRequestedSection();
 });
 
 const commonTimezones = [
@@ -481,6 +523,7 @@ const commandSyncTargetOptions = [
 
 const commandSyncMenuOpen = ref(false);
 const commandSyncSelectRef = ref<HTMLElement | null>(null);
+const dockerSettingsSectionRef = ref<HTMLElement | null>(null);
 const loadingSettings = ref(false);
 const settingsError = ref('');
 const settingsMap = ref<Record<string, string>>({});
@@ -530,6 +573,9 @@ const workspaceForm = reactive({
   terminalEnableRightClickPaste: true,
   showStatusMonitorIpAddress: false,
   statusMonitorIntervalSeconds: 3,
+  dockerStatusIntervalSeconds: 5,
+  dockerDefaultExpand: false,
+  dockerUseSudo: false,
 });
 
 const systemForm = reactive({
@@ -587,6 +633,22 @@ function setFeedback(key: string, message: string, success: boolean) {
   feedback[key] = { message, success };
 }
 
+async function maybeFocusRequestedSection() {
+  if (activeTab.value !== 'workspace') {
+    return;
+  }
+
+  const requested = localStorage.getItem(SETTINGS_FOCUS_SECTION_STORAGE_KEY)
+    || (route.hash.startsWith('#') ? route.hash.slice(1) : '');
+  if (requested !== 'docker') {
+    return;
+  }
+
+  await nextTick();
+  dockerSettingsSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  localStorage.removeItem(SETTINGS_FOCUS_SECTION_STORAGE_KEY);
+}
+
 function normalizeError(error: unknown, fallback = '操作失败'): string {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -642,6 +704,9 @@ function hydrateFormsFromSettings() {
   workspaceForm.terminalEnableRightClickPaste = toBool(map.terminalEnableRightClickPaste, true);
   workspaceForm.showStatusMonitorIpAddress = toBool(map.showStatusMonitorIpAddress, false);
   workspaceForm.statusMonitorIntervalSeconds = toInt(map.statusMonitorIntervalSeconds, 3);
+  workspaceForm.dockerStatusIntervalSeconds = toInt(map.dockerStatusIntervalSeconds, 5);
+  workspaceForm.dockerDefaultExpand = toBool(map.dockerDefaultExpand, false);
+  workspaceForm.dockerUseSudo = toBool(map.dockerUseSudo, false);
 
   systemForm.timezone = map.timezone || 'Asia/Shanghai';
   settingsStore.setRuntimeLocale('zh-CN');
@@ -666,6 +731,7 @@ async function loadSettings() {
     await settingsStore.loadAll();
     settingsMap.value = { ...runtimeSettings.value };
     hydrateFormsFromSettings();
+    await maybeFocusRequestedSection();
   } catch (error) {
     settingsError.value = normalizeError(error, '加载设置失败');
   } finally {
@@ -727,6 +793,16 @@ async function saveStatusMonitorInterval() {
     workspaceForm.statusMonitorIntervalSeconds,
     'statusMonitorInterval',
     '状态监视器刷新间隔设置已保存',
+    1,
+  );
+}
+
+async function saveDockerStatusInterval() {
+  await saveWorkspaceNumber(
+    'dockerStatusIntervalSeconds',
+    workspaceForm.dockerStatusIntervalSeconds,
+    'dockerStatusInterval',
+    'Docker 刷新间隔设置已保存',
     1,
   );
 }

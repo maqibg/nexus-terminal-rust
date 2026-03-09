@@ -47,6 +47,8 @@ pub struct SshExecRequest {
     pub session_id: String,
     pub command: String,
     pub timeout_ms: Option<u64>,
+    pub stdin_base64: Option<String>,
+    pub request_pty: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -232,11 +234,23 @@ pub async fn ssh_exec_command(
     state.auth.require_auth().await?;
 
     let timeout_ms = req.timeout_ms.unwrap_or(3000).clamp(200, 120_000);
+    let stdin = match req.stdin_base64.as_deref() {
+        Some(base64) => {
+            use base64::{engine::general_purpose::STANDARD as B64, Engine};
+            Some(
+                B64.decode(base64)
+                    .map_err(|e| AppError::Validation(format!("invalid stdin base64: {e}")))?,
+            )
+        }
+        None => None,
+    };
     let output = state
         .ssh_manager
         .exec_command(
             &req.session_id,
             &req.command,
+            stdin,
+            req.request_pty.unwrap_or(false),
             Duration::from_millis(timeout_ms),
         )
         .await

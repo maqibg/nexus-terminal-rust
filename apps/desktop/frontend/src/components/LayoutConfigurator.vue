@@ -37,6 +37,7 @@ const isModified = computed(() => {
 
 const paneLabels = computed<Record<PaneName, string>>(() => ({
   connections: '连接列表',
+  dockerManager: 'Docker 管理器',
   terminal: '终端',
   commandBar: '命令栏',
   fileManager: '文件管理器',

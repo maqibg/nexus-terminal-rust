@@ -52,7 +52,24 @@ export const sshApi = {
 
   executeCommand: (sessionId: string, command: string, timeoutMs?: number) =>
     tauriInvoke<SshExecResult>('ssh_exec_command', {
-      req: { session_id: sessionId, command, timeout_ms: timeoutMs },
+      req: { session_id: sessionId, command, timeout_ms: timeoutMs, request_pty: false },
+    }),
+
+  executeCommandWithInput: (
+    sessionId: string,
+    command: string,
+    stdin: string,
+    timeoutMs?: number,
+    requestPty = false,
+  ) =>
+    tauriInvoke<SshExecResult>('ssh_exec_command', {
+      req: {
+        session_id: sessionId,
+        command,
+        timeout_ms: timeoutMs,
+        stdin_base64: btoa(unescape(encodeURIComponent(stdin))),
+        request_pty: requestPty,
+      },
     }),
 
   takeOutputBacklog: (sessionId: string) =>

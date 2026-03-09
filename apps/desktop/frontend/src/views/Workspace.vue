@@ -28,6 +28,14 @@
         </button>
         <button
           class="workspace-left-tool-btn"
+          :class="{ 'workspace-left-tool-btn-active': activeLeftToolPane === 'docker' }"
+          title="Docker 管理器"
+          @click="toggleLeftToolPane('docker')"
+        >
+          <i class="fab fa-docker"></i>
+        </button>
+        <button
+          class="workspace-left-tool-btn"
           :class="{ 'workspace-left-tool-btn-active': showTerminalAiPanel }"
           title="AI 助手"
           @click="toggleTerminalAiPanel()"
@@ -56,6 +64,10 @@
           v-if="activeLeftToolPane === 'connections'"
           class="workspace-left-panel-content"
           @select="handleConnect"
+        />
+        <DockerManager
+          v-else-if="activeLeftToolPane === 'docker'"
+          class="workspace-left-panel-content"
         />
       </div>
 
@@ -157,6 +169,7 @@ import LayoutConfigurator from '@/components/LayoutConfigurator.vue';
 import SftpBrowser from '@/components/SftpBrowser.vue';
 import FileEditorOverlay from '@/components/FileEditorOverlay.vue';
 import TerminalAIChatPanel from '@/components/AI/TerminalAIChatPanel.vue';
+import DockerManager from '@/components/DockerManager.vue';
 
 const sessionStore = useSessionStore();
 const layoutStore = useLayoutStore();
@@ -172,7 +185,7 @@ const showTransferModal = ref(false);
 const showLayoutConfigurator = ref(false);
 const showFileManagerPopup = ref(false);
 
-type LeftToolPane = 'connections';
+type LeftToolPane = 'connections' | 'docker';
 const activeLeftToolPane = ref<LeftToolPane | null>(null);
 const showTerminalAiPanel = ref(false);
 interface TerminalAiActionDetail {
@@ -320,7 +333,7 @@ function handleOpenFileEditorPopup() {
 const effectiveLeftSidebarVisible = computed(() => leftSidebarVisible.value && !activeLeftToolPane.value);
 
 const leftPaneTitle = computed(() => {
-  return '连接列表';
+  return activeLeftToolPane.value === 'docker' ? 'Docker 管理器' : '连接列表';
 });
 
 const mainSize = computed(() => {

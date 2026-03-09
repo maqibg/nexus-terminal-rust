@@ -4,6 +4,7 @@ import { useSettingsStore } from './settings';
 
 export type PaneName =
   | 'connections'
+  | 'dockerManager'
   | 'terminal'
   | 'fileManager'
   | 'editor'
@@ -29,6 +30,7 @@ export interface LayoutConfig {
 
 const ALL_POSSIBLE_PANES: PaneName[] = [
   'connections',
+  'dockerManager',
   'terminal',
   'commandBar',
   'fileManager',
@@ -95,11 +97,12 @@ const DEFAULT_LAYOUT: LayoutConfig = {
   },
   leftSidebar: {
     id: 'left-sidebar',
-    type: 'split',
-    direction: 'vertical',
     children: [
-      { id: 'connections-pane', type: 'pane', pane: 'connections', size: 100 },
+      { id: 'connections-pane', type: 'pane', pane: 'connections', size: 50 },
+      { id: 'docker-pane', type: 'pane', pane: 'dockerManager', size: 50 },
     ],
+    direction: 'vertical',
+    type: 'split',
   },
   rightSidebar: undefined,
 };

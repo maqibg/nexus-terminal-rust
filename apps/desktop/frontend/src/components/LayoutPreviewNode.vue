@@ -23,6 +23,7 @@ import type { LayoutNode, PaneName } from '@/stores/layout';
 
 const paneLabels: Record<PaneName, string> = {
   connections: '连接',
+  dockerManager: 'Docker',
   terminal: '终端',
   fileManager: '文件',
   editor: '编辑器',
