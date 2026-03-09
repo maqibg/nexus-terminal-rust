@@ -10,3 +10,6 @@ async-trait = { workspace = true }
 tokio = { workspace = true, features = ["net", "io-util"] }
 api-contract = { path = "../api-contract" }
 shared-utils = { path = "../shared-utils" }
+
+[dev-dependencies]
+tokio = { workspace = true }

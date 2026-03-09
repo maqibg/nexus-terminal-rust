@@ -58,6 +58,22 @@ export interface Proxy {
   proxy_type: string;
   host: string;
   port: number;
+  username?: string | null;
+  auth_method: string;
+}
+
+/// Counts returned after a successful full-backup import.
+export interface ImportResult {
+  connections: number;
+  proxies: number;
+  ssh_keys: number;
+  quick_commands: number;
+  quick_command_tags: number;
+  favorite_paths: number;
+  terminal_themes: number;
+  settings: number;
+  appearance: number;
+  notification_channels: number;
 }
 
 export const connectionsApi = {
@@ -76,6 +92,10 @@ export const connectionsApi = {
   clone: (id: number) => tauriInvoke<number>('connection_clone', { id }),
   export: (ids?: number[]) => tauriInvoke<string>('connection_export', { ids }),
   import: (json: string) => tauriInvoke<number[]>('connection_import', { json }),
+
+  // Full-backup export / import
+  appExport: () => tauriInvoke<string>('app_export'),
+  appImport: (json: string) => tauriInvoke<ImportResult>('app_import', { json }),
 
   // Tags
   tagList: () => tauriInvoke<Tag[]>('tag_list'),

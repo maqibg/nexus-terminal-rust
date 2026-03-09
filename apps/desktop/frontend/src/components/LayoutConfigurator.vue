@@ -44,7 +44,6 @@ const paneLabels = computed<Record<PaneName, string>>(() => ({
   statusMonitor: '状态监视器',
   commandHistory: '命令历史',
   quickCommands: '快捷指令',
-  dockerManager: 'Docker 管理器',
 }));
 
 watch(
@@ -74,11 +73,16 @@ function createEditorPaneNode(pane: PaneName, size = 50): LayoutEditorNode {
 
 function toEditorNode(node: StoreLayoutNode): LayoutEditorNode {
   if (node.type === 'pane') {
-    return createEditorPaneNode(node.pane ?? 'terminal', node.size ?? 50);
+    return {
+      id: node.id ?? layoutStore.generateId(),
+      type: 'pane',
+      component: node.pane ?? 'terminal',
+      size: node.size ?? 50,
+    };
   }
 
   return {
-    id: layoutStore.generateId(),
+    id: node.id ?? layoutStore.generateId(),
     type: 'container',
     direction: node.direction ?? 'horizontal',
     size: node.size,
@@ -89,6 +93,7 @@ function toEditorNode(node: StoreLayoutNode): LayoutEditorNode {
 function toStoreNode(node: LayoutEditorNode): StoreLayoutNode {
   if (node.type === 'pane') {
     return {
+      id: node.id,
       type: 'pane',
       pane: node.component ?? 'terminal',
       size: node.size,
@@ -96,6 +101,7 @@ function toStoreNode(node: LayoutEditorNode): StoreLayoutNode {
   }
 
   return {
+    id: node.id,
     type: 'split',
     direction: node.direction ?? 'horizontal',
     size: node.size,
@@ -160,6 +166,7 @@ function buildSidebarNode(panes: PaneName[]): StoreLayoutNode | undefined {
 
   if (panes.length === 1) {
     return {
+      id: layoutStore.generateId(),
       type: 'pane',
       pane: panes[0],
     };
@@ -168,12 +175,14 @@ function buildSidebarNode(panes: PaneName[]): StoreLayoutNode | undefined {
   const averageSize = Number((100 / panes.length).toFixed(2));
 
   return {
+    id: layoutStore.generateId(),
     type: 'split',
     direction: 'vertical',
     children: panes.map((pane, index) => {
       if (index === panes.length - 1) {
         const used = averageSize * (panes.length - 1);
         return {
+          id: layoutStore.generateId(),
           type: 'pane',
           pane,
           size: Number((100 - used).toFixed(2)),
@@ -181,6 +190,7 @@ function buildSidebarNode(panes: PaneName[]): StoreLayoutNode | undefined {
       }
 
       return {
+        id: layoutStore.generateId(),
         type: 'pane',
         pane,
         size: averageSize,

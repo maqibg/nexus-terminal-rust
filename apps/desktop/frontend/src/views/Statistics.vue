@@ -508,7 +508,7 @@ const trafficStats = computed(() => {
   const stats = { totalBytesIn: 0, totalBytesOut: 0, totalBytes: 0 };
   transferItems.value.forEach((item) => {
     const transferred = Math.max(typeof item.transferred_bytes === 'number' ? item.transferred_bytes : 0, item.status === 'Completed' ? (typeof item.total_bytes === 'number' ? item.total_bytes : 0) : 0);
-    if (item.kind === 'Upload') stats.totalBytesOut += transferred;
+    if (item.kind === 'upload') stats.totalBytesOut += transferred;
     else stats.totalBytesIn += transferred;
   });
   stats.totalBytes = stats.totalBytesIn + stats.totalBytesOut;

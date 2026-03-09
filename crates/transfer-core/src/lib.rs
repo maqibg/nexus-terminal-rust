@@ -2,10 +2,14 @@
 
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use tokio::sync::watch;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TransferKind {
     Upload,
     Download,
@@ -15,6 +19,7 @@ pub enum TransferKind {
 pub enum TransferStatus {
     Pending,
     InProgress,
+    Paused,
     Completed,
     Failed,
     Cancelled,
@@ -36,6 +41,7 @@ pub struct TransferTask {
 pub struct TransferManager {
     tasks: Arc<DashMap<String, TransferTask>>,
     cancel_tokens: Arc<DashMap<String, watch::Sender<bool>>>,
+    pause_flags: Arc<DashMap<String, Arc<AtomicBool>>>,
 }
 
 impl TransferManager {
@@ -43,6 +49,7 @@ impl TransferManager {
         Self {
             tasks: Arc::new(DashMap::new()),
             cancel_tokens: Arc::new(DashMap::new()),
+            pause_flags: Arc::new(DashMap::new()),
         }
     }
 
@@ -66,6 +73,8 @@ impl TransferManager {
         self.tasks.insert(id.clone(), task);
         let (tx, rx) = watch::channel(false);
         self.cancel_tokens.insert(id.clone(), tx);
+        self.pause_flags
+            .insert(id.clone(), Arc::new(AtomicBool::new(false)));
         (id, rx)
     }
 
@@ -73,7 +82,57 @@ impl TransferManager {
     pub fn update_progress(&self, id: &str, transferred: u64) {
         if let Some(mut task) = self.tasks.get_mut(id) {
             task.transferred_bytes = transferred;
-            task.status = TransferStatus::InProgress;
+            if task.status != TransferStatus::Paused {
+                task.status = TransferStatus::InProgress;
+            }
+        }
+    }
+
+    pub fn pause(&self, id: &str) -> Result<(), String> {
+        if !self.tasks.contains_key(id) {
+            return Err(format!("task '{}' not found", id));
+        }
+        if let Some(flag) = self.pause_flags.get(id) {
+            flag.store(true, Ordering::Relaxed);
+        }
+        if let Some(mut task) = self.tasks.get_mut(id) {
+            if matches!(task.status, TransferStatus::Pending | TransferStatus::InProgress) {
+                task.status = TransferStatus::Paused;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn resume(&self, id: &str) -> Result<(), String> {
+        if !self.tasks.contains_key(id) {
+            return Err(format!("task '{}' not found", id));
+        }
+        if let Some(flag) = self.pause_flags.get(id) {
+            flag.store(false, Ordering::Relaxed);
+        }
+        if let Some(mut task) = self.tasks.get_mut(id) {
+            if task.status == TransferStatus::Paused {
+                task.status = if task.transferred_bytes > 0 {
+                    TransferStatus::InProgress
+                } else {
+                    TransferStatus::Pending
+                };
+            }
+        }
+        Ok(())
+    }
+
+    pub fn pause_all(&self) {
+        let task_ids: Vec<String> = self.tasks.iter().map(|entry| entry.key().clone()).collect();
+        for id in task_ids {
+            let _ = self.pause(&id);
+        }
+    }
+
+    pub fn resume_all(&self) {
+        let task_ids: Vec<String> = self.tasks.iter().map(|entry| entry.key().clone()).collect();
+        for id in task_ids {
+            let _ = self.resume(&id);
         }
     }
 
@@ -84,6 +143,7 @@ impl TransferManager {
             task.status = TransferStatus::Completed;
         }
         self.cancel_tokens.remove(id);
+        self.pause_flags.remove(id);
     }
 
     /// 标记任务失败
@@ -93,10 +153,14 @@ impl TransferManager {
             task.error = Some(error.to_string());
         }
         self.cancel_tokens.remove(id);
+        self.pause_flags.remove(id);
     }
 
     /// 取消任务
     pub fn cancel(&self, id: &str) -> Result<(), String> {
+        if !self.tasks.contains_key(id) {
+            return Err(format!("task '{}' not found", id));
+        }
         if let Some(tx) = self.cancel_tokens.get(id) {
             let _ = tx.send(true);
         }
@@ -104,7 +168,32 @@ impl TransferManager {
             task.status = TransferStatus::Cancelled;
         }
         self.cancel_tokens.remove(id);
+        self.pause_flags.remove(id);
         Ok(())
+    }
+
+    pub fn cancel_all(&self) {
+        let task_ids: Vec<String> = self
+            .tasks
+            .iter()
+            .filter(|entry| {
+                matches!(
+                    entry.value().status,
+                    TransferStatus::Pending | TransferStatus::InProgress | TransferStatus::Paused
+                )
+            })
+            .map(|entry| entry.key().clone())
+            .collect();
+        for task_id in task_ids {
+            let _ = self.cancel(&task_id);
+        }
+    }
+
+    pub fn is_paused(&self, id: &str) -> bool {
+        self.pause_flags
+            .get(id)
+            .map(|flag| flag.load(Ordering::Relaxed))
+            .unwrap_or(false)
     }
 
     /// 获取单个任务
@@ -122,7 +211,7 @@ impl TransferManager {
         self.tasks.retain(|_, t| {
             matches!(
                 t.status,
-                TransferStatus::Pending | TransferStatus::InProgress
+                TransferStatus::Pending | TransferStatus::InProgress | TransferStatus::Paused
             )
         });
     }

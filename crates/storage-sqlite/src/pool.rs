@@ -53,8 +53,8 @@ struct BuiltinTerminalThemeData {
 }
 
 async fn ensure_builtin_terminal_theme_presets(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    let presets: Vec<BuiltinTerminalThemePreset> = serde_json::from_str(BUILTIN_TERMINAL_THEME_PRESETS_JSON)
-        .map_err(|error| {
+    let presets: Vec<BuiltinTerminalThemePreset> =
+        serde_json::from_str(BUILTIN_TERMINAL_THEME_PRESETS_JSON).map_err(|error| {
             sqlx::Error::Protocol(
                 format!("failed to parse builtin terminal theme presets: {error}").into(),
             )
@@ -70,7 +70,8 @@ async fn ensure_builtin_terminal_theme_presets(pool: &SqlitePool) -> Result<(), 
     .fetch_all(pool)
     .await?;
 
-    let mut existing_names: HashSet<String> = existing_rows.into_iter().map(|(name,)| name).collect();
+    let mut existing_names: HashSet<String> =
+        existing_rows.into_iter().map(|(name,)| name).collect();
     let mut inserted_count = 0usize;
 
     for preset in presets {

@@ -1,6 +1,6 @@
 //! Audit, History, QuickCommand Tauri commands.
 
-use api_contract::error::AppError;
+use api_contract::error::{AppError, CmdResult};
 use audit_core::model::AuditLog;
 use audit_core::repository::AuditRepository;
 use history_core::model::*;
@@ -11,8 +11,6 @@ use serde::Deserialize;
 use tauri::State;
 
 use crate::state::AppState;
-
-type CmdResult<T> = Result<T, AppError>;
 
 // ── Audit ──
 
@@ -32,27 +30,19 @@ pub async fn audit_log_list(
         .audit_repo
         .list_logs(req.limit.unwrap_or(100), req.offset.unwrap_or(0))
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
 pub async fn audit_log_count(state: State<'_, AppState>) -> CmdResult<i64> {
     state.auth.require_auth().await?;
-    state
-        .audit_repo
-        .count_logs()
-        .await
-        .map_err(AppError::Database)
+    state.audit_repo.count_logs().await.map_err(AppError::from)
 }
 
 #[tauri::command]
 pub async fn audit_log_clear(state: State<'_, AppState>) -> CmdResult<()> {
     state.auth.require_auth().await?;
-    state
-        .audit_repo
-        .clear_logs()
-        .await
-        .map_err(AppError::Database)
+    state.audit_repo.clear_logs().await.map_err(AppError::from)
 }
 
 // ── Command History ──
@@ -67,7 +57,7 @@ pub async fn command_history_list(
         .history_repo
         .list_command_history(req.limit.unwrap_or(100), req.offset.unwrap_or(0))
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -77,7 +67,7 @@ pub async fn command_history_clear(state: State<'_, AppState>) -> CmdResult<()> 
         .history_repo
         .clear_command_history()
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -87,7 +77,7 @@ pub async fn command_history_delete(state: State<'_, AppState>, id: i64) -> CmdR
         .history_repo
         .delete_command_history_entry(id)
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 // ── Command History Add ──
@@ -109,7 +99,7 @@ pub async fn command_history_add(
         .history_repo
         .add_command(&req.command, req.session_id.as_deref(), req.connection_id)
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 // ── Path History ──
@@ -130,7 +120,7 @@ pub async fn path_history_list(
         .history_repo
         .list_path_history(req.connection_id, req.limit.unwrap_or(50))
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 #[derive(Deserialize)]
@@ -149,7 +139,7 @@ pub async fn path_history_add(
         .history_repo
         .add_path(&req.path, req.connection_id)
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -159,7 +149,7 @@ pub async fn path_history_clear(state: State<'_, AppState>) -> CmdResult<()> {
         .history_repo
         .clear_path_history()
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 // ── Favorite Paths ──
@@ -181,7 +171,7 @@ pub async fn favorite_path_list(
         .history_repo
         .list_favorite_paths(connection_id)
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -194,7 +184,7 @@ pub async fn favorite_path_create(
         .history_repo
         .create_favorite_path(&req.name, &req.path, req.connection_id)
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -204,7 +194,7 @@ pub async fn favorite_path_delete(state: State<'_, AppState>, id: i64) -> CmdRes
         .history_repo
         .delete_favorite_path(id)
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -214,7 +204,7 @@ pub async fn favorite_path_mark_used(state: State<'_, AppState>, id: i64) -> Cmd
         .history_repo
         .mark_favorite_path_used(id)
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 // ── Favorite Path Update ──
@@ -237,7 +227,7 @@ pub async fn favorite_path_update(
         .history_repo
         .update_favorite_path(req.id, &req.name, &req.path, req.connection_id)
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 // ── Quick Commands ──
@@ -245,7 +235,7 @@ pub async fn favorite_path_update(
 #[tauri::command]
 pub async fn quick_command_list(state: State<'_, AppState>) -> CmdResult<Vec<QuickCommand>> {
     state.auth.require_auth().await?;
-    state.qc_repo.list().await.map_err(AppError::Database)
+    state.qc_repo.list().await.map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -255,7 +245,7 @@ pub async fn quick_command_get(state: State<'_, AppState>, id: i64) -> CmdResult
         .qc_repo
         .get(id)
         .await
-        .map_err(AppError::Database)?
+        .map_err(AppError::from)?
         .ok_or(AppError::NotFound("quick command not found".into()))
 }
 
@@ -265,11 +255,7 @@ pub async fn quick_command_create(
     input: QuickCommandInput,
 ) -> CmdResult<i64> {
     state.auth.require_auth().await?;
-    state
-        .qc_repo
-        .create(&input)
-        .await
-        .map_err(AppError::Database)
+    state.qc_repo.create(&input).await.map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -283,13 +269,13 @@ pub async fn quick_command_update(
         .qc_repo
         .update(id, &input)
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
 pub async fn quick_command_delete(state: State<'_, AppState>, id: i64) -> CmdResult<bool> {
     state.auth.require_auth().await?;
-    state.qc_repo.delete(id).await.map_err(AppError::Database)
+    state.qc_repo.delete(id).await.map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -299,7 +285,7 @@ pub async fn quick_command_use(state: State<'_, AppState>, id: i64) -> CmdResult
         .qc_repo
         .increment_usage(id)
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 // ── Quick Command Tags ──
@@ -307,7 +293,7 @@ pub async fn quick_command_use(state: State<'_, AppState>, id: i64) -> CmdResult
 #[tauri::command]
 pub async fn quick_command_tag_list(state: State<'_, AppState>) -> CmdResult<Vec<QuickCommandTag>> {
     state.auth.require_auth().await?;
-    state.qc_repo.list_tags().await.map_err(AppError::Database)
+    state.qc_repo.list_tags().await.map_err(AppError::from)
 }
 
 #[derive(Deserialize)]
@@ -325,17 +311,13 @@ pub async fn quick_command_tag_create(
         .qc_repo
         .create_tag(&req.name)
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
 pub async fn quick_command_tag_delete(state: State<'_, AppState>, id: i64) -> CmdResult<bool> {
     state.auth.require_auth().await?;
-    state
-        .qc_repo
-        .delete_tag(id)
-        .await
-        .map_err(AppError::Database)
+    state.qc_repo.delete_tag(id).await.map_err(AppError::from)
 }
 
 #[derive(Deserialize)]
@@ -354,5 +336,5 @@ pub async fn quick_command_bulk_assign_tag(
         .qc_repo
         .bulk_assign_tag(req.tag_id, &req.quick_command_ids)
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }

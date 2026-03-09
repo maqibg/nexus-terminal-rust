@@ -3,10 +3,39 @@
 use async_trait::async_trait;
 use connection_core::model::*;
 use connection_core::repository::ConnectionRepository;
+use shared_utils::StorageError;
 use sqlx::SqlitePool;
 
 pub struct SqliteConnectionRepo {
     pool: SqlitePool,
+}
+
+async fn sync_connection_tags_tx(
+    conn: &mut sqlx::SqliteConnection,
+    conn_id: i64,
+    tags: &[String],
+) -> Result<(), StorageError> {
+    sqlx::query("DELETE FROM connection_tags WHERE connection_id = ?")
+        .bind(conn_id)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| StorageError(e.to_string()))?;
+    for tag_name in tags {
+        sqlx::query("INSERT OR IGNORE INTO tags (name) VALUES (?)")
+            .bind(tag_name)
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| StorageError(e.to_string()))?;
+        sqlx::query(
+            "INSERT INTO connection_tags (connection_id, tag_id) SELECT ?, id FROM tags WHERE name = ?",
+        )
+        .bind(conn_id)
+        .bind(tag_name)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| StorageError(e.to_string()))?;
+    }
+    Ok(())
 }
 
 impl SqliteConnectionRepo {
@@ -14,35 +43,13 @@ impl SqliteConnectionRepo {
         Self { pool }
     }
 
-    async fn get_tags_for_connection(&self, conn_id: i64) -> Result<Vec<String>, String> {
+    async fn get_tags_for_connection(&self, conn_id: i64) -> Result<Vec<String>, StorageError> {
         let rows: Vec<(String,)> = sqlx::query_as(
             "SELECT t.name FROM tags t JOIN connection_tags ct ON t.id = ct.tag_id WHERE ct.connection_id = ?",
         )
         .bind(conn_id)
-        .fetch_all(&self.pool).await.map_err(|e| e.to_string())?;
+        .fetch_all(&self.pool).await.map_err(|e| StorageError(e.to_string()))?;
         Ok(rows.into_iter().map(|(n,)| n).collect())
-    }
-
-    async fn sync_tags(&self, conn_id: i64, tags: &[String]) -> Result<(), String> {
-        sqlx::query("DELETE FROM connection_tags WHERE connection_id = ?")
-            .bind(conn_id)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| e.to_string())?;
-        for tag_name in tags {
-            // Upsert tag
-            sqlx::query("INSERT OR IGNORE INTO tags (name) VALUES (?)")
-                .bind(tag_name)
-                .execute(&self.pool)
-                .await
-                .map_err(|e| e.to_string())?;
-            sqlx::query(
-                "INSERT INTO connection_tags (connection_id, tag_id) SELECT ?, id FROM tags WHERE name = ?",
-            )
-            .bind(conn_id).bind(tag_name)
-            .execute(&self.pool).await.map_err(|e| e.to_string())?;
-        }
-        Ok(())
     }
 }
 
@@ -103,27 +110,46 @@ const CONN_COLS: &str = "id, name, type, host, port, username, auth_method, encr
 
 #[async_trait]
 impl ConnectionRepository for SqliteConnectionRepo {
-    async fn list_connections(&self) -> Result<Vec<Connection>, String> {
+    async fn list_connections(&self) -> Result<Vec<Connection>, StorageError> {
         let rows: Vec<ConnRow> = sqlx::query_as(&format!(
             "SELECT {CONN_COLS} FROM connections ORDER BY sort_order, id"
         ))
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| e.to_string())?;
-        let mut conns: Vec<Connection> = rows.into_iter().map(row_to_connection).collect();
-        for conn in &mut conns {
-            conn.tags = self.get_tags_for_connection(conn.id).await?;
+        .map_err(|e| StorageError(e.to_string()))?;
+
+        // 批量查询所有 connection→tag 关联，避免 N+1
+        let tag_rows: Vec<(i64, String)> = sqlx::query_as(
+            "SELECT ct.connection_id, t.name FROM connection_tags ct JOIN tags t ON t.id = ct.tag_id",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| StorageError(e.to_string()))?;
+
+        let mut tag_map: std::collections::HashMap<i64, Vec<String>> =
+            std::collections::HashMap::new();
+        for (conn_id, tag_name) in tag_rows {
+            tag_map.entry(conn_id).or_default().push(tag_name);
         }
+
+        let conns: Vec<Connection> = rows
+            .into_iter()
+            .map(|r| {
+                let mut conn = row_to_connection(r);
+                conn.tags = tag_map.remove(&conn.id).unwrap_or_default();
+                conn
+            })
+            .collect();
         Ok(conns)
     }
 
-    async fn get_connection(&self, id: i64) -> Result<Option<Connection>, String> {
+    async fn get_connection(&self, id: i64) -> Result<Option<Connection>, StorageError> {
         let row: Option<ConnRow> =
             sqlx::query_as(&format!("SELECT {CONN_COLS} FROM connections WHERE id = ?"))
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| StorageError(e.to_string()))?;
         match row {
             None => Ok(None),
             Some(r) => {
@@ -138,7 +164,12 @@ impl ConnectionRepository for SqliteConnectionRepo {
         &self,
         input: &ConnectionInput,
         encrypted_password: Option<&str>,
-    ) -> Result<i64, String> {
+    ) -> Result<i64, StorageError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| StorageError(e.to_string()))?;
         let result = sqlx::query(
             "INSERT INTO connections (name, type, host, port, username, auth_method, encrypted_password, ssh_key_id, proxy_id, jump_chain, notes, rdp_options, vnc_options, provider, region, expiry_date, billing_cycle, billing_amount, billing_currency, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         )
@@ -147,7 +178,7 @@ impl ConnectionRepository for SqliteConnectionRepo {
         .bind(&input.host)
         .bind(input.port.unwrap_or(22))
         .bind(input.username.as_deref().unwrap_or("root"))
-        .bind(input.auth_method.as_deref().unwrap_or("password"))
+        .bind(input.auth_method_enum_or_default().as_str())
         .bind(encrypted_password)
         .bind(input.ssh_key_id).bind(input.proxy_id)
         .bind(&input.jump_chain).bind(&input.notes)
@@ -155,11 +186,12 @@ impl ConnectionRepository for SqliteConnectionRepo {
         .bind(&input.provider).bind(&input.region).bind(&input.expiry_date)
         .bind(&input.billing_cycle).bind(input.billing_amount).bind(&input.billing_currency)
         .bind(input.sort_order.unwrap_or(0))
-        .execute(&self.pool).await.map_err(|e| e.to_string())?;
+        .execute(&mut *tx).await.map_err(|e| StorageError(e.to_string()))?;
         let id = result.last_insert_rowid();
         if let Some(tags) = &input.tags {
-            self.sync_tags(id, tags).await?;
+            sync_connection_tags_tx(tx.as_mut(), id, tags).await?;
         }
+        tx.commit().await.map_err(|e| StorageError(e.to_string()))?;
         Ok(id)
     }
 
@@ -168,7 +200,12 @@ impl ConnectionRepository for SqliteConnectionRepo {
         id: i64,
         input: &ConnectionInput,
         encrypted_password: Option<&str>,
-    ) -> Result<bool, String> {
+    ) -> Result<bool, StorageError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| StorageError(e.to_string()))?;
         let result = sqlx::query(
             "UPDATE connections SET name=?, type=?, host=?, port=?, username=?, auth_method=?, encrypted_password=COALESCE(?,encrypted_password), ssh_key_id=?, proxy_id=?, jump_chain=?, notes=?, rdp_options=?, vnc_options=?, provider=?, region=?, expiry_date=?, billing_cycle=?, billing_amount=?, billing_currency=?, sort_order=?, updated_at=datetime('now') WHERE id=?",
         )
@@ -177,7 +214,7 @@ impl ConnectionRepository for SqliteConnectionRepo {
         .bind(&input.host)
         .bind(input.port.unwrap_or(22))
         .bind(input.username.as_deref().unwrap_or("root"))
-        .bind(input.auth_method.as_deref().unwrap_or("password"))
+        .bind(input.auth_method_enum_or_default().as_str())
         .bind(encrypted_password)
         .bind(input.ssh_key_id).bind(input.proxy_id)
         .bind(&input.jump_chain).bind(&input.notes)
@@ -186,35 +223,36 @@ impl ConnectionRepository for SqliteConnectionRepo {
         .bind(&input.billing_cycle).bind(input.billing_amount).bind(&input.billing_currency)
         .bind(input.sort_order.unwrap_or(0))
         .bind(id)
-        .execute(&self.pool).await.map_err(|e| e.to_string())?;
+        .execute(&mut *tx).await.map_err(|e| StorageError(e.to_string()))?;
         if let Some(tags) = &input.tags {
-            self.sync_tags(id, tags).await?;
+            sync_connection_tags_tx(tx.as_mut(), id, tags).await?;
         }
+        tx.commit().await.map_err(|e| StorageError(e.to_string()))?;
         Ok(result.rows_affected() > 0)
     }
 
-    async fn delete_connection(&self, id: i64) -> Result<bool, String> {
+    async fn delete_connection(&self, id: i64) -> Result<bool, StorageError> {
         let result = sqlx::query("DELETE FROM connections WHERE id = ?")
             .bind(id)
             .execute(&self.pool)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| StorageError(e.to_string()))?;
         Ok(result.rows_affected() > 0)
     }
 
-    async fn reorder_connections(&self, ids: &[i64]) -> Result<(), String> {
+    async fn reorder_connections(&self, ids: &[i64]) -> Result<(), StorageError> {
         for (i, id) in ids.iter().enumerate() {
             sqlx::query("UPDATE connections SET sort_order = ? WHERE id = ?")
                 .bind(i as i32)
                 .bind(id)
                 .execute(&self.pool)
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| StorageError(e.to_string()))?;
         }
         Ok(())
     }
 
-    async fn list_tags(&self) -> Result<Vec<Tag>, String> {
+    async fn list_tags(&self) -> Result<Vec<Tag>, StorageError> {
         sqlx::query_as::<_, (i64, String)>("SELECT id, name FROM tags ORDER BY name")
             .fetch_all(&self.pool)
             .await
@@ -223,28 +261,28 @@ impl ConnectionRepository for SqliteConnectionRepo {
                     .map(|(id, name)| Tag { id, name })
                     .collect()
             })
-            .map_err(|e| e.to_string())
+            .map_err(|e| StorageError(e.to_string()))
     }
 
-    async fn create_tag(&self, name: &str) -> Result<i64, String> {
+    async fn create_tag(&self, name: &str) -> Result<i64, StorageError> {
         let result = sqlx::query("INSERT INTO tags (name) VALUES (?)")
             .bind(name)
             .execute(&self.pool)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| StorageError(e.to_string()))?;
         Ok(result.last_insert_rowid())
     }
 
-    async fn delete_tag(&self, id: i64) -> Result<bool, String> {
+    async fn delete_tag(&self, id: i64) -> Result<bool, StorageError> {
         let result = sqlx::query("DELETE FROM tags WHERE id = ?")
             .bind(id)
             .execute(&self.pool)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| StorageError(e.to_string()))?;
         Ok(result.rows_affected() > 0)
     }
 
-    async fn list_ssh_keys(&self) -> Result<Vec<SshKey>, String> {
+    async fn list_ssh_keys(&self) -> Result<Vec<SshKey>, StorageError> {
         sqlx::query_as::<_, (i64, String, String, Option<String>)>(
             "SELECT id, name, encrypted_private_key, encrypted_passphrase FROM ssh_keys ORDER BY id",
         )
@@ -252,10 +290,10 @@ impl ConnectionRepository for SqliteConnectionRepo {
         .map(|rows| rows.into_iter().map(|(id, name, encrypted_private_key, encrypted_passphrase)| SshKey {
             id, name, encrypted_private_key, encrypted_passphrase,
         }).collect())
-        .map_err(|e| e.to_string())
+        .map_err(|e| StorageError(e.to_string()))
     }
 
-    async fn get_ssh_key(&self, id: i64) -> Result<Option<SshKey>, String> {
+    async fn get_ssh_key(&self, id: i64) -> Result<Option<SshKey>, StorageError> {
         sqlx::query_as::<_, (i64, String, String, Option<String>)>(
             "SELECT id, name, encrypted_private_key, encrypted_passphrase FROM ssh_keys WHERE id = ?",
         )
@@ -263,7 +301,7 @@ impl ConnectionRepository for SqliteConnectionRepo {
         .map(|r| r.map(|(id, name, encrypted_private_key, encrypted_passphrase)| SshKey {
             id, name, encrypted_private_key, encrypted_passphrase,
         }))
-        .map_err(|e| e.to_string())
+        .map_err(|e| StorageError(e.to_string()))
     }
 
     async fn create_ssh_key(
@@ -271,10 +309,10 @@ impl ConnectionRepository for SqliteConnectionRepo {
         name: &str,
         encrypted_private_key: &str,
         encrypted_passphrase: Option<&str>,
-    ) -> Result<i64, String> {
+    ) -> Result<i64, StorageError> {
         let result = sqlx::query("INSERT INTO ssh_keys (name, encrypted_private_key, encrypted_passphrase) VALUES (?,?,?)")
             .bind(name).bind(encrypted_private_key).bind(encrypted_passphrase)
-            .execute(&self.pool).await.map_err(|e| e.to_string())?;
+            .execute(&self.pool).await.map_err(|e| StorageError(e.to_string()))?;
         Ok(result.last_insert_rowid())
     }
 
@@ -284,25 +322,25 @@ impl ConnectionRepository for SqliteConnectionRepo {
         name: &str,
         encrypted_private_key: Option<&str>,
         encrypted_passphrase: Option<&str>,
-    ) -> Result<bool, String> {
+    ) -> Result<bool, StorageError> {
         let result = sqlx::query(
             "UPDATE ssh_keys SET name=?, encrypted_private_key=COALESCE(?,encrypted_private_key), encrypted_passphrase=COALESCE(?,encrypted_passphrase), updated_at=datetime('now') WHERE id=?",
         )
         .bind(name).bind(encrypted_private_key).bind(encrypted_passphrase).bind(id)
-        .execute(&self.pool).await.map_err(|e| e.to_string())?;
+        .execute(&self.pool).await.map_err(|e| StorageError(e.to_string()))?;
         Ok(result.rows_affected() > 0)
     }
 
-    async fn delete_ssh_key(&self, id: i64) -> Result<bool, String> {
+    async fn delete_ssh_key(&self, id: i64) -> Result<bool, StorageError> {
         let result = sqlx::query("DELETE FROM ssh_keys WHERE id = ?")
             .bind(id)
             .execute(&self.pool)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| StorageError(e.to_string()))?;
         Ok(result.rows_affected() > 0)
     }
 
-    async fn list_proxies(&self) -> Result<Vec<Proxy>, String> {
+    async fn list_proxies(&self) -> Result<Vec<Proxy>, StorageError> {
         sqlx::query_as::<_, (i64, String, String, String, i32, Option<String>, String, Option<String>, Option<String>)>(
             "SELECT id, name, type, host, port, username, auth_method, encrypted_password, encrypted_private_key FROM proxies ORDER BY id",
         )
@@ -310,10 +348,10 @@ impl ConnectionRepository for SqliteConnectionRepo {
         .map(|rows| rows.into_iter().map(|(id, name, proxy_type, host, port, username, auth_method, encrypted_password, encrypted_private_key)| Proxy {
             id, name, proxy_type, host, port, username, auth_method, encrypted_password, encrypted_private_key,
         }).collect())
-        .map_err(|e| e.to_string())
+        .map_err(|e| StorageError(e.to_string()))
     }
 
-    async fn get_proxy(&self, id: i64) -> Result<Option<Proxy>, String> {
+    async fn get_proxy(&self, id: i64) -> Result<Option<Proxy>, StorageError> {
         sqlx::query_as::<_, (i64, String, String, String, i32, Option<String>, String, Option<String>, Option<String>)>(
             "SELECT id, name, type, host, port, username, auth_method, encrypted_password, encrypted_private_key FROM proxies WHERE id = ?",
         )
@@ -321,36 +359,36 @@ impl ConnectionRepository for SqliteConnectionRepo {
         .map(|r| r.map(|(id, name, proxy_type, host, port, username, auth_method, encrypted_password, encrypted_private_key)| Proxy {
             id, name, proxy_type, host, port, username, auth_method, encrypted_password, encrypted_private_key,
         }))
-        .map_err(|e| e.to_string())
+        .map_err(|e| StorageError(e.to_string()))
     }
 
-    async fn create_proxy(&self, p: &Proxy) -> Result<i64, String> {
+    async fn create_proxy(&self, p: &Proxy) -> Result<i64, StorageError> {
         let result = sqlx::query(
             "INSERT INTO proxies (name, type, host, port, username, auth_method, encrypted_password, encrypted_private_key) VALUES (?,?,?,?,?,?,?,?)",
         )
         .bind(&p.name).bind(&p.proxy_type).bind(&p.host).bind(p.port)
         .bind(&p.username).bind(&p.auth_method).bind(&p.encrypted_password).bind(&p.encrypted_private_key)
-        .execute(&self.pool).await.map_err(|e| e.to_string())?;
+        .execute(&self.pool).await.map_err(|e| StorageError(e.to_string()))?;
         Ok(result.last_insert_rowid())
     }
 
-    async fn update_proxy(&self, p: &Proxy) -> Result<bool, String> {
+    async fn update_proxy(&self, p: &Proxy) -> Result<bool, StorageError> {
         let result = sqlx::query(
             "UPDATE proxies SET name=?, type=?, host=?, port=?, username=?, auth_method=?, encrypted_password=?, encrypted_private_key=?, updated_at=datetime('now') WHERE id=?",
         )
         .bind(&p.name).bind(&p.proxy_type).bind(&p.host).bind(p.port)
         .bind(&p.username).bind(&p.auth_method).bind(&p.encrypted_password).bind(&p.encrypted_private_key)
         .bind(p.id)
-        .execute(&self.pool).await.map_err(|e| e.to_string())?;
+        .execute(&self.pool).await.map_err(|e| StorageError(e.to_string()))?;
         Ok(result.rows_affected() > 0)
     }
 
-    async fn delete_proxy(&self, id: i64) -> Result<bool, String> {
+    async fn delete_proxy(&self, id: i64) -> Result<bool, StorageError> {
         let result = sqlx::query("DELETE FROM proxies WHERE id = ?")
             .bind(id)
             .execute(&self.pool)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| StorageError(e.to_string()))?;
         Ok(result.rows_affected() > 0)
     }
 }

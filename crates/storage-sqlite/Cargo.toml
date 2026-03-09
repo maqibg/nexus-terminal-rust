@@ -21,5 +21,9 @@ history-core = { path = "../history-core" }
 notifications-core = { path = "../notifications-core" }
 audit-core = { path = "../audit-core" }
 transfer-core = { path = "../transfer-core" }
+ssh-core = { path = "../ssh-core" }
 ssh-suspend-core = { path = "../ssh-suspend-core" }
 shared-utils = { path = "../shared-utils" }
+
+[dev-dependencies]
+tokio = { workspace = true }

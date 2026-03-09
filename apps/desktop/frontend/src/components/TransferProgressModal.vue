@@ -14,10 +14,15 @@
           </div>
           <div class="transfer-meta">
             <span>{{ t.percent }}%</span>
-            <button v-if="t.status === 'active'" class="btn-cancel" @click="$emit('cancel', t.id)">取消</button>
+            <button v-if="t.status === 'active' || t.status === 'paused'" class="btn-cancel" @click="$emit('cancel', t.id)">取消</button>
           </div>
         </div>
         <div class="transfer-actions">
+          <button class="btn" :disabled="!hasRunningTasks" @click="handlePauseToggle">
+            {{ allPaused ? '全部继续' : '全部暂停' }}
+          </button>
+          <button class="btn btn-danger" :disabled="!hasActiveTasks" @click="$emit('cancel-all')">全部取消</button>
+          <button class="btn" :disabled="!hasCompletedTasks" @click="$emit('clear-completed')">清空已完成</button>
           <button class="btn" @click="$emit('close')">关闭</button>
         </div>
       </div>
@@ -26,22 +31,46 @@
 </template>
 
 <script setup lang="ts">
-export interface TransferTask {
-  id: string;
-  kind: 'upload' | 'download';
-  fileName: string;
-  totalBytes: number;
-  transferredBytes: number;
-  percent: number;
-  status: 'active' | 'completed' | 'failed' | 'cancelled';
-}
+import { computed } from 'vue';
+import type { TransferTask } from '@/lib/api';
 
-defineProps<{ visible: boolean; tasks: TransferTask[] }>();
-defineEmits<{ close: []; cancel: [id: string] }>();
+const props = defineProps<{ visible: boolean; tasks: TransferTask[] }>();
+const emit = defineEmits<{
+  close: [];
+  cancel: [id: string];
+  'pause-all': [];
+  'resume-all': [];
+  'cancel-all': [];
+  'clear-completed': [];
+}>();
 
 const statusLabel: Record<string, string> = {
-  active: '传输中', completed: '完成', failed: '失败', cancelled: '已取消',
+  active: '传输中', paused: '已暂停', completed: '完成', failed: '失败', cancelled: '已取消',
 };
+
+const hasCompletedTasks = computed(() =>
+  props.tasks.some((task) => task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled'),
+);
+
+const hasActiveTasks = computed(() =>
+  props.tasks.some((task) => task.status === 'active' || task.status === 'paused'),
+);
+
+const hasRunningTasks = computed(() =>
+  props.tasks.some((task) => task.status === 'active' || task.status === 'paused'),
+);
+
+const allPaused = computed(() =>
+  hasRunningTasks.value && props.tasks.every((task) => task.status !== 'active'),
+);
+
+function handlePauseToggle(): void {
+  if (allPaused.value) {
+    emit('resume-all');
+    return;
+  }
+  emit('pause-all');
+}
 </script>
 
 <style scoped>
@@ -54,12 +83,15 @@ const statusLabel: Record<string, string> = {
 .file-name { font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .transfer-status { font-size: 11px; }
 .transfer-status.active { color: var(--blue); }
+.transfer-status.paused { color: var(--yellow); }
 .transfer-status.completed { color: var(--green); }
 .transfer-status.failed { color: var(--red); }
 .progress-bar { height: 3px; background: var(--bg-surface1); border-radius: 2px; overflow: hidden; }
 .progress-fill { height: 100%; background: var(--blue); transition: width 0.2s; }
 .transfer-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: 11px; color: var(--text-dim); }
 .btn-cancel { background: none; border: none; color: var(--red); cursor: pointer; font-size: 11px; }
-.transfer-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+.transfer-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .btn { padding: 6px 16px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-surface1); color: var(--text); cursor: pointer; font-size: 13px; }
+.btn-danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 45%, var(--border)); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
 </style>

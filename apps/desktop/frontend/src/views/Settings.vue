@@ -256,25 +256,6 @@
               </form>
             </div>
 
-            <hr class="section-divider">
-
-            <div class="settings-section-content">
-              <h3 class="section-heading">Docker 管理器设置</h3>
-              <form class="section-form" @submit.prevent="saveDockerSettings">
-                <div class="form-field">
-                  <label class="form-label" for="workspace-docker-interval">状态刷新间隔 (秒):</label>
-                  <input id="workspace-docker-interval" v-model.number="workspaceForm.dockerStatusIntervalSeconds" class="form-control" type="number" min="1" step="1">
-                </div>
-                <div class="checkbox-row">
-                  <input id="workspace-docker-expand" v-model="workspaceForm.dockerDefaultExpand" class="checkbox-input" type="checkbox">
-                  <label for="workspace-docker-expand">默认展开容器详情</label>
-                </div>
-                <div class="form-actions">
-                  <button type="submit" class="btn btn-primary">保存</button>
-                  <p v-if="feedback.docker?.message" :class="['feedback-msg', feedback.docker.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.docker.message }}</p>
-                </div>
-              </form>
-            </div>
           </div>
         </section>
         <section v-if="activeTab === 'ai'" class="settings-card">
@@ -337,11 +318,58 @@
         <section v-if="activeTab === 'dataManagement'" class="settings-card">
           <h2 class="card-title">数据管理</h2>
           <div class="card-body">
+            <!-- 完整备份导出 -->
             <div class="settings-section-content">
-              <h3 class="section-heading">导出连接数据</h3>
+              <h3 class="section-heading">完整备份导出</h3>
+              <p class="section-desc">导出全部数据（连接、SSH 密钥名称存根、代理、快捷命令、收藏路径、终端主题、设置及通知渠道）。加密密钥材料不会被包含在内。</p>
+              <div class="form-actions">
+                <button type="button" class="btn btn-primary" :disabled="appExportLoading" @click="appExport">
+                  {{ appExportLoading ? '导出中...' : '导出完整备份' }}
+                </button>
+                <p v-if="appExportMessage" :class="['feedback-msg', appExportSuccess ? 'feedback-ok' : 'feedback-error']">{{ appExportMessage }}</p>
+              </div>
+            </div>
+
+            <hr class="section-divider">
+
+            <!-- 完整备份导入 -->
+            <div class="settings-section-content">
+              <h3 class="section-heading">完整备份导入</h3>
+              <p class="section-desc">从备份文件恢复数据。导入在单个数据库事务中执行，失败时自动回滚。SSH 私钥不包含在备份中，导入后需重新录入。</p>
+              <input
+                ref="appImportFileInput"
+                type="file"
+                accept=".json"
+                style="display: none"
+                @change="appImport"
+              >
+              <div class="form-actions">
+                <button type="button" class="btn btn-primary" :disabled="appImportLoading" @click="triggerAppImport">
+                  {{ appImportLoading ? '导入中...' : '选择备份文件' }}
+                </button>
+                <p v-if="appImportMessage" :class="['feedback-msg', appImportSuccess ? 'feedback-ok' : 'feedback-error']">{{ appImportMessage }}</p>
+              </div>
+              <div v-if="appImportResult" class="import-result-grid">
+                <div class="import-result-item"><span class="label">连接</span><span class="value">{{ appImportResult.connections }}</span></div>
+                <div class="import-result-item"><span class="label">代理</span><span class="value">{{ appImportResult.proxies }}</span></div>
+                <div class="import-result-item"><span class="label">SSH 密钥</span><span class="value">{{ appImportResult.ssh_keys }}</span></div>
+                <div class="import-result-item"><span class="label">快捷命令</span><span class="value">{{ appImportResult.quick_commands }}</span></div>
+                <div class="import-result-item"><span class="label">收藏路径</span><span class="value">{{ appImportResult.favorite_paths }}</span></div>
+                <div class="import-result-item"><span class="label">终端主题</span><span class="value">{{ appImportResult.terminal_themes }}</span></div>
+                <div class="import-result-item"><span class="label">设置项</span><span class="value">{{ appImportResult.settings }}</span></div>
+                <div class="import-result-item"><span class="label">通知渠道</span><span class="value">{{ appImportResult.notification_channels }}</span></div>
+              </div>
+            </div>
+
+            <hr class="section-divider">
+
+            <!-- 旧版：仅导出连接数据 -->
+            <div class="settings-section-content">
+              <h3 class="section-heading">仅导出连接数据（旧版）</h3>
+              <p class="section-desc">仅导出连接列表（不含密码），用于与旧版本兼容或跨设备迁移连接配置。</p>
               <form class="section-form" @submit.prevent="exportConnections">
                 <div class="form-actions">
-                  <button type="submit" class="btn btn-primary" :disabled="exportConnectionsLoading">{{ exportConnectionsLoading ? '导出中...' : '开始导出' }}</button>
+                  <button type="submit" class="btn btn-muted" :disabled="exportConnectionsLoading">{{ exportConnectionsLoading ? '导出中...' : '导出连接' }}</button>
                   <p v-if="exportConnectionsMessage" :class="['feedback-msg', exportConnectionsSuccess ? 'feedback-ok' : 'feedback-error']">{{ exportConnectionsMessage }}</p>
                 </div>
               </form>
@@ -382,11 +410,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import AppSelect from '@/components/AppSelect.vue';
 import AISettingsPanel from '@/components/AI/AISettingsPanel.vue';
 import { authApi, connectionsApi } from '@/lib/api';
+import type { ImportResult } from '@/lib/api';
 import { useUiNotificationsStore } from '@/stores/uiNotifications';
 import { useAppearanceStore } from '@/stores/appearance';
 import { useSettingsStore } from '@/stores/settings';
@@ -396,42 +425,37 @@ type AppVersionHost = {
 };
 
 type TabKey = 'workspace' | 'ai' | 'system' | 'security' | 'dataManagement' | 'appearance' | 'about';
+const SETTINGS_TAB_STORAGE_KEY = 'settings_active_tab';
+const RELEASES_BASE_URL = 'https://github.com/maqibg/nexus-terminal-rust/releases';
+const LATEST_RELEASE_API_URL = 'https://api.github.com/repos/maqibg/nexus-terminal-rust/releases/latest';
 
+const tabs = computed<Array<{ key: TabKey; label: string }>>(() => [
+  { key: 'workspace', label: '工作区' },
+  { key: 'ai', label: 'AI 助手' },
+  { key: 'system', label: '系统' },
+  { key: 'security', label: '安全' },
+  { key: 'dataManagement', label: '数据管理' },
+  { key: 'appearance', label: '外观' },
+  { key: 'about', label: '关于' },
+]);
 
-const tabs = computed<Array<{ key: TabKey; label: string }>>(() => {
-  if (locale.value === 'zh-CN') {
-    return [
-      { key: 'workspace', label: '工作区' },
-      { key: 'ai', label: 'AI 助手' },
-      { key: 'system', label: '系统' },
-      { key: 'security', label: '安全' },
-      { key: 'dataManagement', label: '数据管理' },
-      { key: 'appearance', label: '外观' },
-      { key: 'about', label: '关于' },
-    ];
+function getInitialActiveTab(): TabKey {
+  const raw = localStorage.getItem(SETTINGS_TAB_STORAGE_KEY);
+  if (raw && tabs.value.some((tab) => tab.key === raw)) {
+    return raw as TabKey;
   }
+  return 'workspace';
+}
 
-  if (locale.value === 'ja-JP') {
-    return [
-      { key: 'workspace', label: 'ワークスペース' },
-      { key: 'ai', label: 'AI アシスタント' },
-      { key: 'system', label: 'システム' },
-      { key: 'security', label: 'セキュリティ' },
-      { key: 'dataManagement', label: 'データ管理' },
-      { key: 'appearance', label: '外観' },
-      { key: 'about', label: '情報' },
-    ];
-  }
+const notifications = useUiNotificationsStore();
+const appearanceStore = useAppearanceStore();
+const settingsStore = useSettingsStore();
+const { settings: runtimeSettings } = storeToRefs(settingsStore);
 
-  return [
-    { key: 'workspace', label: 'Workspace' },
-    { key: 'ai', label: 'AI Assistant' },
-    { key: 'system', label: 'System' },
-    { key: 'security', label: 'Security' },
-    { key: 'dataManagement', label: 'Data' },
-    { key: 'appearance', label: 'Appearance' },
-    { key: 'about', label: 'About' },
-  ];
+const activeTab = ref<TabKey>(getInitialActiveTab());
+
+watch(activeTab, (value) => {
+  localStorage.setItem(SETTINGS_TAB_STORAGE_KEY, value);
 });
 
 const commonTimezones = [
@@ -447,16 +471,6 @@ const commonTimezones = [
 
 const timezoneOptions = computed(() => commonTimezones.map(timezone => ({ value: timezone, label: timezone })));
 
-const notifications = useUiNotificationsStore();
-const appearanceStore = useAppearanceStore();
-const settingsStore = useSettingsStore();
-const { locale, settings: runtimeSettings } = storeToRefs(settingsStore);
-
-const activeTab = ref<TabKey>('workspace');
-const loadingSettings = ref(false);
-const settingsError = ref('');
-const settingsMap = ref<Record<string, string>>({});
-
 const feedback = reactive<Record<string, { message: string; success: boolean }>>({});
 
 const commandSyncTargetOptions = [
@@ -467,6 +481,9 @@ const commandSyncTargetOptions = [
 
 const commandSyncMenuOpen = ref(false);
 const commandSyncSelectRef = ref<HTMLElement | null>(null);
+const loadingSettings = ref(false);
+const settingsError = ref('');
+const settingsMap = ref<Record<string, string>>({});
 
 const commandSyncTargetLabel = computed(() => {
   const item = commandSyncTargetOptions.find((option) => option.value === workspaceForm.commandInputSyncTarget);
@@ -513,8 +530,6 @@ const workspaceForm = reactive({
   terminalEnableRightClickPaste: true,
   showStatusMonitorIpAddress: false,
   statusMonitorIntervalSeconds: 3,
-  dockerStatusIntervalSeconds: 2,
-  dockerDefaultExpand: false,
 });
 
 const systemForm = reactive({
@@ -531,6 +546,16 @@ const passwordLoading = ref(false);
 const exportConnectionsLoading = ref(false);
 const exportConnectionsMessage = ref('');
 const exportConnectionsSuccess = ref(false);
+
+// Full backup
+const appExportLoading = ref(false);
+const appExportMessage = ref('');
+const appExportSuccess = ref(false);
+const appImportLoading = ref(false);
+const appImportMessage = ref('');
+const appImportSuccess = ref(false);
+const appImportResult = ref<ImportResult | null>(null);
+const appImportFileInput = ref<HTMLInputElement | null>(null);
 
 const appVersion = (() => {
   const maybeVersion = (globalThis as AppVersionHost).__APP_VERSION__;
@@ -552,9 +577,9 @@ const isUpdateAvailable = computed(() => {
 
 const latestReleaseUrl = computed(() => {
   if (!latestVersion.value) {
-    return 'https://github.com/Heavrnl/nexus-terminal/releases';
+    return RELEASES_BASE_URL;
   }
-  return `https://github.com/Heavrnl/nexus-terminal/releases/tag/${latestVersion.value}`;
+  return `${RELEASES_BASE_URL}/tag/${latestVersion.value}`;
 });
 
 
@@ -617,8 +642,6 @@ function hydrateFormsFromSettings() {
   workspaceForm.terminalEnableRightClickPaste = toBool(map.terminalEnableRightClickPaste, true);
   workspaceForm.showStatusMonitorIpAddress = toBool(map.showStatusMonitorIpAddress, false);
   workspaceForm.statusMonitorIntervalSeconds = toInt(map.statusMonitorIntervalSeconds, 3);
-  workspaceForm.dockerStatusIntervalSeconds = toInt(map.dockerStatusIntervalSeconds, 2);
-  workspaceForm.dockerDefaultExpand = toBool(map.dockerDefaultExpand, false);
 
   systemForm.timezone = map.timezone || 'Asia/Shanghai';
   settingsStore.setRuntimeLocale('zh-CN');
@@ -708,23 +731,6 @@ async function saveStatusMonitorInterval() {
   );
 }
 
-async function saveDockerSettings() {
-  try {
-    if (!Number.isInteger(workspaceForm.dockerStatusIntervalSeconds) || workspaceForm.dockerStatusIntervalSeconds < 1) {
-      throw new Error('刷新间隔必须为不小于 1 的整数');
-    }
-
-    await saveSettingsBatch([
-      ['dockerStatusIntervalSeconds', String(workspaceForm.dockerStatusIntervalSeconds)],
-      ['dockerDefaultExpand', workspaceForm.dockerDefaultExpand ? 'true' : 'false'],
-    ]);
-
-    setFeedback('docker', 'Docker 设置已保存', true);
-  } catch (error) {
-    setFeedback('docker', normalizeError(error, '保存失败'), false);
-  }
-}
-
 
 async function saveSystemTimezone() {
   try {
@@ -790,6 +796,61 @@ async function exportConnections() {
   }
 }
 
+function triggerAppImport() {
+  appImportFileInput.value?.click();
+}
+
+async function appExport() {
+  appExportLoading.value = true;
+  appExportMessage.value = '';
+  appExportSuccess.value = false;
+  try {
+    const payload = await connectionsApi.appExport();
+    const blob = new Blob([payload], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `nexus_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    appExportMessage.value = '完整备份导出成功，文件已开始下载。';
+    appExportSuccess.value = true;
+    notifications.addNotification({ type: 'success', message: '完整备份导出成功' });
+  } catch (error) {
+    appExportMessage.value = normalizeError(error, '导出失败');
+    appExportSuccess.value = false;
+    notifications.addNotification({ type: 'error', message: appExportMessage.value });
+  } finally {
+    appExportLoading.value = false;
+  }
+}
+
+async function appImport(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  // Reset so same file can be re-selected next time
+  input.value = '';
+  appImportLoading.value = true;
+  appImportMessage.value = '';
+  appImportSuccess.value = false;
+  appImportResult.value = null;
+  try {
+    const json = await file.text();
+    const result = await connectionsApi.appImport(json);
+    appImportResult.value = result;
+    appImportMessage.value = '导入成功。';
+    appImportSuccess.value = true;
+    notifications.addNotification({ type: 'success', message: '完整备份导入成功' });
+  } catch (error) {
+    appImportMessage.value = normalizeError(error, '导入失败');
+    appImportSuccess.value = false;
+    notifications.addNotification({ type: 'error', message: appImportMessage.value });
+  } finally {
+    appImportLoading.value = false;
+  }
+}
+
 function normalizeVersion(version: string): string {
   return version.replace(/^v/i, '').trim();
 }
@@ -827,7 +888,7 @@ async function checkLatestVersion() {
   versionCheckError.value = '';
 
   try {
-    const response = await fetch('https://api.github.com/repos/Heavrnl/nexus-terminal/releases/latest', {
+    const response = await fetch(LATEST_RELEASE_API_URL, {
       headers: {
         Accept: 'application/vnd.github+json',
       },
@@ -1378,6 +1439,36 @@ onUnmounted(() => {
   .form-grid-two {
     grid-template-columns: 1fr;
   }
+}
+
+.import-result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.import-result-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface1);
+  font-size: 13px;
+}
+
+.import-result-item .label {
+  color: var(--text-sub);
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.import-result-item .value {
+  color: var(--text-main);
+  font-weight: 600;
+  font-size: 18px;
 }
 </style>
 

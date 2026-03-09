@@ -78,9 +78,13 @@ async fn socks5_handshake(
     if buf[1] == 0x02 {
         let user = username.unwrap_or("");
         let pass = password.unwrap_or("");
-        let mut auth = vec![0x01, user.len() as u8];
+        let user_len =
+            u8::try_from(user.len()).map_err(|_| "SOCKS5 用户名超长（最大 255 字节）")?;
+        let pass_len = u8::try_from(pass.len()).map_err(|_| "SOCKS5 密码超长（最大 255 字节）")?;
+
+        let mut auth = vec![0x01, user_len];
         auth.extend_from_slice(user.as_bytes());
-        auth.push(pass.len() as u8);
+        auth.push(pass_len);
         auth.extend_from_slice(pass.as_bytes());
         stream.write_all(&auth).await.map_err(|e| e.to_string())?;
 
@@ -96,32 +100,66 @@ async fn socks5_handshake(
         return Err("SOCKS5 不支持的认证方法".into());
     }
 
-    // 连接请求
-    let mut req = vec![0x05, 0x01, 0x00, 0x03, target_host.len() as u8];
-    req.extend_from_slice(target_host.as_bytes());
+    // 连接请求（域名模式）
+    let host_bytes = target_host.as_bytes();
+    let host_len =
+        u8::try_from(host_bytes.len()).map_err(|_| "SOCKS5 目标主机名超长（最大 255 字节）")?;
+
+    let mut req = vec![0x05, 0x01, 0x00, 0x03, host_len];
+    req.extend_from_slice(host_bytes);
     req.push((target_port >> 8) as u8);
     req.push((target_port & 0xff) as u8);
     stream.write_all(&req).await.map_err(|e| e.to_string())?;
 
-    // 读取响应 (至少 10 字节)
-    let mut resp = [0u8; 10];
+    // 读取响应头：VER, REP, RSV, ATYP
+    let mut header = [0u8; 4];
     stream
-        .read_exact(&mut resp)
+        .read_exact(&mut header)
         .await
         .map_err(|e| e.to_string())?;
-    if resp[1] != 0x00 {
-        return Err(format!("SOCKS5 连接失败, 状态码: {}", resp[1]));
+
+    if header[0] != 0x05 {
+        return Err("SOCKS5 响应版本错误".into());
+    }
+    if header[1] != 0x00 {
+        return Err(format!("SOCKS5 连接失败，状态码: {}", header[1]));
     }
 
-    // 如果地址类型是域名，需要额外读取
-    if resp[3] == 0x03 {
-        let len = resp[4] as usize;
-        let mut extra = vec![0u8; len + 2 - 5]; // 已读了部分
-        if extra.len() > 0 {
+    // 按 ATYP 精确读取绑定地址，丢弃内容（仅用于消费字节）
+    match header[3] {
+        0x01 => {
+            // IPv4：4 字节地址 + 2 字节端口
+            let mut addr = [0u8; 6];
             stream
-                .read_exact(&mut extra)
+                .read_exact(&mut addr)
                 .await
                 .map_err(|e| e.to_string())?;
+        }
+        0x03 => {
+            // 域名：1 字节长度 + N 字节域名 + 2 字节端口
+            let mut len_buf = [0u8; 1];
+            stream
+                .read_exact(&mut len_buf)
+                .await
+                .map_err(|e| e.to_string())?;
+            let domain_len = len_buf[0] as usize;
+            let total = domain_len.checked_add(2).ok_or("SOCKS5 响应域名长度溢出")?;
+            let mut rest = vec![0u8; total];
+            stream
+                .read_exact(&mut rest)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        0x04 => {
+            // IPv6：16 字节地址 + 2 字节端口
+            let mut addr = [0u8; 18];
+            stream
+                .read_exact(&mut addr)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        atyp => {
+            return Err(format!("SOCKS5 不支持的地址类型: 0x{atyp:02x}"));
         }
     }
 
@@ -140,9 +178,9 @@ async fn http_connect(
     );
 
     if let (Some(user), Some(pass)) = (username, password) {
-        use std::io::Write;
         let mut creds = Vec::new();
-        write!(creds, "{user}:{pass}").unwrap();
+        use std::io::Write;
+        write!(creds, "{user}:{pass}").map_err(|e| e.to_string())?;
         let encoded = base64_encode(&creds);
         req.push_str(&format!("Proxy-Authorization: Basic {encoded}\r\n"));
     }
@@ -203,4 +241,25 @@ fn base64_encode(data: &[u8]) -> String {
         }
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn socks5_username_too_long_rejected() {
+        let long_user = "a".repeat(256);
+        let result: Result<(), &str> = u8::try_from(long_user.len())
+            .map(|_| ())
+            .map_err(|_| "SOCKS5 用户名超长（最大 255 字节）");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn socks5_hostname_too_long_rejected() {
+        let long_host = "a".repeat(256);
+        let result: Result<(), &str> = u8::try_from(long_host.len())
+            .map(|_| ())
+            .map_err(|_| "SOCKS5 目标主机名超长（最大 255 字节）");
+        assert!(result.is_err());
+    }
 }

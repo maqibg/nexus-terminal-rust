@@ -23,6 +23,12 @@ export interface SshOutputChunk {
   data: string;
 }
 
+export interface HostKeyEntry {
+  host: string;
+  port: number;
+  fingerprint: string;
+}
+
 export const sshApi = {
   connect: (connectionId: number, cols?: number, rows?: number) =>
     tauriInvoke<string>('ssh_connect', {
@@ -55,6 +61,18 @@ export const sshApi = {
     }),
 
   list: () => tauriInvoke<SshSession[]>('ssh_session_list'),
+
+  // Host key management
+  acceptHostKey: (host: string, port: number, fingerprint: string) =>
+    tauriInvoke<void>('ssh_accept_host_key', { host, port, fingerprint }),
+
+  hostKeyList: () => tauriInvoke<HostKeyEntry[]>('ssh_host_key_list'),
+
+  hostKeyGet: (host: string, port: number) =>
+    tauriInvoke<string | null>('ssh_host_key_get', { host, port }),
+
+  hostKeyDelete: (host: string, port: number) =>
+    tauriInvoke<boolean>('ssh_host_key_delete', { host, port }),
 };
 
 /**

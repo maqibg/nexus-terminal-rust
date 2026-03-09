@@ -28,14 +28,6 @@
         </button>
         <button
           class="workspace-left-tool-btn"
-          :class="{ 'workspace-left-tool-btn-active': activeLeftToolPane === 'docker' }"
-          title="Docker 管理器"
-          @click="toggleLeftToolPane('docker')"
-        >
-          <i class="fab fa-docker"></i>
-        </button>
-        <button
-          class="workspace-left-tool-btn"
           :class="{ 'workspace-left-tool-btn-active': showTerminalAiPanel }"
           title="AI 助手"
           @click="toggleTerminalAiPanel()"
@@ -65,12 +57,6 @@
           class="workspace-left-panel-content"
           @select="handleConnect"
         />
-
-        <div class="workspace-left-panel-content workspace-docker-empty">
-          <i class="fab fa-docker workspace-docker-icon"></i>
-          <div class="workspace-docker-title">远程主机 Docker 不可用</div>
-          <div class="workspace-docker-desc">请确保远程主机上已安装并运行 Docker。</div>
-        </div>
       </div>
 
       <Splitpanes
@@ -137,6 +123,10 @@
       :tasks="taskList"
       @close="showTransferModal = false"
       @cancel="cancelTask"
+      @pause-all="pauseAll"
+      @resume-all="resumeAll"
+      @cancel-all="cancelAll"
+      @clear-completed="clearCompleted"
     />
 
     <LayoutConfigurator
@@ -147,16 +137,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import { Splitpanes, Pane } from 'splitpanes';
 import 'splitpanes/dist/splitpanes.css';
 import { useSessionStore } from '@/stores/session';
-import { useLayoutStore } from '@/stores/layout';
+import { notifyGlobalLayoutResized, useLayoutStore } from '@/stores/layout';
 import { useSettingsStore } from '@/stores/settings';
 import { useFileEditorStore } from '@/stores/fileEditor';
-import { sshApi, sftpApi, desktopApi, type Connection } from '@/lib/api';
+import { type Connection } from '@/lib/api';
 import { useTransferProgress } from '@/composables/useTransferProgress';
+import { useAlertDialog } from '@/composables/useAlertDialog';
+import { useSessionLifecycle } from '@/composables/useSessionLifecycle';
 import LayoutRenderer from '@/components/LayoutRenderer.vue';
 import TerminalTabBar from '@/components/TerminalTabBar.vue';
 import WorkspaceConnectionList from '@/components/WorkspaceConnectionList.vue';
@@ -170,6 +162,8 @@ const sessionStore = useSessionStore();
 const layoutStore = useLayoutStore();
 const settingsStore = useSettingsStore();
 const fileEditorStore = useFileEditorStore();
+const { alert } = useAlertDialog();
+const { connectConnection, closeSession: closeManagedSession } = useSessionLifecycle(alert);
 const { activeSessionId, activeSession, sessionList } = storeToRefs(sessionStore);
 const { layoutConfig, leftSidebarVisible, rightSidebarVisible, leftSidebarSize, rightSidebarSize, headerVisible, layoutLocked } =
   storeToRefs(layoutStore);
@@ -178,7 +172,7 @@ const showTransferModal = ref(false);
 const showLayoutConfigurator = ref(false);
 const showFileManagerPopup = ref(false);
 
-type LeftToolPane = 'connections' | 'docker';
+type LeftToolPane = 'connections';
 const activeLeftToolPane = ref<LeftToolPane | null>(null);
 const showTerminalAiPanel = ref(false);
 interface TerminalAiActionDetail {
@@ -190,12 +184,10 @@ interface TerminalAiPanelExpose {
   sendMessage: (override?: string) => Promise<void>;
 }
 const terminalAiPanelRef = ref<TerminalAiPanelExpose | null>(null);
-const { taskList, startListening, cancelTask, cleanup } = useTransferProgress();
+const { taskList, startListening, cancelTask, pauseAll, resumeAll, cancelAll, clearCompleted, cleanup } = useTransferProgress();
 const workspaceSidebarPersistent = computed(() => settingsStore.getBoolean('workspaceSidebarPersistent', false));
-const dockerStatusIntervalSeconds = computed(() => settingsStore.getInteger('dockerStatusIntervalSeconds', 2, 1));
 
 let workspaceResizeDispatchRaf = 0;
-let dockerStatusRefreshTimer: number | null = null;
 
 function extractPaneSizes(payload: unknown): number[] {
   if (Array.isArray(payload)) {
@@ -221,38 +213,14 @@ function clampSize(value: number, min: number, max: number): number {
 }
 
 function notifyWorkspaceLayoutResized() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
   if (workspaceResizeDispatchRaf) {
     window.cancelAnimationFrame(workspaceResizeDispatchRaf);
   }
 
   workspaceResizeDispatchRaf = window.requestAnimationFrame(() => {
-    window.dispatchEvent(new Event('resize'));
-    window.dispatchEvent(new CustomEvent('nexus:layout-resized'));
+    notifyGlobalLayoutResized();
     workspaceResizeDispatchRaf = 0;
   });
-}
-
-function clearDockerStatusRefreshTimer() {
-  if (dockerStatusRefreshTimer != null && typeof window !== 'undefined') {
-    window.clearInterval(dockerStatusRefreshTimer);
-  }
-  dockerStatusRefreshTimer = null;
-}
-
-function startDockerStatusRefreshTimer() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  clearDockerStatusRefreshTimer();
-  const intervalMs = Math.max(1, dockerStatusIntervalSeconds.value) * 1000;
-  dockerStatusRefreshTimer = window.setInterval(() => {
-    window.dispatchEvent(new CustomEvent('nexus:docker-status:refresh'));
-  }, intervalMs);
 }
 
 function handleWorkspacePaneResize(payload?: unknown) {
@@ -352,10 +320,7 @@ function handleOpenFileEditorPopup() {
 const effectiveLeftSidebarVisible = computed(() => leftSidebarVisible.value && !activeLeftToolPane.value);
 
 const leftPaneTitle = computed(() => {
-  if (activeLeftToolPane.value === 'connections') {
-    return '连接列表';
-  }
-  return 'Docker 管理器';
+  return '连接列表';
 });
 
 const mainSize = computed(() => {
@@ -365,102 +330,13 @@ const mainSize = computed(() => {
   return size;
 });
 
-async function warmupSftp(sessionId: string, connectionId: number) {
-  try {
-    const sftpSessionId = await sftpApi.open(connectionId);
-    sessionStore.setSftpSession(sessionId, sftpSessionId);
-  } catch {
-    // ignore warmup failures and allow terminal-only usage
-  }
-}
-
 async function handleConnect(conn: Connection) {
   showConnList.value = false;
-
-  const connType = String(conn.type ?? 'SSH').toUpperCase();
-  if (connType === 'RDP') {
-    try {
-      await desktopApi.openRdpConnection(conn.id);
-    } catch (e: any) {
-      window.alert(`RDP 启动失败: ${e.message ?? String(e)}`);
-    }
-    return;
-  }
-
-  if (connType === 'VNC') {
-    try {
-      const vncSession = await desktopApi.openVncConnection(conn.id);
-      const localSessionId = sessionStore.createVncSession(
-        conn.id,
-        conn.name,
-        vncSession.session_id,
-        vncSession.ws_port,
-        vncSession.password,
-      );
-      sessionStore.setActive(localSessionId);
-    } catch (e: any) {
-      window.alert(`VNC 启动失败: ${e.message ?? String(e)}`);
-    }
-    return;
-  }
-
-  const sid = sessionStore.createSession(conn.id, conn.name, 'SSH');
-  try {
-    const realSid = await sshApi.connect(conn.id);
-    sessionStore.removeSession(sid);
-    sessionStore.addSession({
-      id: realSid,
-      connectionId: conn.id,
-      connectionName: conn.name,
-      protocol: 'SSH',
-      status: 'connected',
-      createdAt: new Date().toISOString(),
-      sftpReady: false,
-      sftpSessionId: null,
-      currentPath: '/',
-      desktopSessionId: null,
-      vncWsPort: null,
-      vncPassword: null,
-    });
-    sessionStore.setActive(realSid);
-    void warmupSftp(realSid, conn.id);
-  } catch {
-    sessionStore.updateStatus(sid, 'disconnected');
-  }
+  await connectConnection(conn);
 }
 
 async function closeSession(sessionId: string) {
-  const session = sessionStore.getSession(sessionId);
-  if (!session) {
-    return;
-  }
-
-  if (session.protocol === 'VNC') {
-    if (session.desktopSessionId) {
-      try {
-        await desktopApi.disconnectVncSession(session.desktopSessionId);
-      } catch {
-        // ignore VNC close failures
-      }
-    }
-    sessionStore.removeSession(sessionId);
-    return;
-  }
-
-  if (session?.sftpSessionId) {
-    try {
-      await sftpApi.close(session.sftpSessionId);
-    } catch {
-      // ignore sftp close failures
-    }
-  }
-
-  try {
-    await sshApi.close(sessionId);
-  } catch {
-    // ignore backend close failures
-  }
-  sessionStore.removeSession(sessionId);
+  await closeManagedSession(sessionId);
 }
 
 async function closeOthers(anchorSessionId: string) {
@@ -499,22 +375,13 @@ onMounted(() => {
   void startListening();
   void settingsStore
     .loadAll()
-    .then(() => {
-      if (settingsStore.getBoolean('dockerDefaultExpand', false) && !activeLeftToolPane.value) {
-        activeLeftToolPane.value = 'docker';
-      }
-    })
+    .then(() => undefined)
     .catch(() => undefined);
 
   window.addEventListener('transfer-created', handleTransferCreated);
   window.addEventListener('nexus:workspace:file-manager-popup:open', handleOpenFileManagerPopup as EventListener);
   window.addEventListener('nexus:workspace:file-editor-popup:open', handleOpenFileEditorPopup as EventListener);
   window.addEventListener('nexus:workspace:open-ai-assistant', handleOpenAiAssistantEvent as EventListener);
-  startDockerStatusRefreshTimer();
-});
-
-watch(dockerStatusIntervalSeconds, () => {
-  startDockerStatusRefreshTimer();
 });
 
 onUnmounted(() => {
@@ -526,7 +393,6 @@ onUnmounted(() => {
     window.cancelAnimationFrame(workspaceResizeDispatchRaf);
     workspaceResizeDispatchRaf = 0;
   }
-  clearDockerStatusRefreshTimer();
   cleanup();
 });
 </script>
@@ -633,34 +499,6 @@ onUnmounted(() => {
 .workspace-left-panel-content {
   flex: 1;
   min-height: 0;
-}
-
-.workspace-docker-empty {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  padding: 20px;
-  gap: 10px;
-}
-
-.workspace-docker-icon {
-  font-size: 42px;
-  color: var(--text-dim);
-}
-
-.workspace-docker-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.workspace-docker-desc {
-  max-width: 220px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--text-sub);
 }
 
 .workspace-layout {

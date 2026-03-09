@@ -95,6 +95,30 @@ pub async fn rmdir(sftp: &SftpSession, path: &str) -> Result<(), String> {
         .map_err(|e| format!("rmdir failed: {e}"))
 }
 
+/// Recursively remove a directory and all of its children.
+pub async fn rmdir_recursive(sftp: &SftpSession, path: &str) -> Result<(), String> {
+    let mut directory_stack = vec![path.to_string()];
+    let mut removal_order = Vec::new();
+
+    while let Some(current_dir) = directory_stack.pop() {
+        removal_order.push(current_dir.clone());
+        let entries = list_dir(sftp, &current_dir).await?;
+        for entry in entries {
+            if entry.is_dir {
+                directory_stack.push(entry.path);
+            } else {
+                remove_file(sftp, &entry.path).await?;
+            }
+        }
+    }
+
+    for directory in removal_order.into_iter().rev() {
+        rmdir(sftp, &directory).await?;
+    }
+
+    Ok(())
+}
+
 /// Rename/move a file or directory.
 pub async fn rename(sftp: &SftpSession, old_path: &str, new_path: &str) -> Result<(), String> {
     sftp.rename(old_path, new_path)
@@ -145,5 +169,46 @@ pub async fn append_file(sftp: &SftpSession, path: &str, data: &[u8]) -> Result<
     file.shutdown()
         .await
         .map_err(|e| format!("flush failed: {e}"))?;
+    Ok(())
+}
+
+/// Stream-copy a file within the same SFTP session to avoid loading the whole
+/// file into frontend memory.
+pub async fn copy_file_streaming(
+    sftp: &SftpSession,
+    source_path: &str,
+    target_path: &str,
+) -> Result<(), String> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let mut source = sftp
+        .open(source_path)
+        .await
+        .map_err(|e| format!("open source failed: {e}"))?;
+    let mut target = sftp
+        .create(target_path)
+        .await
+        .map_err(|e| format!("create target failed: {e}"))?;
+
+    let mut buffer = vec![0u8; 64 * 1024];
+    loop {
+        let read = source
+            .read(&mut buffer)
+            .await
+            .map_err(|e| format!("read source failed: {e}"))?;
+        if read == 0 {
+            break;
+        }
+
+        target
+            .write_all(&buffer[..read])
+            .await
+            .map_err(|e| format!("write target failed: {e}"))?;
+    }
+
+    target
+        .shutdown()
+        .await
+        .map_err(|e| format!("flush target failed: {e}"))?;
     Ok(())
 }

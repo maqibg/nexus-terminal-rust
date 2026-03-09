@@ -1,5 +1,6 @@
 use api_contract::error::AppError;
 use serde::Serialize;
+use sqlx::Row;
 use tauri::State;
 
 use crate::state::AppState;
@@ -21,7 +22,28 @@ pub struct RuntimePathsResponse {
 }
 
 #[tauri::command]
-pub async fn get_backend_health() -> Result<HealthResponse, String> {
+pub async fn get_backend_health(state: State<'_, AppState>) -> Result<HealthResponse, String> {
+    if !state.runtime_paths.data_dir.exists() {
+        return Err(format!(
+            "data directory not found: {}",
+            state.runtime_paths.data_dir.display()
+        ));
+    }
+
+    if !state.runtime_paths.download_dir.exists() {
+        return Err(format!(
+            "download directory not found: {}",
+            state.runtime_paths.download_dir.display()
+        ));
+    }
+
+    sqlx::query("SELECT 1")
+        .fetch_one(&state.storage.pool)
+        .await
+        .map_err(|error| format!("database health check failed: {error}"))?
+        .try_get::<i64, _>(0)
+        .map_err(|error| format!("database health check parse failed: {error}"))?;
+
     Ok(HealthResponse {
         status: "ok".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),

@@ -272,6 +272,7 @@ const parseGitHubTreeUrl = (url: string): { owner: string; repo: string; branch:
 export const useAppearanceStore = defineStore('appearance', () => {
   const appearance = ref<Record<string, string>>({});
   const loaded = ref(false);
+  let loadPromise: Promise<void> | null = null;
   const appearanceSettings = ref<Partial<AppearanceSettingsState>>({});
   const allTerminalThemes = ref<TerminalTheme[]>([]);
 
@@ -533,18 +534,30 @@ export const useAppearanceStore = defineStore('appearance', () => {
   };
 
   async function loadAll() {
-    const items = await settingsApi.appearanceGetAll();
-    const map: Record<string, string> = {};
-    for (const item of items) {
-      map[item.key] = item.value;
+    if (loadPromise) {
+      return loadPromise;
     }
-    appearance.value = map;
-    syncAppearanceSettings();
-    applyTheme();
-    await loadTerminalThemes();
-    await fetchLocalHtmlPresets();
-    await fetchRemoteHtmlPresetsRepositoryUrl();
-    loaded.value = true;
+
+    loadPromise = (async () => {
+      const items = await settingsApi.appearanceGetAll();
+      const map: Record<string, string> = {};
+      for (const item of items) {
+        map[item.key] = item.value;
+      }
+      appearance.value = map;
+      syncAppearanceSettings();
+      applyTheme();
+      await loadTerminalThemes();
+      await fetchLocalHtmlPresets();
+      await fetchRemoteHtmlPresetsRepositoryUrl();
+      loaded.value = true;
+    })();
+
+    try {
+      await loadPromise;
+    } finally {
+      loadPromise = null;
+    }
   }
 
   async function loadInitialAppearanceData() {

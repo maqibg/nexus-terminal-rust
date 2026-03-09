@@ -30,7 +30,6 @@ const paneLabels: Record<PaneName, string> = {
   statusMonitor: '状态',
   commandHistory: '历史',
   quickCommands: '快捷',
-  dockerManager: 'Docker',
 };
 
 export default defineComponent({

@@ -142,7 +142,7 @@
             class="action-btn"
             @click="openUpload"
             :disabled="!activeSftpSessionId"
-            title="上传文件"
+            title="上传文件或文件夹"
           >
             <i class="fas fa-upload"></i>
             <span>上传</span>
@@ -192,30 +192,110 @@
         <i class="fas fa-exclamation-triangle"></i>
         <span>{{ error }}</span>
       </div>
-      <div v-else class="file-list" @click.self="clearSelection" @contextmenu.prevent="showCtx($event, null)">
-        <div class="file-header">
-          <span class="fh-icon">类型</span>
-          <span class="fh-name">名称</span>
-          <span class="fh-size">大小</span>
-          <span class="fh-perms">权限</span>
-          <span class="fh-modified">修改时间</span>
-        </div>
+      <div
+        v-else
+        ref="fileListContainerRef"
+        class="file-list"
+        @click.self="clearSelection"
+        @contextmenu.prevent="showCtx($event, null)"
+        @dragenter.prevent="handleDragEnter"
+        @dragover.prevent="handleDragOver"
+        @dragleave="handleDragLeave"
+        @drop.prevent="handleDrop"
+      >
         <div
-          v-for="entry in filteredEntries"
-          :key="entry.path"
-          class="file-item"
-          :class="{ dir: entry.is_dir, selected: isEntrySelected(entry) }"
-          @click.stop="handleEntryClick(entry, $event)"
-          @contextmenu.prevent.stop="handleEntryContextMenu($event, entry)"
+          v-if="showExternalDropOverlay"
+          class="drag-upload-overlay"
+          @dragover.prevent
+          @dragleave.prevent="handleDragLeave"
+          @drop.prevent="handleOverlayDrop"
         >
-          <span class="file-icon">
-            <i v-if="entry.is_dir" class="fas fa-folder folder-color"></i>
-            <i v-else class="fas fa-file file-color"></i>
-          </span>
-          <span class="file-name">{{ entry.name }}</span>
-          <span class="file-size">{{ entry.is_dir ? '' : formatSize(entry.size) }}</span>
-          <span class="file-perms">{{ entry.permissions != null ? formatPerms(entry.permissions) : '' }}</span>
-          <span class="file-modified">{{ formatModifiedTime(entry.modified) }}</span>
+          <div class="drag-upload-card">
+            <i class="fas fa-cloud-upload-alt"></i>
+            <div class="drag-upload-title">松手即可上传到当前目录</div>
+            <div class="drag-upload-path">{{ currentPath }}</div>
+            <div class="drag-upload-desc">支持直接拖拽文件或文件夹</div>
+          </div>
+        </div>
+        <div class="file-list-shell" :class="{ 'overlay-active': showExternalDropOverlay }">
+          <div class="file-header" :style="{ gridTemplateColumns: gridTemplate }">
+            <button class="file-header-btn" :class="{ active: sortKey === 'type' }" @click="toggleSort('type')">
+              <span>类型</span>
+              <span v-if="sortKey === 'type'" class="sort-indicator">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+              <span class="resize-handle" @mousedown.prevent.stop="startResize($event, 'type')"></span>
+            </button>
+            <button class="file-header-btn" :class="{ active: sortKey === 'name' }" @click="toggleSort('name')">
+              <span>名称</span>
+              <span v-if="sortKey === 'name'" class="sort-indicator">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+              <span class="resize-handle" @mousedown.prevent.stop="startResize($event, 'name')"></span>
+            </button>
+            <button class="file-header-btn align-right" :class="{ active: sortKey === 'size' }" @click="toggleSort('size')">
+              <span>大小</span>
+              <span v-if="sortKey === 'size'" class="sort-indicator">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+              <span class="resize-handle" @mousedown.prevent.stop="startResize($event, 'size')"></span>
+            </button>
+            <button class="file-header-btn" :class="{ active: sortKey === 'permissions' }" @click="toggleSort('permissions')">
+              <span>权限</span>
+              <span v-if="sortKey === 'permissions'" class="sort-indicator">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+              <span class="resize-handle" @mousedown.prevent.stop="startResize($event, 'permissions')"></span>
+            </button>
+            <button class="file-header-btn" :class="{ active: sortKey === 'modified' }" @click="toggleSort('modified')">
+              <span>修改时间</span>
+              <span v-if="sortKey === 'modified'" class="sort-indicator">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+            </button>
+          </div>
+
+          <div class="file-body">
+            <div
+              v-if="currentPath !== '/'"
+              class="file-row up-row"
+              :class="{ 'drop-target': dragOverTarget === '..' }"
+              :style="{ gridTemplateColumns: gridTemplate }"
+              data-drop-row=".."
+              @click.stop="goUp"
+              @dragover.prevent="handleDragOverRow('..', $event)"
+              @dragleave="handleDragLeaveRow('..')"
+              @drop.prevent="handleDropOnRow('..', $event)"
+            >
+              <span class="file-cell file-icon">
+                <i class="fas fa-level-up-alt folder-color"></i>
+              </span>
+              <span class="file-cell file-name">..</span>
+              <span class="file-cell file-size"></span>
+              <span class="file-cell file-perms"></span>
+              <span class="file-cell file-modified"></span>
+            </div>
+
+            <div
+              v-for="entry in filteredEntries"
+              :key="entry.path"
+              class="file-row"
+              :class="{
+                dir: entry.is_dir,
+                selected: isEntrySelected(entry),
+                'drop-target': entry.is_dir && dragOverTarget === entry.path,
+              }"
+              :style="{ gridTemplateColumns: gridTemplate }"
+              :data-drop-row="entry.path"
+              draggable="true"
+              @dragstart="handleDragStart(entry)"
+              @dragend="handleDragEnd"
+              @dragover.prevent="handleDragOverRow(entry, $event)"
+              @dragleave="handleDragLeaveRow(entry)"
+              @drop.prevent="handleDropOnRow(entry, $event)"
+              @click.stop="handleEntryClick(entry, $event)"
+              @contextmenu.prevent.stop="handleEntryContextMenu($event, entry)"
+            >
+              <span class="file-cell file-icon">
+                <i v-if="entry.is_dir" class="fas fa-folder folder-color"></i>
+                <i v-else class="fas fa-file file-color"></i>
+              </span>
+              <span class="file-cell file-name">{{ entry.name }}</span>
+              <span class="file-cell file-size">{{ entry.is_dir ? '' : formatSize(entry.size) }}</span>
+              <span class="file-cell file-perms">{{ entry.permissions != null ? formatPerms(entry.permissions) : '' }}</span>
+              <span class="file-cell file-modified">{{ formatModifiedTime(entry.modified) }}</span>
+            </div>
+          </div>
         </div>
         <div v-if="!filteredEntries.length" class="empty-dir">
           <i class="fas fa-folder-open"></i>
@@ -331,7 +411,7 @@
         :visible="showUpload"
         :session-id="activeSftpSessionId || ''"
         :remote-path="currentPath"
-        @uploaded="showUpload = false; refresh()"
+        @uploaded="handleUploadTasksCreated"
         @cancel="showUpload = false"
       />
 
@@ -347,1655 +427,80 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { storeToRefs } from 'pinia';
-import { pathHistoryApi, sftpApi, sshApi, statusApi, type FileEntry, type PathHistory } from '@/lib/api';
-import { save } from '@tauri-apps/plugin-dialog';
-import { useFileEditorStore } from '@/stores/fileEditor';
-import { useUINotificationStore } from '@/stores/uiNotifications';
 import { useSessionStore } from '@/stores/session';
-import { useSettingsStore } from '@/stores/settings';
-import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 import FavoritePaths from '@/components/FavoritePaths.vue';
 import FileUploadPopup from '@/components/FileUploadPopup.vue';
 import SendFilesModal from '@/components/SendFilesModal.vue';
+import { useSftpBrowser } from '@/composables/useSftpBrowser';
+import { useSftpBrowserDragAndDrop } from '@/composables/useSftpBrowserDragAndDrop';
+import { useSftpFileListColumns } from '@/composables/useSftpFileListColumns';
 
 const sessionStore = useSessionStore();
-const settingsStore = useSettingsStore();
 const { activeSessionId: sshSessionId, activeSession } = storeToRefs(sessionStore);
 const isSshSession = computed(() => activeSession.value?.protocol === 'SSH');
 const connectionId = computed(() => (activeSession.value?.protocol === 'SSH' ? activeSession.value.connectionId : undefined));
 const activeSftpSessionId = computed(() => (activeSession.value?.protocol === 'SSH' ? activeSession.value?.sftpSessionId ?? null : null));
+const fileListContainerRef = ref<HTMLDivElement | null>(null);
 
-const fileEditorStore = useFileEditorStore();
-const notify = useUINotificationStore();
-const focusSwitcherStore = useFocusSwitcherStore();
+const {
+  // state
+  currentPath, pathInput, entries, filteredEntries, loading, error, searchQuery,
+  selectedEntryPaths, clipboardState,
+  rootModeEnabled, rootModeSwitching, showRootModeDialog, rootModeUsername, rootModePassword,
+  pathHistoryItems, pathHistoryLoading, filteredPathHistory, pathHistorySelectedIndex,
+  isSearchActive, isEditingPath, showPathHistoryDropdown,
+  ctxVisible, ctxPos, ctxNearRight, ctxSubmenuKey, ctxEntry,
+  showFavoritePathsPopover, isFavoriteDialogOpen, favoritePopoverStyle,
+  showUpload, showMkdir, mkdirName, showNewFile, newFileName, showSendFile, sendFileTarget,
+  contextMenuItems, showPopupFileEditor, sortKey, sortDirection,
+  // DOM refs
+  pathInputRef, pathInputWrapperRef, searchInputRef, ctxMenuRef, favoriteButtonRef, favoritePopoverRef,
+  // actions
+  navigateTo, goUp, refresh,
+  handleRootModeButtonClick, enableRootMode, disableRootMode, closeRootModeDialog,
+  handleEntryClick, handleEntryContextMenu, showCtx, closeCtxMenu, handleCtxItemClick,
+  startPathEdit, handlePathInputFocus, handlePathInputChange, handlePathInputKeydown, handlePathInputBlur, selectPathHistory,
+  activateSearch, deactivateSearch, cancelSearch,
+  toggleFavoritePopover, navigateFromFavorite, handleFavoriteDialogVisibility,
+  openUpload, openSendModal, onSendCreated,
+  registerUploadTasksForRefresh,
+  toggleSort, uploadLocalPaths, moveEntriesToDirectory,
+  doMkdir, doCreateFile, openPopupEditor, sendCdCommandToTerminal,
+  isEntrySelected, clearSelection,
+  formatSize, formatModifiedTime, formatPerms,
+  getPathDir,
+} = useSftpBrowser(activeSftpSessionId, sshSessionId, connectionId);
 
-const currentPath = ref('/');
-const pathInput = ref('/');
-const pathInputRef = ref<HTMLInputElement>();
-const pathInputWrapperRef = ref<HTMLDivElement>();
-
-const searchQuery = ref('');
-const searchInputRef = ref<HTMLInputElement>();
-const isSearchActive = ref(false);
-
-const entries = ref<FileEntry[]>([]);
-const filteredEntries = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase();
-  if (!query) {
-    return entries.value;
-  }
-  return entries.value.filter((entry) => entry.name.toLowerCase().includes(query));
+const { gridTemplate, startResize } = useSftpFileListColumns();
+const {
+  showExternalDropOverlay,
+  dragOverTarget,
+  handleDragEnter,
+  handleDragOver,
+  handleDragLeave,
+  handleDrop,
+  handleOverlayDrop,
+  handleDragStart,
+  handleDragEnd,
+  handleDragOverRow,
+  handleDragLeaveRow,
+  handleDropOnRow,
+} = useSftpBrowserDragAndDrop({
+  isConnected: computed(() => !!activeSftpSessionId.value),
+  currentPath,
+  selectedEntryPaths,
+  fileListContainerRef,
+  getParentPath: getPathDir,
+  uploadLocalPaths,
+  moveEntriesToDirectory,
 });
 
-const loading = ref(false);
-const error = ref('');
-const showUpload = ref(false);
-const showSendFile = ref(false);
-const sendFileTarget = ref<string | null>(null);
-const fileManagerShowDeleteConfirmation = computed(() => settingsStore.getBoolean('fileManagerShowDeleteConfirmation', true));
-const showPopupFileEditor = computed(() => settingsStore.getBoolean('showPopupFileEditor', false));
-
-interface BrowserContextMenuItem {
-  key: string;
-  label?: string;
-  icon?: string;
-  danger?: boolean;
-  disabled?: boolean;
-  separator?: boolean;
-  submenu?: BrowserContextMenuItem[];
-  onClick?: () => void | Promise<void>;
+function handleUploadTasksCreated(taskIds: string[]): void {
+  showUpload.value = false;
+  registerUploadTasksForRefresh(taskIds, currentPath.value);
 }
-
-interface BrowserClipboardState {
-  operation: 'copy' | 'cut';
-  sessionId: string;
-  entries: FileEntry[];
-}
-
-const ctxVisible = ref(false);
-const ctxEntry = ref<FileEntry | null>(null);
-const ctxPos = ref({ x: 0, y: 0 });
-const ctxMenuRef = ref<HTMLDivElement>();
-const ctxNearRight = ref(false);
-const ctxSubmenuKey = ref<string | null>(null);
-const clipboardState = ref<BrowserClipboardState | null>(null);
-const selectedEntryPaths = ref<Set<string>>(new Set());
-const lastSelectedPath = ref<string | null>(null);
-const showMkdir = ref(false);
-const mkdirName = ref('');
-const showNewFile = ref(false);
-const newFileName = ref('');
-const rootModeEnabled = ref(false);
-const rootModeSwitching = ref(false);
-const showRootModeDialog = ref(false);
-const rootModeUsername = ref('root');
-const rootModePassword = ref('');
-
-const isEditingPath = ref(false);
-const showPathHistoryDropdown = ref(false);
-const pathHistoryItems = ref<PathHistory[]>([]);
-const pathHistoryLoading = ref(false);
-const pathHistorySelectedIndex = ref(-1);
-const filteredPathHistory = computed(() => {
-  const query = pathInput.value.trim().toLowerCase();
-  if (!query) {
-    return pathHistoryItems.value;
-  }
-  return pathHistoryItems.value.filter((item) => item.path.toLowerCase().includes(query));
-});
-
-const favoriteButtonRef = ref<HTMLButtonElement>();
-const favoritePopoverRef = ref<HTMLDivElement>();
-const showFavoritePathsPopover = ref(false);
-const isFavoriteDialogOpen = ref(false);
-const favoritePopoverStyle = ref<Record<string, string>>({ left: '0px', top: '0px' });
-
-const VIEWPORT_PADDING = 8;
-const CONTEXT_SUBMENU_MIN_WIDTH = 190;
-const defaultDownloadDir = ref('');
-
-let unregisterFileManagerSearch: (() => void) | null = null;
-let unregisterFileManagerPathInput: (() => void) | null = null;
-
-function isVisibleInput(input: HTMLInputElement | undefined): input is HTMLInputElement {
-  if (!input || !input.isConnected || input.disabled) {
-    return false;
-  }
-  const style = window.getComputedStyle(input);
-  if (style.display === 'none' || style.visibility === 'hidden') {
-    return false;
-  }
-  const rect = input.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0;
-}
-
-function normalizePath(path: string): string {
-  const trimmed = path.trim();
-  if (!trimmed) {
-    return '/';
-  }
-
-  let normalized = trimmed.replace(/\\/g, '/');
-  if (!normalized.startsWith('/')) {
-    normalized = `/${normalized}`;
-  }
-
-  normalized = normalized.replace(/\/{2,}/g, '/');
-  return normalized || '/';
-}
-
-function joinRemotePath(basePath: string, childName: string): string {
-  const safeChild = childName.trim().replace(/^\/+/, '');
-  const normalizedBase = basePath === '/' ? '/' : basePath.replace(/\/+$/, '');
-  return normalizedBase === '/' ? `/${safeChild}` : `${normalizedBase}/${safeChild}`;
-}
-
-function joinLocalPath(basePath: string, childName: string): string {
-  const normalizedBase = basePath.trim().replace(/[\\/]+$/, '');
-  const safeChild = childName.trim().replace(/^[\\/]+/, '');
-  if (!normalizedBase) {
-    return safeChild || childName;
-  }
-  const separator = normalizedBase.includes('\\') ? '\\' : '/';
-  return `${normalizedBase}${separator}${safeChild}`;
-}
-
-async function resolveDownloadDefaultPath(fileName: string): Promise<string> {
-  if (!defaultDownloadDir.value) {
-    try {
-      const runtimePaths = await statusApi.getRuntimePaths();
-      defaultDownloadDir.value = runtimePaths.downloadDir;
-    } catch {
-      defaultDownloadDir.value = '';
-    }
-  }
-  return joinLocalPath(defaultDownloadDir.value, fileName);
-}
-
-function getPathName(path: string): string {
-  const normalized = path.replace(/\/+$/, '');
-  if (!normalized || normalized === '/') {
-    return '';
-  }
-  const index = normalized.lastIndexOf('/');
-  return index >= 0 ? normalized.slice(index + 1) : normalized;
-}
-
-function getPathDir(path: string): string {
-  const normalized = path.replace(/\/+$/, '');
-  if (!normalized || normalized === '/') {
-    return '/';
-  }
-  const index = normalized.lastIndexOf('/');
-  return index <= 0 ? '/' : normalized.slice(0, index);
-}
-
-function splitNameExt(name: string): { base: string; ext: string } {
-  const index = name.lastIndexOf('.');
-  if (index > 0) {
-    return { base: name.slice(0, index), ext: name.slice(index) };
-  }
-  return { base: name, ext: '' };
-}
-
-function buildDuplicateName(name: string, index: number): string {
-  const { base, ext } = splitNameExt(name);
-  if (index <= 1) {
-    return `${base}_copy${ext}`;
-  }
-  return `${base}_copy_${index}${ext}`;
-}
-
-function resetBrowserState() {
-  entries.value = [];
-  currentPath.value = '/';
-  pathInput.value = '/';
-  error.value = '';
-  searchQuery.value = '';
-  isSearchActive.value = false;
-  isEditingPath.value = false;
-  showPathHistoryDropdown.value = false;
-  pathHistorySelectedIndex.value = -1;
-  pathHistoryItems.value = [];
-  showFavoritePathsPopover.value = false;
-  showMkdir.value = false;
-  showNewFile.value = false;
-  mkdirName.value = '';
-  newFileName.value = '';
-  rootModeEnabled.value = false;
-  rootModeSwitching.value = false;
-  showRootModeDialog.value = false;
-  rootModePassword.value = '';
-  ctxVisible.value = false;
-  ctxEntry.value = null;
-  ctxSubmenuKey.value = null;
-  clipboardState.value = null;
-  clearSelection();
-}
-
-async function ensureSftpSession(sshSid: string): Promise<string> {
-  const session = sessionStore.getSession(sshSid);
-  if (!session) {
-    throw new Error('会话不存在');
-  }
-  if (session.protocol !== 'SSH') {
-    throw new Error('当前会话不支持 SFTP');
-  }
-  if (session.sftpSessionId) {
-    return session.sftpSessionId;
-  }
-
-  const sftpSessionId = await sftpApi.open(session.connectionId);
-  sessionStore.setSftpSession(sshSid, sftpSessionId);
-  return sftpSessionId;
-}
-
-function closeRootModeDialog(): void {
-  if (rootModeSwitching.value) {
-    return;
-  }
-  showRootModeDialog.value = false;
-  rootModePassword.value = '';
-}
-
-async function handleRootModeButtonClick(): Promise<void> {
-  if (!connectionId.value || rootModeSwitching.value) {
-    return;
-  }
-
-  if (rootModeEnabled.value) {
-    await disableRootMode();
-    return;
-  }
-
-  rootModeUsername.value = rootModeUsername.value || 'root';
-  rootModePassword.value = '';
-  showRootModeDialog.value = true;
-}
-
-async function enableRootMode(): Promise<void> {
-  if (!connectionId.value || !sshSessionId.value || rootModeSwitching.value) {
-    return;
-  }
-
-  const username = rootModeUsername.value.trim() || 'root';
-  const password = rootModePassword.value;
-  if (!password) {
-    notify.addNotification('warning', '请输入 Root 密码');
-    return;
-  }
-
-  rootModeSwitching.value = true;
-  const previousSessionId = activeSftpSessionId.value;
-
-  try {
-    const rootSftpSessionId = await sftpApi.openOverride(connectionId.value, {
-      username,
-      authMethod: 'password',
-      password,
-    });
-
-    sessionStore.setSftpSession(sshSessionId.value, rootSftpSessionId);
-    rootModeEnabled.value = true;
-    showRootModeDialog.value = false;
-    rootModePassword.value = '';
-
-    if (previousSessionId && previousSessionId !== rootSftpSessionId) {
-      void sftpApi.close(previousSessionId).catch(() => undefined);
-    }
-
-    notify.addNotification('success', `已进入 Root 模式（${username}）`);
-    await navigateTo('/root');
-  } catch (e: any) {
-    const message = String(e?.message || '');
-    if (message.includes('authentication rejected') || message.includes('认证被拒绝')) {
-      notify.addNotification(
-        'error',
-        'Root 认证被拒绝：请检查目标机 SSH 是否允许 root 登录，或改用密钥认证。'
-      );
-    } else {
-      notify.addNotification('error', message || '进入 Root 模式失败');
-    }
-  } finally {
-    rootModeSwitching.value = false;
-  }
-}
-
-async function disableRootMode(): Promise<void> {
-  if (!connectionId.value || !sshSessionId.value || rootModeSwitching.value) {
-    return;
-  }
-
-  rootModeSwitching.value = true;
-  const previousSessionId = activeSftpSessionId.value;
-
-  try {
-    const normalSftpSessionId = await sftpApi.open(connectionId.value);
-    sessionStore.setSftpSession(sshSessionId.value, normalSftpSessionId);
-    rootModeEnabled.value = false;
-
-    if (previousSessionId && previousSessionId !== normalSftpSessionId) {
-      void sftpApi.close(previousSessionId).catch(() => undefined);
-    }
-
-    notify.addNotification('success', '已退出 Root 模式');
-    await navigateTo(currentPath.value || '/');
-  } catch (e: any) {
-    notify.addNotification('error', e?.message || '退出 Root 模式失败');
-  } finally {
-    rootModeSwitching.value = false;
-  }
-}
-
-async function addPathToHistory(path: string): Promise<void> {
-  try {
-    await pathHistoryApi.add(path, connectionId.value);
-  } catch {
-    // ignore path history persistence failures
-  }
-}
-
-async function loadPathHistory(): Promise<void> {
-  pathHistoryLoading.value = true;
-  try {
-    pathHistoryItems.value = await pathHistoryApi.list(connectionId.value, 80);
-  } catch {
-    pathHistoryItems.value = [];
-  } finally {
-    pathHistoryLoading.value = false;
-  }
-}
-
-function openPathHistory(): void {
-  showPathHistoryDropdown.value = true;
-  pathHistorySelectedIndex.value = -1;
-  void loadPathHistory();
-}
-
-function closePathHistory(): void {
-  showPathHistoryDropdown.value = false;
-  pathHistorySelectedIndex.value = -1;
-}
-
-async function navigateTo(path: string) {
-  const sid = activeSftpSessionId.value;
-  if (!sid) return;
-
-  const targetPath = normalizePath(path);
-  const previousPath = currentPath.value;
-
-  loading.value = true;
-  error.value = '';
-  try {
-    const list = await sftpApi.listDir(sid, targetPath);
-    entries.value = list.sort((a, b) => {
-      if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-    clearSelection();
-    closeCtxMenu();
-    currentPath.value = targetPath;
-    pathInput.value = targetPath;
-
-    if (sshSessionId.value) {
-      sessionStore.setCurrentPath(sshSessionId.value, targetPath);
-    }
-
-    if (targetPath !== previousPath) {
-      void addPathToHistory(targetPath);
-    }
-  } catch (e: any) {
-    error.value = e.message || '加载失败';
-  } finally {
-    loading.value = false;
-  }
-}
-
-function goUp() {
-  const normalized = currentPath.value.replace(/\/+$/, '');
-  if (!normalized || normalized === '/') {
-    return;
-  }
-  const index = normalized.lastIndexOf('/');
-  const parent = index <= 0 ? '/' : normalized.slice(0, index);
-  void navigateTo(parent);
-}
-
-function refresh() {
-  void navigateTo(currentPath.value);
-}
-
-function activateSearch(): void {
-  isSearchActive.value = true;
-  void nextTick(() => {
-    searchInputRef.value?.focus();
-    searchInputRef.value?.select();
-  });
-}
-
-function deactivateSearch(): void {
-  isSearchActive.value = false;
-}
-
-function cancelSearch(): void {
-  searchQuery.value = '';
-  isSearchActive.value = false;
-}
-
-function updateFavoritePopoverPosition(): void {
-  if (!showFavoritePathsPopover.value || !favoriteButtonRef.value || !favoritePopoverRef.value) {
-    return;
-  }
-
-  const triggerRect = favoriteButtonRef.value.getBoundingClientRect();
-  const popoverRect = favoritePopoverRef.value.getBoundingClientRect();
-
-  let left = triggerRect.left;
-  let top = triggerRect.bottom + 2;
-
-  const maxLeft = window.innerWidth - popoverRect.width - VIEWPORT_PADDING;
-  if (left > maxLeft) {
-    left = maxLeft;
-  }
-  left = Math.max(VIEWPORT_PADDING, left);
-
-  if (top + popoverRect.height + VIEWPORT_PADDING > window.innerHeight) {
-    const topAbove = triggerRect.top - popoverRect.height - 2;
-    top = topAbove >= VIEWPORT_PADDING
-      ? topAbove
-      : Math.max(VIEWPORT_PADDING, window.innerHeight - popoverRect.height - VIEWPORT_PADDING);
-  }
-
-  favoritePopoverStyle.value = {
-    left: `${left}px`,
-    top: `${top}px`,
-  };
-}
-
-function toggleFavoritePopover(): void {
-  if (showFavoritePathsPopover.value) {
-    showFavoritePathsPopover.value = false;
-    isFavoriteDialogOpen.value = false;
-    return;
-  }
-
-  showFavoritePathsPopover.value = true;
-  void nextTick(updateFavoritePopoverPosition);
-}
-
-function navigateFromFavorite(path: string): void {
-  showFavoritePathsPopover.value = false;
-  isFavoriteDialogOpen.value = false;
-  void navigateTo(path);
-}
-
-function handleFavoriteDialogVisibility(visible: boolean): void {
-  isFavoriteDialogOpen.value = visible;
-}
-
-function startPathEdit(): void {
-  if (!activeSftpSessionId.value) {
-    return;
-  }
-
-  pathInput.value = currentPath.value;
-  isEditingPath.value = true;
-  openPathHistory();
-
-  void nextTick(() => {
-    pathInputRef.value?.focus();
-    pathInputRef.value?.select();
-  });
-}
-
-function handlePathInputFocus(): void {
-  openPathHistory();
-}
-
-function handlePathInputChange(): void {
-  pathHistorySelectedIndex.value = -1;
-}
-
-async function applyPathFromInput(target: string): Promise<void> {
-  await navigateTo(target);
-  isEditingPath.value = false;
-  closePathHistory();
-}
-
-function handlePathInputKeydown(event: KeyboardEvent): void {
-  const list = filteredPathHistory.value;
-
-  switch (event.key) {
-    case 'ArrowDown': {
-      event.preventDefault();
-      if (!list.length) {
-        return;
-      }
-      pathHistorySelectedIndex.value =
-        pathHistorySelectedIndex.value >= list.length - 1 ? 0 : pathHistorySelectedIndex.value + 1;
-      break;
-    }
-    case 'ArrowUp': {
-      event.preventDefault();
-      if (!list.length) {
-        return;
-      }
-      pathHistorySelectedIndex.value =
-        pathHistorySelectedIndex.value <= 0 ? list.length - 1 : pathHistorySelectedIndex.value - 1;
-      break;
-    }
-    case 'Enter': {
-      event.preventDefault();
-      const selected =
-        pathHistorySelectedIndex.value >= 0 ? list[pathHistorySelectedIndex.value]?.path : pathInput.value;
-      void applyPathFromInput(selected || pathInput.value);
-      break;
-    }
-    case 'Escape': {
-      event.preventDefault();
-      pathInput.value = currentPath.value;
-      isEditingPath.value = false;
-      closePathHistory();
-      break;
-    }
-    default:
-      break;
-  }
-}
-
-function handlePathInputBlur(): void {
-  window.setTimeout(() => {
-    const activeEl = document.activeElement as Node | null;
-    const wrapper = pathInputWrapperRef.value;
-    if (!wrapper || !activeEl || !wrapper.contains(activeEl)) {
-      isEditingPath.value = false;
-      closePathHistory();
-    }
-  }, 120);
-}
-
-function selectPathHistory(path: string): void {
-  void applyPathFromInput(path);
-}
-
-async function sendCdCommandToTerminal(): Promise<void> {
-  const sid = sshSessionId.value;
-  if (!sid || !currentPath.value) {
-    return;
-  }
-
-  const escapedPath = currentPath.value.replace(/["\\$`]/g, '\\$&');
-  const command = `cd "${escapedPath}"\n`;
-
-  try {
-    const data = btoa(unescape(encodeURIComponent(command)));
-    await sshApi.write(sid, data);
-  } catch (e: any) {
-    notify.addNotification('error', `发送目录切换命令失败: ${e.message || String(e)}`);
-  }
-}
-
-const selectedEntries = computed<FileEntry[]>(() =>
-  entries.value.filter((entry) => selectedEntryPaths.value.has(entry.path)),
-);
-
-const SUPPORTED_ARCHIVE_EXTENSIONS = ['.zip', '.tar.gz', '.tgz', '.tar.bz2', '.tbz2'];
-
-function isArchiveFile(filename: string): boolean {
-  const lower = filename.toLowerCase();
-  return SUPPORTED_ARCHIVE_EXTENSIONS.some((ext) => lower.endsWith(ext));
-}
-
-function isEntrySelected(entry: FileEntry): boolean {
-  return selectedEntryPaths.value.has(entry.path);
-}
-
-function clearSelection(): void {
-  if (selectedEntryPaths.value.size) {
-    selectedEntryPaths.value = new Set();
-  }
-  lastSelectedPath.value = null;
-}
-
-function setSingleSelection(entry: FileEntry): void {
-  selectedEntryPaths.value = new Set([entry.path]);
-  lastSelectedPath.value = entry.path;
-}
-
-function toggleEntrySelection(entry: FileEntry): void {
-  const next = new Set(selectedEntryPaths.value);
-  if (next.has(entry.path)) {
-    next.delete(entry.path);
-  } else {
-    next.add(entry.path);
-  }
-  selectedEntryPaths.value = next;
-  lastSelectedPath.value = entry.path;
-}
-
-function selectRangeTo(entry: FileEntry): void {
-  const allVisibleEntries = filteredEntries.value;
-  if (!allVisibleEntries.length) {
-    setSingleSelection(entry);
-    return;
-  }
-
-  const targetIndex = allVisibleEntries.findIndex((item) => item.path === entry.path);
-  const anchorPath = lastSelectedPath.value ?? entry.path;
-  const anchorIndex = allVisibleEntries.findIndex((item) => item.path === anchorPath);
-
-  if (targetIndex === -1 || anchorIndex === -1) {
-    setSingleSelection(entry);
-    return;
-  }
-
-  const start = Math.min(targetIndex, anchorIndex);
-  const end = Math.max(targetIndex, anchorIndex);
-  const next = new Set(selectedEntryPaths.value);
-  for (let i = start; i <= end; i += 1) {
-    next.add(allVisibleEntries[i].path);
-  }
-  selectedEntryPaths.value = next;
-  lastSelectedPath.value = entry.path;
-}
-
-function handleEntryClick(entry: FileEntry, event: MouseEvent): void {
-  if (event.shiftKey) {
-    selectRangeTo(entry);
-    return;
-  }
-
-  if (event.ctrlKey || event.metaKey) {
-    toggleEntrySelection(entry);
-    return;
-  }
-
-  setSingleSelection(entry);
-  if (entry.is_dir) {
-    void navigateTo(entry.path);
-  } else {
-    void openEditor(entry);
-  }
-}
-
-function closeCtxMenu(): void {
-  ctxVisible.value = false;
-  ctxEntry.value = null;
-  ctxSubmenuKey.value = null;
-  ctxNearRight.value = false;
-}
-
-function adjustContextMenuPosition(): void {
-  const menu = ctxMenuRef.value;
-  if (!menu) {
-    return;
-  }
-
-  const rect = menu.getBoundingClientRect();
-  let x = ctxPos.value.x;
-  let y = ctxPos.value.y;
-
-  const maxX = window.innerWidth - rect.width - VIEWPORT_PADDING;
-  const maxY = window.innerHeight - rect.height - VIEWPORT_PADDING;
-
-  if (x > maxX) {
-    x = maxX;
-  }
-  if (y > maxY) {
-    y = maxY;
-  }
-
-  x = Math.max(VIEWPORT_PADDING, x);
-  y = Math.max(VIEWPORT_PADDING, y);
-
-  ctxPos.value = { x, y };
-
-  const remainingRight = window.innerWidth - (x + rect.width);
-  ctxNearRight.value = remainingRight < CONTEXT_SUBMENU_MIN_WIDTH + VIEWPORT_PADDING;
-}
-
-function showCtx(e: MouseEvent, entry: FileEntry | null = null): void {
-  e.preventDefault();
-  if (!entry) {
-    clearSelection();
-  }
-  ctxEntry.value = entry;
-  ctxPos.value = { x: e.clientX, y: e.clientY };
-  ctxSubmenuKey.value = null;
-  ctxVisible.value = true;
-  void nextTick(adjustContextMenuPosition);
-}
-
-function handleEntryContextMenu(e: MouseEvent, entry: FileEntry): void {
-  const isSelected = selectedEntryPaths.value.has(entry.path);
-  const hasModifiers = e.ctrlKey || e.metaKey || e.shiftKey;
-
-  if (!isSelected && !hasModifiers) {
-    setSingleSelection(entry);
-  } else if (!isSelected && hasModifiers) {
-    const next = new Set(selectedEntryPaths.value);
-    next.add(entry.path);
-    selectedEntryPaths.value = next;
-    lastSelectedPath.value = entry.path;
-  }
-
-  showCtx(e, entry);
-}
-
-function runContextAction(action: () => void | Promise<void>): void {
-  closeCtxMenu();
-  void Promise.resolve(action());
-}
-
-function getContextEntries(): FileEntry[] {
-  const entry = ctxEntry.value;
-  if (!entry) {
-    return [];
-  }
-
-  if (selectedEntryPaths.value.has(entry.path) && selectedEntries.value.length > 1) {
-    return [...selectedEntries.value];
-  }
-
-  return [entry];
-}
-
-function buildCompressSubmenu(prefix: string, targets: FileEntry[], disabled: boolean): BrowserContextMenuItem[] {
-  return [
-    {
-      key: `${prefix}-zip`,
-      label: '压缩为 ZIP',
-      disabled,
-      onClick: () => triggerCompress('zip', targets),
-    },
-    {
-      key: `${prefix}-targz`,
-      label: '压缩为 TAR.GZ',
-      disabled,
-      onClick: () => triggerCompress('tar.gz', targets),
-    },
-    {
-      key: `${prefix}-tarbz2`,
-      label: '压缩为 TAR.BZ2',
-      disabled,
-      onClick: () => triggerCompress('tar.bz2', targets),
-    },
-  ];
-}
-
-const contextMenuItems = computed<BrowserContextMenuItem[]>(() => {
-  const entry = ctxEntry.value;
-  const canUseSftp = !!activeSftpSessionId.value;
-  const hasClipboard = !!clipboardState.value?.entries.length;
-  const items: BrowserContextMenuItem[] = [];
-  const targetEntries = getContextEntries();
-  const isMultiContext = targetEntries.length > 1 && !!entry && selectedEntryPaths.value.has(entry.path);
-
-  if (isMultiContext) {
-    const allFilesSelected = targetEntries.every((item) => !item.is_dir);
-
-    items.push({
-      key: 'cut-multi',
-      label: '剪切',
-      icon: 'fas fa-cut',
-      disabled: !canUseSftp,
-      onClick: () => queueClipboardAction('cut'),
-    });
-    items.push({
-      key: 'copy-multi',
-      label: '复制',
-      icon: 'fas fa-copy',
-      disabled: !canUseSftp,
-      onClick: () => queueClipboardAction('copy'),
-    });
-
-    if (allFilesSelected) {
-      items.push({
-        key: 'download-multi',
-        label: `下载 ${targetEntries.length} 个文件`,
-        icon: 'fas fa-download',
-        disabled: !canUseSftp,
-        onClick: () => downloadMultipleFiles(targetEntries),
-      });
-    }
-
-    items.push({
-      key: 'compress-multi',
-      label: '压缩',
-      icon: 'fas fa-file-archive',
-      submenu: buildCompressSubmenu('compress-multi', targetEntries, !canUseSftp),
-    });
-    items.push({
-      key: 'send-to-multi',
-      label: '发送到...',
-      icon: 'fas fa-share',
-      disabled: !canUseSftp,
-      onClick: () => openSendModal(targetEntries[0]?.path),
-    });
-
-    items.push({ key: 'sep-multi-1', separator: true });
-    items.push({
-      key: 'delete-multi',
-      label: `删除 ${targetEntries.length} 项`,
-      icon: 'fas fa-trash-alt',
-      danger: true,
-      disabled: !canUseSftp,
-      onClick: () => handleDeleteEntries(targetEntries),
-    });
-    items.push({
-      key: 'refresh-multi',
-      label: '刷新',
-      icon: 'fas fa-sync-alt',
-      disabled: !canUseSftp,
-      onClick: refresh,
-    });
-
-    return items;
-  }
-
-  if (entry && entry.name !== '..') {
-    if (entry.is_dir) {
-      items.push({
-        key: 'download-folder',
-        label: '下载文件夹',
-        icon: 'fas fa-file-archive',
-        disabled: !canUseSftp,
-        onClick: () => downloadDirectory(entry),
-      });
-    } else {
-      items.push({
-        key: 'download-file',
-        label: '下载文件',
-        icon: 'fas fa-download',
-        disabled: !canUseSftp,
-        onClick: () => downloadFile(entry),
-      });
-    }
-
-    items.push({
-      key: 'cut',
-      label: '剪切',
-      icon: 'fas fa-cut',
-      disabled: !canUseSftp,
-      onClick: () => queueClipboardAction('cut'),
-    });
-    items.push({
-      key: 'copy',
-      label: '复制',
-      icon: 'fas fa-copy',
-      disabled: !canUseSftp,
-      onClick: () => queueClipboardAction('copy'),
-    });
-
-    if (entry.is_dir) {
-      items.push({
-        key: 'paste',
-        label: '粘贴',
-        icon: 'fas fa-paste',
-        disabled: !canUseSftp || !hasClipboard,
-        onClick: pasteFromClipboard,
-      });
-    }
-
-    items.push({
-      key: 'copy-path',
-      label: '复制路径',
-      icon: 'fas fa-link',
-      disabled: !canUseSftp,
-      onClick: copyContextPath,
-    });
-
-    items.push({ key: 'sep-single-1', separator: true });
-
-    items.push({
-      key: 'delete',
-      label: '删除',
-      icon: 'fas fa-trash-alt',
-      danger: true,
-      disabled: !canUseSftp,
-      onClick: () => handleDelete(entry),
-    });
-    items.push({
-      key: 'rename',
-      label: '重命名',
-      icon: 'fas fa-i-cursor',
-      disabled: !canUseSftp,
-      onClick: () => handleRename(entry),
-    });
-
-    items.push({ key: 'sep-single-2', separator: true });
-
-    const compressTargets = [entry];
-    items.push({
-      key: 'compress',
-      label: '压缩',
-      icon: 'fas fa-file-archive',
-      submenu: buildCompressSubmenu('compress', compressTargets, !canUseSftp),
-    });
-
-    if (!entry.is_dir && isArchiveFile(entry.name)) {
-      items.push({
-        key: 'decompress',
-        label: '解压',
-        icon: 'fas fa-box-open',
-        disabled: !canUseSftp,
-        onClick: () => triggerDecompress(entry),
-      });
-    }
-
-    items.push({
-      key: 'send-to',
-      label: '发送到...',
-      icon: 'fas fa-share',
-      disabled: !canUseSftp,
-      onClick: () => openSendModal(entry.path),
-    });
-
-    items.push({ key: 'sep-single-3', separator: true });
-    items.push({
-      key: 'new-folder',
-      label: '新建文件夹',
-      icon: 'fas fa-folder-plus',
-      disabled: !canUseSftp,
-      onClick: () => {
-        showMkdir.value = true;
-      },
-    });
-    items.push({
-      key: 'new-file',
-      label: '新建文件',
-      icon: 'far fa-file-alt',
-      disabled: !canUseSftp,
-      onClick: () => {
-        showNewFile.value = true;
-      },
-    });
-    items.push({
-      key: 'upload',
-      label: '上传',
-      icon: 'fas fa-upload',
-      disabled: !canUseSftp,
-      onClick: openUpload,
-    });
-
-    items.push({ key: 'sep-single-4', separator: true });
-    items.push({
-      key: 'chmod',
-      label: '修改权限',
-      icon: 'fas fa-lock',
-      disabled: !canUseSftp,
-      onClick: () => handleChmod(entry),
-    });
-    items.push({
-      key: 'refresh',
-      label: '刷新',
-      icon: 'fas fa-sync-alt',
-      disabled: !canUseSftp,
-      onClick: refresh,
-    });
-
-    return items;
-  }
-
-  if (!entry) {
-    items.push({
-      key: 'paste-empty',
-      label: '粘贴',
-      icon: 'fas fa-paste',
-      disabled: !canUseSftp || !hasClipboard,
-      onClick: pasteFromClipboard,
-    });
-    items.push({ key: 'sep-empty-1', separator: true });
-    items.push({
-      key: 'new-folder-empty',
-      label: '新建文件夹',
-      icon: 'fas fa-folder-plus',
-      disabled: !canUseSftp,
-      onClick: () => {
-        showMkdir.value = true;
-      },
-    });
-    items.push({
-      key: 'new-file-empty',
-      label: '新建文件',
-      icon: 'far fa-file-alt',
-      disabled: !canUseSftp,
-      onClick: () => {
-        showNewFile.value = true;
-      },
-    });
-    items.push({
-      key: 'upload-empty',
-      label: '上传',
-      icon: 'fas fa-upload',
-      disabled: !canUseSftp,
-      onClick: openUpload,
-    });
-    items.push({ key: 'sep-empty-2', separator: true });
-    items.push({
-      key: 'refresh-empty',
-      label: '刷新',
-      icon: 'fas fa-sync-alt',
-      disabled: !canUseSftp,
-      onClick: refresh,
-    });
-
-    return items;
-  }
-
-  items.push({
-    key: 'paste-parent',
-    label: '粘贴',
-    icon: 'fas fa-paste',
-    disabled: !canUseSftp || !hasClipboard,
-    onClick: pasteFromClipboard,
-  });
-  items.push({
-    key: 'refresh-parent',
-    label: '刷新',
-    icon: 'fas fa-sync-alt',
-    disabled: !canUseSftp,
-    onClick: refresh,
-  });
-
-  return items;
-});
-
-function handleCtxItemClick(item: BrowserContextMenuItem, fromSubmenu = false): void {
-  if (item.disabled) {
-    return;
-  }
-
-  if (item.submenu && item.submenu.length && !fromSubmenu) {
-    ctxSubmenuKey.value = ctxSubmenuKey.value === item.key ? null : item.key;
-    return;
-  }
-
-  if (item.onClick) {
-    runContextAction(item.onClick);
-  }
-}
-
-function queueClipboardAction(operation: 'copy' | 'cut'): void {
-  const sid = activeSftpSessionId.value;
-  const targetEntries = getContextEntries();
-  if (!sid || !targetEntries.length) {
-    return;
-  }
-
-  clipboardState.value = {
-    operation,
-    sessionId: sid,
-    entries: targetEntries.map((entry) => ({ ...entry })),
-  };
-
-  if (targetEntries.length === 1) {
-    notify.addNotification('success', operation === 'copy' ? `已复制 ${targetEntries[0].name}` : `已剪切 ${targetEntries[0].name}`);
-  } else {
-    notify.addNotification('success', operation === 'copy' ? `已复制 ${targetEntries.length} 项` : `已剪切 ${targetEntries.length} 项`);
-  }
-}
-
-async function cloneEntryRecursive(sessionId: string, source: FileEntry, targetPath: string): Promise<void> {
-  if (source.is_dir) {
-    await sftpApi.mkdir(sessionId, targetPath);
-    const children = await sftpApi.listDir(sessionId, source.path);
-    for (const child of children) {
-      if (child.name === '.' || child.name === '..') {
-        continue;
-      }
-      const childTargetPath = joinRemotePath(targetPath, child.name);
-      await cloneEntryRecursive(sessionId, child, childTargetPath);
-    }
-    return;
-  }
-
-  const content = await sftpApi.readFile(sessionId, source.path);
-  await sftpApi.writeFile(sessionId, targetPath, content);
-}
-
-async function pasteFromClipboard(): Promise<void> {
-  const sid = activeSftpSessionId.value;
-  const clipboard = clipboardState.value;
-  if (!sid || !clipboard || !clipboard.entries.length) {
-    return;
-  }
-
-  if (clipboard.sessionId !== sid) {
-    notify.addNotification('warning', '暂不支持跨会话粘贴');
-    return;
-  }
-
-  const targetDir = ctxEntry.value?.is_dir ? ctxEntry.value.path : currentPath.value;
-
-  try {
-    const existingNames = new Set((await sftpApi.listDir(sid, targetDir)).map((item) => item.name));
-    let movedCount = 0;
-    let copiedCount = 0;
-    let skippedCount = 0;
-    let failedCount = 0;
-
-    for (const sourceEntry of clipboard.entries) {
-      const sourceName = getPathName(sourceEntry.path) || sourceEntry.name;
-      if (!sourceName) {
-        failedCount += 1;
-        continue;
-      }
-
-      const sourceDir = getPathDir(sourceEntry.path);
-      if (clipboard.operation === 'cut' && sourceDir === targetDir) {
-        skippedCount += 1;
-        continue;
-      }
-
-      let targetName = sourceName;
-      let index = 1;
-      while (existingNames.has(targetName)) {
-        targetName = buildDuplicateName(sourceName, index);
-        index += 1;
-      }
-      existingNames.add(targetName);
-
-      const targetPath = joinRemotePath(targetDir, targetName);
-
-      try {
-        if (clipboard.operation === 'cut') {
-          await sftpApi.rename(sid, sourceEntry.path, targetPath);
-          movedCount += 1;
-        } else {
-          await cloneEntryRecursive(sid, sourceEntry, targetPath);
-          copiedCount += 1;
-        }
-      } catch {
-        failedCount += 1;
-      }
-    }
-
-    if (clipboard.operation === 'cut' && (movedCount > 0 || skippedCount === clipboard.entries.length)) {
-      clipboardState.value = null;
-    }
-
-    if (clipboard.operation === 'cut' && movedCount > 0) {
-      notify.addNotification('success', `已移动 ${movedCount} 项`);
-    } else if (clipboard.operation === 'copy' && copiedCount > 0) {
-      notify.addNotification('success', `已复制 ${copiedCount} 项`);
-    } else if (skippedCount > 0 && failedCount === 0) {
-      notify.addNotification('info', '源目录与目标目录一致，无需粘贴');
-    }
-
-    if (failedCount > 0) {
-      notify.addNotification('warning', `有 ${failedCount} 项粘贴失败`);
-    }
-
-    await navigateTo(currentPath.value);
-  } catch (e: any) {
-    notify.addNotification('error', e.message || '粘贴失败');
-  }
-}
-
-async function copyContextPath(): Promise<void> {
-  const entry = ctxEntry.value;
-  if (!entry) {
-    return;
-  }
-
-  try {
-    await navigator.clipboard.writeText(entry.path);
-    notify.addNotification('success', '路径已复制到剪贴板');
-  } catch {
-    notify.addNotification('error', '复制路径失败，请检查剪贴板权限');
-  }
-}
-
-function triggerCompress(format: 'zip' | 'tar.gz' | 'tar.bz2', targetEntries: FileEntry[] = getContextEntries()): void {
-  if (!targetEntries.length) {
-    return;
-  }
-
-  const formatLabel = format.toUpperCase();
-  const label = targetEntries.length === 1 ? targetEntries[0].name : `${targetEntries.length} 项`;
-  notify.addNotification('info', `${label} 的 ${formatLabel} 压缩能力即将接入，当前可先使用下载功能`);
-}
-
-function triggerDecompress(entry: FileEntry): void {
-  notify.addNotification('info', `${entry.name} 的解压能力即将接入，当前可先下载后在本地解压`);
-}
-
-async function downloadMultipleFiles(targetEntries: FileEntry[]): Promise<void> {
-  const fileEntries = targetEntries.filter((entry) => !entry.is_dir);
-  if (!fileEntries.length) {
-    notify.addNotification('warning', '批量下载仅支持文件');
-    return;
-  }
-
-  for (const fileEntry of fileEntries) {
-    await downloadFile(fileEntry);
-  }
-}
-
-async function handleDeleteEntries(targetEntries: FileEntry[]): Promise<void> {
-  const sid = activeSftpSessionId.value;
-  if (!sid || !targetEntries.length) {
-    return;
-  }
-
-  const label = targetEntries.length === 1 ? `"${targetEntries[0].name}"` : `${targetEntries.length} 项`;
-  if (fileManagerShowDeleteConfirmation.value && !confirm(`确定删除 ${label} 吗？`)) {
-    return;
-  }
-
-  let successCount = 0;
-  let failedCount = 0;
-
-  // 文件优先，目录按深度从深到浅删除，降低目录删除失败概率
-  const sortedTargets = [...targetEntries].sort((a, b) => {
-    if (a.is_dir !== b.is_dir) {
-      return a.is_dir ? 1 : -1;
-    }
-
-    if (!a.is_dir && !b.is_dir) {
-      return 0;
-    }
-
-    const depthA = a.path.split('/').length;
-    const depthB = b.path.split('/').length;
-    return depthB - depthA;
-  });
-
-  for (const target of sortedTargets) {
-    try {
-      if (target.is_dir) {
-        await sftpApi.rmdir(sid, target.path);
-      } else {
-        await sftpApi.removeFile(sid, target.path);
-      }
-      successCount += 1;
-    } catch {
-      failedCount += 1;
-    }
-  }
-
-  if (successCount > 0) {
-    notify.addNotification('success', `已删除 ${successCount} 项`);
-  }
-  if (failedCount > 0) {
-    notify.addNotification('warning', `${failedCount} 项删除失败`);
-  }
-
-  if (successCount > 0) {
-    if (targetEntries.every((item) => selectedEntryPaths.value.has(item.path))) {
-      clearSelection();
-    }
-    await navigateTo(currentPath.value);
-  }
-}
-
-function openUpload() {
-  if (!activeSftpSessionId.value) {
-    notify.addNotification('error', 'SFTP 未就绪，无法上传');
-    return;
-  }
-  showUpload.value = true;
-}
-
-function openSendModal(path?: string) {
-  if (!activeSftpSessionId.value) {
-    notify.addNotification('error', 'SFTP 未就绪，无法发起传输');
-    return;
-  }
-  sendFileTarget.value = path ?? null;
-  showSendFile.value = true;
-}
-
-async function handleDelete(entry: FileEntry) {
-  await handleDeleteEntries([entry]);
-}
-
-async function handleRename(entry: FileEntry) {
-  const sid = activeSftpSessionId.value;
-  if (!sid) return;
-
-  const newName = prompt('新名称:', entry.name);
-  if (!newName || newName === entry.name) return;
-
-  const nextPath = joinRemotePath(currentPath.value, newName);
-  try {
-    await sftpApi.rename(sid, entry.path, nextPath);
-    refresh();
-  } catch (e: any) {
-    error.value = e.message;
-  }
-}
-
-async function handleChmod(entry: FileEntry) {
-  const sid = activeSftpSessionId.value;
-  if (!sid) return;
-
-  const current = entry.permissions != null ? (entry.permissions & 0o7777).toString(8) : '644';
-  const input = prompt('权限 (八进制):', current);
-  if (!input) return;
-
-  const mode = parseInt(input, 8);
-  if (Number.isNaN(mode)) {
-    notify.addNotification('error', '无效的权限值');
-    return;
-  }
-
-  try {
-    await sftpApi.chmod(sid, entry.path, mode);
-    notify.addNotification('success', '权限已修改');
-    refresh();
-  } catch (e: any) {
-    notify.addNotification('error', e.message);
-  }
-}
-
-function openPopupEditor() {
-  const sid = activeSftpSessionId.value;
-  if (!sid) {
-    notify.addNotification('warning', '没有活动会话，无法打开编辑器');
-    return;
-  }
-
-  fileEditorStore.triggerPopup('', sid);
-}
-
-async function openEditor(entry: FileEntry) {
-  const sid = activeSftpSessionId.value;
-  if (!sid) return;
-
-  const popupEditorEnabled = settingsStore.getBoolean('showPopupFileEditor', false);
-  const shareFileEditorTabs = settingsStore.getBoolean('shareFileEditorTabs', true);
-  const tabScope = connectionId.value != null ? String(connectionId.value) : 'global';
-  const tabId = shareFileEditorTabs ? `shared:${tabScope}:${entry.path}` : `${sid}:${entry.path}`;
-
-  if (popupEditorEnabled) {
-    fileEditorStore.triggerPopup(entry.path, sid);
-  }
-
-  if (fileEditorStore.openFiles.has(tabId)) {
-    fileEditorStore.updateFileSession(tabId, sid);
-    fileEditorStore.setActive(tabId);
-    return;
-  }
-
-  try {
-    const base64 = await sftpApi.readFile(sid, entry.path);
-    const content = decodeURIComponent(escape(atob(base64)));
-    const ext = entry.name.split('.').pop()?.toLowerCase() ?? '';
-    const langMap: Record<string, string> = {
-      js: 'javascript',
-      ts: 'typescript',
-      py: 'python',
-      rs: 'rust',
-      json: 'json',
-      yaml: 'yaml',
-      yml: 'yaml',
-      md: 'markdown',
-      html: 'html',
-      css: 'css',
-      sh: 'shell',
-      bash: 'shell',
-      xml: 'xml',
-      sql: 'sql',
-      toml: 'toml',
-      conf: 'ini',
-      ini: 'ini',
-    };
-
-    fileEditorStore.openFile({
-      id: tabId,
-      sessionId: sid,
-      path: entry.path,
-      filename: entry.name,
-      content,
-      originalContent: content,
-      rawContentBase64: base64,
-      selectedEncoding: 'utf-8',
-      isDirty: false,
-      isLoading: false,
-      loadingError: null,
-      isSaving: false,
-      saveStatus: 'idle',
-      saveError: null,
-      scrollTop: 0,
-      scrollLeft: 0,
-      language: langMap[ext] ?? 'plaintext',
-    });
-
-  } catch (e: any) {
-    notify.addNotification('error', `打开失败: ${e.message}`);
-  }
-}
-
-function announceTransfer(taskId: string) {
-  window.dispatchEvent(new CustomEvent('transfer-created', { detail: { taskId } }));
-}
-
-async function downloadFile(entry: FileEntry) {
-  const sid = activeSftpSessionId.value;
-  if (!sid) return;
-
-  try {
-    const defaultPath = await resolveDownloadDefaultPath(entry.name || 'file');
-    const localPath = await save({ defaultPath });
-    if (!localPath) return;
-
-    const taskId = await sftpApi.downloadToDisk(sid, entry.path, localPath);
-    announceTransfer(taskId);
-    notify.addNotification('success', `已开始下载 ${entry.name}`);
-  } catch (e: any) {
-    notify.addNotification('error', `下载失败: ${e.message}`);
-  }
-}
-
-async function downloadDirectory(entry: FileEntry) {
-  const sid = activeSftpSessionId.value;
-  if (!sid) return;
-
-  try {
-    const defaultName = `${entry.name || 'directory'}.zip`;
-    const defaultPath = await resolveDownloadDefaultPath(defaultName);
-    const localPath = await save({
-      defaultPath,
-      filters: [{ name: 'Zip Archive', extensions: ['zip'] }],
-    });
-    if (!localPath) return;
-
-    const taskId = await sftpApi.downloadDirectoryToDisk(sid, entry.path, localPath);
-    announceTransfer(taskId);
-    notify.addNotification('success', `已开始打包下载 ${entry.name}`);
-  } catch (e: any) {
-    notify.addNotification('error', `目录下载失败: ${e.message}`);
-  }
-}
-
-function onSendCreated(taskId: string) {
-  showSendFile.value = false;
-  announceTransfer(taskId);
-}
-
-function formatPerms(p: number): string {
-  return (p & 0o7777).toString(8).padStart(4, '0');
-}
-
-async function doMkdir() {
-  const sid = activeSftpSessionId.value;
-  const folderName = mkdirName.value.trim();
-  if (!sid || !folderName) return;
-
-  try {
-    await sftpApi.mkdir(sid, joinRemotePath(currentPath.value, folderName));
-    showMkdir.value = false;
-    mkdirName.value = '';
-    refresh();
-  } catch (e: any) {
-    notify.addNotification('error', e.message || '创建文件夹失败');
-  }
-}
-
-async function doCreateFile() {
-  const sid = activeSftpSessionId.value;
-  const fileName = newFileName.value.trim();
-  if (!sid || !fileName) return;
-
-  try {
-    await sftpApi.writeFile(sid, joinRemotePath(currentPath.value, fileName), '');
-    showNewFile.value = false;
-    newFileName.value = '';
-    refresh();
-  } catch (e: any) {
-    notify.addNotification('error', e.message || '创建文件失败');
-  }
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(1)} MB`;
-  return `${(bytes / 1073741824).toFixed(1)} GB`;
-}
-
-function formatModifiedTime(modified?: number): string {
-  if (!modified) {
-    return '';
-  }
-
-  const timestamp = modified > 1000000000000 ? modified : modified * 1000;
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-
-  return date.toLocaleString();
-}
-
-function handleDocumentMouseDown(event: MouseEvent): void {
-  const target = event.target as Node | null;
-  if (!target) {
-    return;
-  }
-
-  if (showFavoritePathsPopover.value) {
-    const clickInFavoriteButton = favoriteButtonRef.value?.contains(target);
-    const clickInFavoritePopover = favoritePopoverRef.value?.contains(target);
-    if (!clickInFavoriteButton && !clickInFavoritePopover && !isFavoriteDialogOpen.value) {
-      showFavoritePathsPopover.value = false;
-      isFavoriteDialogOpen.value = false;
-    }
-  }
-
-  if (isEditingPath.value || showPathHistoryDropdown.value) {
-    const clickInPathWrapper = pathInputWrapperRef.value?.contains(target);
-    if (!clickInPathWrapper) {
-      isEditingPath.value = false;
-      closePathHistory();
-    }
-  }
-
-  if (ctxVisible.value) {
-    const clickInCtxMenu = ctxMenuRef.value?.contains(target);
-    if (!clickInCtxMenu) {
-      closeCtxMenu();
-    }
-  }
-}
-
-function handleWindowResize(): void {
-  if (showFavoritePathsPopover.value) {
-    updateFavoritePopoverPosition();
-  }
-  if (ctxVisible.value) {
-    adjustContextMenuPosition();
-  }
-}
-
-watch(showFavoritePathsPopover, (visible) => {
-  if (visible) {
-    void nextTick(updateFavoritePopoverPosition);
-    return;
-  }
-
-  isFavoriteDialogOpen.value = false;
-});
-
-watch(ctxVisible, (visible) => {
-  if (visible) {
-    void nextTick(adjustContextMenuPosition);
-  }
-});
-
-async function focusPathInput(): Promise<boolean | undefined> {
-  if (!isEditingPath.value) {
-    startPathEdit();
-    await nextTick();
-  }
-
-  if (!isVisibleInput(pathInputRef.value)) {
-    return undefined;
-  }
-
-  pathInputRef.value.focus();
-  pathInputRef.value.select();
-  return document.activeElement === pathInputRef.value;
-}
-
-async function focusSearchInput(): Promise<boolean | undefined> {
-  if (!isSearchActive.value) {
-    activateSearch();
-    await nextTick();
-  }
-
-  if (!isVisibleInput(searchInputRef.value)) {
-    return undefined;
-  }
-
-  searchInputRef.value.focus();
-  searchInputRef.value.select();
-  return document.activeElement === searchInputRef.value;
-}
-
-onMounted(() => {
-  void settingsStore.loadAll().catch(() => undefined);
-  unregisterFileManagerSearch = focusSwitcherStore.registerFocusAction('fileManagerSearch', focusSearchInput);
-  unregisterFileManagerPathInput = focusSwitcherStore.registerFocusAction('fileManagerPathInput', focusPathInput);
-  document.addEventListener('mousedown', handleDocumentMouseDown);
-  window.addEventListener('resize', handleWindowResize);
-});
-
-onUnmounted(() => {
-  unregisterFileManagerSearch?.();
-  unregisterFileManagerPathInput?.();
-  unregisterFileManagerSearch = null;
-  unregisterFileManagerPathInput = null;
-  document.removeEventListener('mousedown', handleDocumentMouseDown);
-  window.removeEventListener('resize', handleWindowResize);
-});
-
-watch(
-  sshSessionId,
-  async (newSid) => {
-    showUpload.value = false;
-    showSendFile.value = false;
-    sendFileTarget.value = null;
-    resetBrowserState();
-
-    if (!newSid || !isSshSession.value) {
-      return;
-    }
-
-    try {
-      await ensureSftpSession(newSid);
-      const targetPath = sessionStore.getSession(newSid)?.currentPath || '/';
-      await navigateTo(targetPath);
-    } catch (e: any) {
-      error.value = e.message || 'SFTP 初始化失败';
-    }
-  },
-  { immediate: true },
-);
 </script>
 
 <style scoped>
@@ -2006,6 +511,7 @@ watch(
   background: var(--bg-base, #1e1e2e);
   color: var(--text, #cdd6f4);
   overflow: hidden;
+  position: relative;
 }
 
 .sftp-placeholder {
@@ -2324,102 +830,194 @@ watch(
 }
 
 .file-list {
+  position: relative;
   flex: 1;
-  overflow-y: auto;
+  overflow: auto;
   font-family: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
   text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+.file-list-shell {
+  position: relative;
+  min-width: max-content;
+}
+
+.file-list-shell.overlay-active {
+  pointer-events: none;
+}
+
 .file-header {
-  display: flex;
+  display: grid;
   align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0 12px;
+  min-width: max-content;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-sub, #6b7280);
   border-bottom: 1px solid var(--border, #313244);
   background: var(--bg-mantle, #181825);
-  position: sticky;
+}
+
+.file-header-btn {
+  position: relative;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-start;
+  width: 100%;
+  height: 36px;
+  padding: 0 14px 0 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.file-header-btn:hover {
+  color: var(--text, #cdd6f4);
+}
+
+.file-header-btn.active {
+  color: var(--blue, #89b4fa);
+}
+
+.file-header-btn.align-right {
+  justify-content: flex-end;
+}
+
+.sort-indicator {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.resize-handle {
+  position: absolute;
   top: 0;
-  z-index: 1;
-  text-transform: none;
-  letter-spacing: 0;
+  right: -6px;
+  width: 12px;
+  height: 100%;
+  cursor: col-resize;
+  pointer-events: auto;
 }
 
-.fh-icon {
-  width: 44px;
-  flex-shrink: 0;
-  text-align: center;
+.resize-handle:hover {
+  background: color-mix(in srgb, var(--blue, #89b4fa) 20%, transparent);
 }
 
-.fh-name {
-  flex: 1;
+.file-body {
+  min-width: max-content;
 }
 
-.fh-size {
-  min-width: 84px;
-  text-align: right;
-  flex-shrink: 0;
-}
-
-.fh-perms {
-  min-width: 68px;
-  flex-shrink: 0;
-  font-family: monospace;
-  text-align: center;
-}
-
-.fh-modified {
-  min-width: 142px;
-  flex-shrink: 0;
-}
-
-.file-item {
+.drag-upload-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  font-size: 13px;
-  line-height: 1.35;
-  cursor: default;
-  border-bottom: 1px solid color-mix(in srgb, var(--border, #d1d5db) 78%, transparent);
-  transition: background 0.12s;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg-base, #1e1e2e) 72%, transparent);
+  backdrop-filter: blur(4px);
 }
 
-.file-item:hover {
+.drag-upload-card {
+  min-width: 320px;
+  max-width: 460px;
+  padding: 24px 28px;
+  border: 1px dashed var(--blue, #89b4fa);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-surface0, #313244) 92%, transparent);
+  color: var(--text, #cdd6f4);
+  text-align: center;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.drag-upload-card i {
+  font-size: 32px;
+  color: var(--blue, #89b4fa);
+  margin-bottom: 12px;
+}
+
+.drag-upload-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.drag-upload-path {
+  margin-top: 8px;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.drag-upload-desc {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-sub, #6b7280);
+}
+
+.file-row {
+  display: grid;
+  align-items: center;
+  min-width: max-content;
+  min-height: 36px;
+  padding: 0 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border, #d1d5db) 78%, transparent);
+  transition: background 0.12s, outline-color 0.12s;
+  user-select: none;
+  cursor: default;
+}
+
+.file-row:hover {
   background: rgba(137, 180, 250, 0.08);
 }
 
-.file-item.dir {
+.file-row.dir,
+.file-row.up-row {
   cursor: pointer;
 }
 
-.file-item.dir:hover {
+.file-row.dir:hover,
+.file-row.up-row:hover {
   background: rgba(137, 180, 250, 0.12);
 }
 
-.file-item.selected {
+.file-row.selected {
   background: rgba(137, 180, 250, 0.24);
 }
 
-.file-item.selected:hover {
+.file-row.selected:hover {
   background: rgba(137, 180, 250, 0.3);
 }
 
-.file-item.selected .file-size,
-.file-item.selected .file-perms,
-.file-item.selected .file-modified {
-  color: var(--text, #111827);
+.file-row.drop-target {
+  outline: 2px dashed var(--blue, #89b4fa);
+  outline-offset: -2px;
+  background: rgba(137, 180, 250, 0.16);
+}
+
+.file-cell {
+  padding: 8px 14px 8px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-row.selected .file-size,
+.file-row.selected .file-perms,
+.file-row.selected .file-modified,
+.file-row.selected .file-name {
+  color: var(--text, #cdd6f4);
 }
 
 .file-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-  width: 44px;
   text-align: center;
+  font-size: 14px;
 }
 
 .folder-color {
@@ -2431,24 +1029,19 @@ watch(
 }
 
 .file-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text, #111827);
+  color: var(--text, #cdd6f4);
   font-size: 13px;
   font-weight: 500;
 }
 
-.file-item.dir .file-name {
-  font-weight: 500;
+.file-row.dir .file-name,
+.file-row.up-row .file-name {
+  font-weight: 600;
 }
 
 .file-size {
   color: var(--text-sub, #6b7280);
   font-size: 12px;
-  flex-shrink: 0;
-  min-width: 84px;
   text-align: right;
   font-family: 'Cascadia Mono', 'Consolas', monospace;
 }
@@ -2457,16 +1050,12 @@ watch(
   color: var(--text-sub, #6b7280);
   font-size: 12px;
   font-family: 'Cascadia Mono', 'Consolas', monospace;
-  flex-shrink: 0;
-  min-width: 68px;
   text-align: center;
 }
 
 .file-modified {
   color: var(--text-sub, #6b7280);
   font-size: 12px;
-  flex-shrink: 0;
-  min-width: 142px;
   text-align: left;
   white-space: nowrap;
 }

@@ -98,10 +98,10 @@ pub async fn auth_disable_2fa(state: State<'_, AppState>, req: PasswordRequest) 
 
 // ── Passkey Commands ──
 
+/// Finish passkey registration — accepts the full credential JSON from navigator.credentials.create()
 #[derive(Deserialize)]
 pub struct PasskeyRegisterFinishRequest {
-    pub credential_id: String,
-    pub public_key: String,
+    pub credential_json: String,
     pub name: String,
 }
 
@@ -133,7 +133,7 @@ pub async fn passkey_register_finish(
 ) -> CmdResult<i64> {
     state
         .auth
-        .passkey_register_finish(&req.credential_id, &req.public_key, &req.name)
+        .passkey_register_finish(&req.credential_json, &req.name)
         .await
 }
 

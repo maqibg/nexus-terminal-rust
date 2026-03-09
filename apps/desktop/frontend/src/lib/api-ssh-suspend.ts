@@ -5,6 +5,7 @@ import { tauriInvoke } from './invoke';
 
 export interface SuspendedSession {
   id: string;
+  connection_id: number;
   connection_name: string;
   suspended_at: string;
 }

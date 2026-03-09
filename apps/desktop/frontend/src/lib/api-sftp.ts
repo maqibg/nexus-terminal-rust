@@ -12,6 +12,12 @@ export interface FileEntry {
   permissions?: number;
 }
 
+export interface LocalUploadEntry {
+  local_path: string;
+  relative_path: string;
+  display_path: string;
+}
+
 export interface SftpOpenOverrideOptions {
   username?: string;
   authMethod?: 'password' | 'key';
@@ -74,6 +80,11 @@ export const sftpApi = {
       req: { session_id: sessionId, old_path: oldPath, new_path: newPath },
     }),
 
+  copyEntry: (sessionId: string, sourcePath: string, targetPath: string) =>
+    tauriInvoke<void>('sftp_copy_entry', {
+      req: { session_id: sessionId, source_path: sourcePath, target_path: targetPath },
+    }),
+
   stat: (sessionId: string, path: string) =>
     tauriInvoke<FileEntry>('sftp_stat', {
       req: { session_id: sessionId, path },
@@ -102,6 +113,16 @@ export const sftpApi = {
   uploadFromDisk: (sessionId: string, localPath: string, remotePath: string) =>
     tauriInvoke<string>('sftp_upload_from_disk', {
       req: { session_id: sessionId, local_path: localPath, remote_path: remotePath },
+    }),
+
+  uploadEntryFromDisk: (sessionId: string, localPath: string, remotePath: string) =>
+    tauriInvoke<string>('sftp_upload_entry_from_disk', {
+      req: { session_id: sessionId, local_path: localPath, remote_path: remotePath },
+    }),
+
+  collectLocalUploadEntries: (paths: string[]) =>
+    tauriInvoke<LocalUploadEntry[]>('sftp_collect_local_upload_entries', {
+      req: { paths },
     }),
 
   downloadDirectoryToDisk: (sessionId: string, remotePath: string, localZipPath: string) =>

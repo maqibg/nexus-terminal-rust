@@ -1,6 +1,7 @@
 import { useFileEditorStore, type FileTab } from '@/stores/fileEditor';
 import { sftpApi } from '@/lib/api';
 import { useAlertDialog } from './useAlertDialog';
+import { toAppError } from '@/lib/errors';
 
 /**
  * Remote file editor composable — open/save/close via SFTP.
@@ -8,6 +9,11 @@ import { useAlertDialog } from './useAlertDialog';
 export function useFileEditor() {
   const store = useFileEditorStore();
   const { alert } = useAlertDialog();
+
+  function decodeUtf8Base64(base64: string): string {
+    const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+    return new TextDecoder('utf-8').decode(bytes);
+  }
 
   function guessLanguage(path: string): string {
     const ext = path.split('.').pop()?.toLowerCase() ?? '';
@@ -31,7 +37,7 @@ export function useFileEditor() {
 
     try {
       const base64 = await sftpApi.readFile(sessionId, path);
-      const content = atob(base64);
+      const content = decodeUtf8Base64(base64);
       const tab: FileTab = {
         id: tabId,
         sessionId,
@@ -40,10 +46,12 @@ export function useFileEditor() {
         originalContent: content,
         isDirty: false,
         language: guessLanguage(path),
+        rawContentBase64: base64,
+        selectedEncoding: 'utf-8',
       };
       store.openFile(tab);
-    } catch (e: any) {
-      await alert('Open File Error', e.message ?? String(e));
+    } catch (e: unknown) {
+      await alert('Open File Error', toAppError(e).message);
     }
   }
 
@@ -54,8 +62,8 @@ export function useFileEditor() {
       const base64 = btoa(tab.content);
       await sftpApi.writeFile(tab.sessionId, tab.path, base64);
       store.markSaved(tabId);
-    } catch (e: any) {
-      await alert('Save Error', e.message ?? String(e));
+    } catch (e: unknown) {
+      await alert('Save Error', toAppError(e).message);
     }
   }
 

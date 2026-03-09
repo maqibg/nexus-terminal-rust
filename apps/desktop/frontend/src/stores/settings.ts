@@ -18,19 +18,32 @@ function applyDocumentLocale(locale: AppLocale): void {
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<Record<string, string>>({});
   const loaded = ref(false);
+  let loadPromise: Promise<void> | null = null;
 
   const locale = computed<AppLocale>(() => 'zh-CN');
 
   async function loadAll() {
-    const items = await settingsApi.getAll();
-    const map: Record<string, string> = {};
-    for (const item of items) {
-      map[item.key] = item.value;
+    if (loadPromise) {
+      return loadPromise;
     }
-    map.language = 'zh-CN';
-    settings.value = map;
-    loaded.value = true;
-    applyDocumentLocale('zh-CN');
+
+    loadPromise = (async () => {
+      const items = await settingsApi.getAll();
+      const map: Record<string, string> = {};
+      for (const item of items) {
+        map[item.key] = item.value;
+      }
+      map.language = 'zh-CN';
+      settings.value = map;
+      loaded.value = true;
+      applyDocumentLocale('zh-CN');
+    })();
+
+    try {
+      await loadPromise;
+    } finally {
+      loadPromise = null;
+    }
   }
 
   async function set(key: string, value: string) {

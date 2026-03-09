@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }
@@ -18,4 +19,5 @@ connection-core = { path = "../connection-core" }
 proxy-core = { path = "../proxy-core" }
 session-core = { path = "../session-core" }
 shared-utils = { path = "../shared-utils" }
+dashmap = { workspace = true }
 russh-sftp = { workspace = true }

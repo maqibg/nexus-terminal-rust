@@ -2,7 +2,7 @@
   <Teleport to="body">
     <div v-if="visible" class="dialog-backdrop" @click.self="cancel">
       <div class="upload-card">
-        <div class="upload-title">上传文件</div>
+        <div class="upload-title">上传文件 / 文件夹</div>
         <div
           class="drop-zone"
           :class="{ dragging }"
@@ -11,7 +11,7 @@
           @drop.prevent="onDrop"
           @click="pickFiles"
         >
-          <span v-if="!uploading">拖拽文件到此处，或点击选择本地文件</span>
+          <span v-if="!uploading">拖拽文件或文件夹到此处，或点击选择本地文件</span>
           <span v-else>正在创建上传任务... {{ progress }}%</span>
         </div>
         <div v-if="uploading" class="progress-bar">
@@ -26,9 +26,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { open } from '@tauri-apps/plugin-dialog';
-import { sftpApi } from '@/lib/api';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import type { DragDropEvent as TauriDragDropEvent } from '@tauri-apps/api/webview';
+import { createUploadTasksFromLocalPaths } from '@/lib/local-upload';
 import { useUINotificationStore } from '@/stores/uiNotifications';
 
 const props = defineProps<{
@@ -36,22 +38,18 @@ const props = defineProps<{
   sessionId: string;
   remotePath: string;
 }>();
-const emit = defineEmits<{ uploaded: []; cancel: [] }>();
+const emit = defineEmits<{ uploaded: [taskIds: string[]]; cancel: [] }>();
 
 const notify = useUINotificationStore();
 const dragging = ref(false);
 const uploading = ref(false);
 const progress = ref(0);
+let unlistenWindowDragDrop: (() => void) | null = null;
 
 function cancel() { if (!uploading.value) emit('cancel'); }
 
 function normalizeRemotePath(basePath: string, fileName: string): string {
   return basePath.endsWith('/') ? `${basePath}${fileName}` : `${basePath}/${fileName}`;
-}
-
-function fileNameFromPath(path: string): string {
-  const parts = path.split(/[\\/]/);
-  return parts[parts.length - 1] || 'file';
 }
 
 function announceTransfer(taskId: string) {
@@ -75,12 +73,9 @@ function onDrop(e: DragEvent) {
     .map((file) => (file as File & { path?: string }).path)
     .filter((v): v is string => !!v);
 
-  if (!paths.length) {
-    notify.addNotification('error', '拖拽上传仅支持带本地路径的桌面文件');
-    return;
+  if (paths.length) {
+    void uploadFromPaths(paths);
   }
-
-  uploadFromPaths(paths);
 }
 
 async function uploadFromPaths(paths: string[]) {
@@ -88,27 +83,64 @@ async function uploadFromPaths(paths: string[]) {
   progress.value = 0;
 
   try {
-    const total = paths.length;
-    let finished = 0;
+    const { taskIds, uploadEntries } = await createUploadTasksFromLocalPaths({
+      sessionId: props.sessionId,
+      paths,
+      remoteBasePath: props.remotePath,
+      joinRemotePath: normalizeRemotePath,
+      onTaskCreated: (taskId) => {
+        announceTransfer(taskId);
+      },
+    });
 
-    for (const localPath of paths) {
-      const fileName = fileNameFromPath(localPath);
-      const remotePath = normalizeRemotePath(props.remotePath, fileName);
-      const taskId = await sftpApi.uploadFromDisk(props.sessionId, localPath, remotePath);
-      announceTransfer(taskId);
-
-      finished += 1;
-      progress.value = Math.round((finished / total) * 100);
+    if (!taskIds.length) {
+      notify.addNotification('warning', '未找到可上传的文件');
+      return;
     }
 
-    notify.addNotification('success', `已创建 ${paths.length} 个上传任务`);
-    emit('uploaded');
+    progress.value = uploadEntries.length > 0 ? 100 : 0;
+    notify.addNotification('success', `已创建 ${taskIds.length} 个上传任务`);
+    emit('uploaded', taskIds);
   } catch (e: any) {
     notify.addNotification('error', `上传失败: ${e.message}`);
   } finally {
     uploading.value = false;
   }
 }
+
+async function handleWindowDragDropEvent(event: TauriDragDropEvent): Promise<void> {
+  if (event.type === 'leave') {
+    dragging.value = false;
+    return;
+  }
+
+  if (event.type !== 'drop' || !props.visible || uploading.value) {
+    return;
+  }
+
+  dragging.value = false;
+  const paths = event.paths ?? [];
+  if (!paths.length) {
+    return;
+  }
+
+  await uploadFromPaths(paths);
+}
+
+onMounted(() => {
+  void getCurrentWindow()
+    .onDragDropEvent((event) => {
+      void handleWindowDragDropEvent(event.payload);
+    })
+    .then((unlisten) => {
+      unlistenWindowDragDrop = unlisten;
+    });
+});
+
+onUnmounted(() => {
+  unlistenWindowDragDrop?.();
+  unlistenWindowDragDrop = null;
+});
 </script>
 
 <style scoped>

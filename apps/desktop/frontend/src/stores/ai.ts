@@ -28,9 +28,11 @@ export const useAIStore = defineStore('ai', () => {
   const config = ref<AIConfig>(defaultConfig());
   const messages = ref<AIChatMessage[]>([]);
 
-  const loading = ref(false);
+  const loadingCounter = ref(0);
+  const loading = computed(() => loadingCounter.value > 0);
   const chatLoading = ref(false);
   const error = ref<string | null>(null);
+  let loadAllPromise: Promise<void> | null = null;
 
   const defaultModel = computed(() => {
     if (!config.value.defaultModelId) {
@@ -70,8 +72,16 @@ export const useAIStore = defineStore('ai', () => {
     error.value = fallback;
   };
 
+  const beginLoading = () => {
+    loadingCounter.value += 1;
+  };
+
+  const endLoading = () => {
+    loadingCounter.value = Math.max(0, loadingCounter.value - 1);
+  };
+
   async function loadChannels() {
-    loading.value = true;
+    beginLoading();
     error.value = null;
     try {
       channels.value = await aiApi.getAllChannels();
@@ -79,12 +89,12 @@ export const useAIStore = defineStore('ai', () => {
       setError(err, '加载 AI 渠道失败');
       throw err;
     } finally {
-      loading.value = false;
+      endLoading();
     }
   }
 
   async function loadModels() {
-    loading.value = true;
+    beginLoading();
     error.value = null;
     try {
       models.value = await aiApi.getAllModels();
@@ -92,7 +102,7 @@ export const useAIStore = defineStore('ai', () => {
       setError(err, '加载 AI 模型失败');
       throw err;
     } finally {
-      loading.value = false;
+      endLoading();
     }
   }
 
@@ -107,11 +117,20 @@ export const useAIStore = defineStore('ai', () => {
   }
 
   async function loadAll() {
-    await Promise.all([loadChannels(), loadModels(), loadConfig()]);
+    if (loadAllPromise) {
+      return loadAllPromise;
+    }
+
+    loadAllPromise = Promise.all([loadChannels(), loadModels(), loadConfig()]).then(() => undefined);
+    try {
+      await loadAllPromise;
+    } finally {
+      loadAllPromise = null;
+    }
   }
 
   async function addChannel(data: Omit<AIChannel, 'id' | 'createdAt' | 'updatedAt'>) {
-    loading.value = true;
+    beginLoading();
     error.value = null;
     try {
       const channel = await aiApi.addChannel({
@@ -127,12 +146,12 @@ export const useAIStore = defineStore('ai', () => {
       setError(err, '添加 AI 渠道失败');
       throw err;
     } finally {
-      loading.value = false;
+      endLoading();
     }
   }
 
   async function updateChannel(id: string, updates: Partial<AIChannel>) {
-    loading.value = true;
+    beginLoading();
     error.value = null;
     try {
       await aiApi.updateChannel(id, {
@@ -154,12 +173,12 @@ export const useAIStore = defineStore('ai', () => {
       setError(err, '更新 AI 渠道失败');
       throw err;
     } finally {
-      loading.value = false;
+      endLoading();
     }
   }
 
   async function deleteChannel(id: string) {
-    loading.value = true;
+    beginLoading();
     error.value = null;
     try {
       await aiApi.deleteChannel(id);
@@ -172,12 +191,12 @@ export const useAIStore = defineStore('ai', () => {
       setError(err, '删除 AI 渠道失败');
       throw err;
     } finally {
-      loading.value = false;
+      endLoading();
     }
   }
 
   async function verifyChannel(id: string): Promise<boolean> {
-    loading.value = true;
+    beginLoading();
     error.value = null;
     try {
       return await aiApi.verifyChannel(id);
@@ -185,12 +204,12 @@ export const useAIStore = defineStore('ai', () => {
       setError(err, '验证 AI 渠道失败');
       return false;
     } finally {
-      loading.value = false;
+      endLoading();
     }
   }
 
   async function fetchModels(channelId: string): Promise<AIModel[]> {
-    loading.value = true;
+    beginLoading();
     error.value = null;
     try {
       const fetched = await aiApi.fetchModels(channelId);
@@ -201,12 +220,12 @@ export const useAIStore = defineStore('ai', () => {
       setError(err, '获取 AI 模型失败');
       throw err;
     } finally {
-      loading.value = false;
+      endLoading();
     }
   }
 
   async function addModel(data: Omit<AIModel, 'id' | 'createdAt'>) {
-    loading.value = true;
+    beginLoading();
     error.value = null;
     try {
       const model = await aiApi.addModel({
@@ -222,12 +241,12 @@ export const useAIStore = defineStore('ai', () => {
       setError(err, '添加 AI 模型失败');
       throw err;
     } finally {
-      loading.value = false;
+      endLoading();
     }
   }
 
   async function deleteModel(id: string) {
-    loading.value = true;
+    beginLoading();
     error.value = null;
     try {
       await aiApi.deleteModel(id);
@@ -239,12 +258,12 @@ export const useAIStore = defineStore('ai', () => {
       setError(err, '删除 AI 模型失败');
       throw err;
     } finally {
-      loading.value = false;
+      endLoading();
     }
   }
 
   async function setDefaultModel(modelId: string) {
-    loading.value = true;
+    beginLoading();
     error.value = null;
     try {
       await aiApi.setDefaultModel(modelId);
@@ -253,12 +272,12 @@ export const useAIStore = defineStore('ai', () => {
       setError(err, '设置默认模型失败');
       throw err;
     } finally {
-      loading.value = false;
+      endLoading();
     }
   }
 
   async function updateConfig(updates: Partial<AIConfig>) {
-    loading.value = true;
+    beginLoading();
     error.value = null;
     try {
       await aiApi.updateConfig({
@@ -280,7 +299,7 @@ export const useAIStore = defineStore('ai', () => {
       setError(err, '更新 AI 配置失败');
       throw err;
     } finally {
-      loading.value = false;
+      endLoading();
     }
   }
 

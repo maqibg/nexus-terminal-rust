@@ -2,6 +2,7 @@
   <UINotificationDisplay />
   <GlobalAlertDialog />
   <GlobalConfirmDialog />
+  <SshKeyConfirmModal />
 
   <div id="app-container">
     <header v-if="showHeader" class="app-header" data-tauri-drag-region>
@@ -71,7 +72,12 @@
     </div>
 
     <main class="app-main">
-      <router-view />
+      <router-view v-slot="{ Component, route }">
+        <KeepAlive>
+          <component :is="Component" v-if="route.path === '/workspace'" :key="route.path" />
+        </KeepAlive>
+        <component :is="Component" v-if="route.path !== '/workspace'" :key="route.path" />
+      </router-view>
     </main>
 
     <transition name="global-ai-slide">
@@ -103,6 +109,7 @@ import { statusApi } from '@/lib/api';
 import UINotificationDisplay from '@/components/UINotificationDisplay.vue';
 import GlobalAlertDialog from '@/components/GlobalAlertDialog.vue';
 import GlobalConfirmDialog from '@/components/GlobalConfirmDialog.vue';
+import SshKeyConfirmModal from '@/components/SshKeyConfirmModal.vue';
 import FocusSwitcherConfigurator from '@/components/FocusSwitcherConfigurator.vue';
 import StyleCustomizer from '@/components/StyleCustomizer.vue';
 import TerminalAIChatPanel from '@/components/AI/TerminalAIChatPanel.vue';
@@ -119,64 +126,23 @@ const { isAuthenticated } = storeToRefs(authStore);
 const { headerVisible } = storeToRefs(layoutStore);
 const { isConfiguratorVisible: isFocusSwitcherVisible } = storeToRefs(focusSwitcherStore);
 const { isStyleCustomizerVisible } = storeToRefs(appearanceStore);
-const { locale } = storeToRefs(settingsStore);
 const appWindow = getCurrentWindow();
-const uiText = computed(() => {
-  if (locale.value === 'zh-CN') {
-    return {
-      navConnections: '连接管理',
-      navTerminal: '终端',
-      navProxy: '代理管理',
-      navStatistics: '统计分析',
-      navSettings: '设置',
-      aiAssistant: 'AI 助手',
-      customizeAppearance: '外观自定义',
-      logout: '登出',
-      minimize: '最小化',
-      maximize: '最大化/还原',
-      close: '关闭',
-      backendStarting: '后端启动中...',
-      backendFailed: '后端启动失败：',
-      unknownError: '未知错误',
-    };
-  }
-
-  if (locale.value === 'ja-JP') {
-    return {
-      navConnections: '接続管理',
-      navTerminal: 'ターミナル',
-      navProxy: 'プロキシ管理',
-      navStatistics: '統計分析',
-      navSettings: '設定',
-      aiAssistant: 'AI アシスタント',
-      customizeAppearance: '外観カスタマイズ',
-      logout: 'ログアウト',
-      minimize: '最小化',
-      maximize: '最大化/復元',
-      close: '閉じる',
-      backendStarting: 'バックエンド起動中...',
-      backendFailed: 'バックエンド起動失敗: ',
-      unknownError: '不明なエラー',
-    };
-  }
-
-  return {
-    navConnections: 'Connections',
-    navTerminal: 'Terminal',
-    navProxy: 'Proxies',
-    navStatistics: 'Statistics',
-    navSettings: 'Settings',
-    aiAssistant: 'AI Assistant',
-    customizeAppearance: 'Customize Appearance',
-    logout: 'Logout',
-    minimize: 'Minimize',
-    maximize: 'Maximize/Restore',
-    close: 'Close',
-    backendStarting: 'Backend starting...',
-    backendFailed: 'Backend startup failed: ',
-    unknownError: 'Unknown error',
-  };
-});
+const uiText = computed(() => ({
+  navConnections: '连接管理',
+  navTerminal: '终端',
+  navProxy: '代理管理',
+  navStatistics: '统计分析',
+  navSettings: '设置',
+  aiAssistant: 'AI 助手',
+  customizeAppearance: '外观自定义',
+  logout: '登出',
+  minimize: '最小化',
+  maximize: '最大化/还原',
+  close: '关闭',
+  backendStarting: '后端启动中...',
+  backendFailed: '后端启动失败：',
+  unknownError: '未知错误',
+}));
 
 const noHeaderPaths = ['/login', '/setup'];
 const showHeader = computed(() => {
@@ -229,9 +195,9 @@ async function checkBackendStartup() {
       startupState.value = 'error';
       startupError.value = `status=${health.status}`;
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
     startupState.value = 'error';
-    startupError.value = e.message ?? String(e);
+    startupError.value = e instanceof Error ? e.message : String(e);
   }
 }
 

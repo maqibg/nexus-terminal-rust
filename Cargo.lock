@@ -354,13 +354,18 @@ dependencies = [
  "api-contract",
  "argon2",
  "async-trait",
+ "base64 0.22.1",
  "bcrypt",
+ "ciborium",
+ "rand 0.9.2",
  "serde",
  "serde_json",
  "session-core",
+ "sha2",
  "shared-utils",
  "thiserror 2.0.18",
  "time",
+ "tokio",
  "totp-rs",
  "tracing",
  "uuid",
@@ -765,6 +770,33 @@ dependencies = [
  "serde",
  "wasm-bindgen",
  "windows-link 0.2.1",
+]
+
+[[package]]
+name = "ciborium"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e"
+dependencies = [
+ "ciborium-io",
+ "ciborium-ll",
+ "serde",
+]
+
+[[package]]
+name = "ciborium-io"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757"
+
+[[package]]
+name = "ciborium-ll"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
+dependencies = [
+ "ciborium-io",
+ "half",
 ]
 
 [[package]]
@@ -2143,6 +2175,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "half"
+version = "2.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b"
+dependencies = [
+ "cfg-if",
+ "crunchy",
+ "zerocopy",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3007,24 +3050,29 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 name = "nexus-terminal"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "api-contract",
+ "async-trait",
  "audit-core",
  "auth-core",
  "base64 0.22.1",
  "connection-core",
  "futures-util",
  "history-core",
+ "log",
  "notifications-core",
  "proxy-core",
  "quick-command-core",
  "reqwest 0.12.28",
  "russh",
+ "russh-sftp",
  "serde",
  "serde_json",
  "session-core",
  "settings-core",
  "sftp-core",
  "shared-utils",
+ "sqlx",
  "ssh-core",
  "ssh-suspend-core",
  "storage-sqlite",
@@ -5514,11 +5562,13 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "connection-core",
+ "dashmap",
  "proxy-core",
  "russh",
  "russh-keys",
  "russh-sftp",
  "serde",
+ "serde_json",
  "session-core",
  "shared-utils",
  "tauri",
@@ -5597,6 +5647,7 @@ dependencies = [
  "settings-core",
  "shared-utils",
  "sqlx",
+ "ssh-core",
  "ssh-suspend-core",
  "tag-core",
  "thiserror 2.0.18",

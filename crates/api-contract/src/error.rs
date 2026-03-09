@@ -41,5 +41,11 @@ pub enum AppError {
     SetupRequired,
 }
 
+impl From<shared_utils::StorageError> for AppError {
+    fn from(e: shared_utils::StorageError) -> Self {
+        AppError::Database(e.0)
+    }
+}
+
 /// Result type alias for Tauri commands.
 pub type CmdResult<T> = Result<T, AppError>;

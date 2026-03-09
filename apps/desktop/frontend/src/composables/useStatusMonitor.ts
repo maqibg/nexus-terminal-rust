@@ -2,6 +2,7 @@ import { computed, onUnmounted, readonly, ref, watch } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { storeToRefs } from 'pinia';
 
+import { statusApi } from '@/lib/api';
 import { useSessionStore } from '@/stores/session';
 
 const HISTORY_POINTS = 60;
@@ -96,6 +97,22 @@ export function useStatusMonitor() {
     }
 
     waitingForFirstSample.value = true;
+
+    try {
+      const snapshot = await statusApi.getConnectionRuntimeStatus({ sessionId });
+      if (bindVersion === version) {
+        currentStatus.value = snapshot;
+        statusError.value = null;
+        lastUpdatedAt.value = snapshot.timestamp ?? Date.now();
+        waitingForFirstSample.value = false;
+        cpuHistory.value = pushHistory(cpuHistory.value, snapshot.cpuPercent ?? 0);
+        memUsedHistory.value = pushHistory(memUsedHistory.value, snapshot.memUsed ?? 0);
+        netRxHistory.value = pushHistory(netRxHistory.value, snapshot.netRxRate ?? 0);
+        netTxHistory.value = pushHistory(netTxHistory.value, snapshot.netTxRate ?? 0);
+      }
+    } catch {
+      // fall back to event-driven first sample
+    }
 
     const updateUnlisten = await listen<SessionStatusSnapshot>(`status:update:${sessionId}`, (event) => {
       if (bindVersion !== version) {

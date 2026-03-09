@@ -365,7 +365,7 @@ pub async fn desktop_open_rdp_connection(
         .conn_repo
         .get_connection(connection_id)
         .await
-        .map_err(AppError::Database)?
+        .map_err(AppError::from)?
         .ok_or(AppError::NotFound("connection not found".into()))?;
 
     if !conn.conn_type.eq_ignore_ascii_case("RDP") {
@@ -484,7 +484,7 @@ pub async fn desktop_open_vnc_connection(
         .conn_repo
         .get_connection(connection_id)
         .await
-        .map_err(AppError::Database)?
+        .map_err(AppError::from)?
         .ok_or(AppError::NotFound("connection not found".into()))?;
 
     if !conn.conn_type.eq_ignore_ascii_case("VNC") {

@@ -13,7 +13,8 @@ export const useAuthStore = defineStore('auth', () => {
       state.value = s.state;
       has2fa.value = s.has_2fa;
     } catch {
-      state.value = 'error';
+      state.value = 'Locked';
+      has2fa.value = false;
     }
   }
 

@@ -38,7 +38,7 @@ export const authApi = {
       return { state: 'Locked', has_2fa: false };
     } catch (e: any) {
       // Backend throws SetupRequired error when no user exists
-      if (e.message?.includes('SetupRequired') || e.message?.includes('setup required')) {
+      if (e.kind === 'SetupRequired') {
         return { state: 'NeedsSetup', has_2fa: false };
       }
       throw e;
@@ -74,8 +74,8 @@ export const authApi = {
   // Passkey
   passkeyList: () => tauriInvoke<PasskeyInfo[]>('passkey_list'),
   passkeyRegisterStart: () => tauriInvoke<string>('passkey_register_start'),
-  passkeyRegisterFinish: (credentialId: string, publicKey: string, name: string) =>
-    tauriInvoke<number>('passkey_register_finish', { req: { credential_id: credentialId, public_key: publicKey, name } }),
+  passkeyRegisterFinish: (credentialJson: string, name: string) =>
+    tauriInvoke<number>('passkey_register_finish', { req: { credential_json: credentialJson, name } }),
   passkeyDelete: (credentialId: string) =>
     tauriInvoke<boolean>('passkey_delete', { req: { credential_id: credentialId } }),
   passkeyRename: (credentialId: string, name: string) =>

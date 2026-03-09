@@ -9,7 +9,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use api_contract::error::AppError;
+use api_contract::error::{AppError, CmdResult};
 use reqwest::{Client, StatusCode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -19,8 +19,6 @@ use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::state::AppState;
-
-type CmdResult<T> = Result<T, AppError>;
 
 const AI_CHANNELS_KEY: &str = "ai.channels";
 const AI_MODELS_KEY: &str = "ai.models";
@@ -330,7 +328,10 @@ fn extract_text_from_response(value: &Value) -> Option<String> {
         return Some(text.to_string());
     }
 
-    if let Some(parts) = value.pointer("/choices/0/message/content").and_then(Value::as_array) {
+    if let Some(parts) = value
+        .pointer("/choices/0/message/content")
+        .and_then(Value::as_array)
+    {
         let mut output = String::new();
         for item in parts {
             if let Some(text) = item
@@ -399,7 +400,10 @@ fn strip_markdown_code_fences(content: &str) -> String {
     let mut start_index = 0usize;
     let mut end_index = lines.len();
 
-    if lines.first().is_some_and(|line| line.trim_start().starts_with("```")) {
+    if lines
+        .first()
+        .is_some_and(|line| line.trim_start().starts_with("```"))
+    {
         start_index = 1;
     }
 
@@ -507,7 +511,12 @@ async fn stream_response_chunks(
     Ok(())
 }
 
-fn build_prompt(action: AiAction, content: &str, language: Option<&str>, config: &AiConfig) -> String {
+fn build_prompt(
+    action: AiAction,
+    content: &str,
+    language: Option<&str>,
+    config: &AiConfig,
+) -> String {
     let language = language.unwrap_or("unknown");
 
     let write_template = if config.prompts.write.trim().is_empty() {
@@ -573,7 +582,7 @@ where
         .settings_repo
         .get_setting(key)
         .await
-        .map_err(AppError::Database)?;
+        .map_err(AppError::from)?;
 
     if let Some(raw) = raw {
         if raw.trim().is_empty() {
@@ -599,7 +608,7 @@ where
         .settings_repo
         .set_setting(key, &serialized)
         .await
-        .map_err(AppError::Database)
+        .map_err(AppError::from)
 }
 
 async fn load_channels(state: &AppState) -> CmdResult<Vec<AiChannel>> {
@@ -635,11 +644,9 @@ async fn save_channels(state: &AppState, channels: &[AiChannel]) -> CmdResult<()
 }
 
 async fn load_models(state: &AppState) -> CmdResult<Vec<AiModel>> {
-    Ok(
-        load_json_setting::<Vec<AiModel>>(state, AI_MODELS_KEY)
-            .await?
-            .unwrap_or_default(),
-    )
+    Ok(load_json_setting::<Vec<AiModel>>(state, AI_MODELS_KEY)
+        .await?
+        .unwrap_or_default())
 }
 
 async fn save_models(state: &AppState, models: &[AiModel]) -> CmdResult<()> {
@@ -683,14 +690,12 @@ async fn save_chat_history(state: &AppState, messages: &[AiChatMessage]) -> CmdR
 async fn load_terminal_chat_history(
     state: &AppState,
 ) -> CmdResult<HashMap<String, Vec<AiChatMessage>>> {
-    Ok(
-        load_json_setting::<HashMap<String, Vec<AiChatMessage>>>(
-            state,
-            AI_TERMINAL_CHAT_HISTORY_KEY,
-        )
-        .await?
-        .unwrap_or_default(),
+    Ok(load_json_setting::<HashMap<String, Vec<AiChatMessage>>>(
+        state,
+        AI_TERMINAL_CHAT_HISTORY_KEY,
     )
+    .await?
+    .unwrap_or_default())
 }
 
 async fn save_terminal_chat_history(
@@ -1041,7 +1046,10 @@ async fn request_gemini(
     } else {
         format!("models/{}", model.model_id)
     };
-    let url = format!("{endpoint}/{model_path}:generateContent?key={}", channel.api_key);
+    let url = format!(
+        "{endpoint}/{model_path}:generateContent?key={}",
+        channel.api_key
+    );
 
     let client = build_http_client(config.timeout)?;
     let body = json!({
@@ -1143,7 +1151,9 @@ async fn perform_request_with_model(
         response = strip_markdown_code_fences(&response);
     }
 
-    if let Err(error) = stream_response_chunks(app_handle, &request_id, &response, &cancel_flag).await {
+    if let Err(error) =
+        stream_response_chunks(app_handle, &request_id, &response, &cancel_flag).await
+    {
         if !matches!(&error, AppError::Validation(message) if message == "请求已取消") {
             emit_ai_error(app_handle, &request_id, &error.to_string());
         }
@@ -1286,7 +1296,10 @@ pub async fn ai_verify_channel(state: State<'_, AppState>, id: String) -> CmdRes
 }
 
 #[tauri::command]
-pub async fn ai_fetch_models(state: State<'_, AppState>, channel_id: String) -> CmdResult<Vec<AiModel>> {
+pub async fn ai_fetch_models(
+    state: State<'_, AppState>,
+    channel_id: String,
+) -> CmdResult<Vec<AiModel>> {
     state.auth.require_auth().await?;
 
     let channels = load_channels(&state).await?;
@@ -1298,7 +1311,9 @@ pub async fn ai_fetch_models(state: State<'_, AppState>, channel_id: String) -> 
     let mut models = load_models(&state).await?;
     let fetched_models = fetch_models_by_channel(channel, 30_000).await?;
 
-    models.retain(|model| !(model.channel_id == channel.id && model.source_type == AiModelSourceType::Auto));
+    models.retain(|model| {
+        !(model.channel_id == channel.id && model.source_type == AiModelSourceType::Auto)
+    });
     models.extend(fetched_models.clone());
     save_models(&state, &models).await?;
 
@@ -1389,7 +1404,10 @@ pub async fn ai_get_config(state: State<'_, AppState>) -> CmdResult<AiConfig> {
 }
 
 #[tauri::command]
-pub async fn ai_update_config(state: State<'_, AppState>, updates: AiConfigUpdate) -> CmdResult<()> {
+pub async fn ai_update_config(
+    state: State<'_, AppState>,
+    updates: AiConfigUpdate,
+) -> CmdResult<()> {
     state.auth.require_auth().await?;
 
     let mut config = load_config(&state).await?;

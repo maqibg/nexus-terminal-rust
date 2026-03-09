@@ -4,57 +4,71 @@ mod commands;
 mod state;
 mod status_monitor;
 
+use anyhow::{anyhow, Context};
+use log::LevelFilter;
 use state::{AppState, RuntimePaths};
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(LevelFilter::Info)
+                .level_for("nexus_terminal", LevelFilter::Info)
+                .level_for("sqlx", LevelFilter::Warn)
+                .level_for("russh", LevelFilter::Warn)
+                .level_for("russh_sftp", LevelFilter::Warn)
+                .level_for("tao", LevelFilter::Error)
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
-            let executable_path =
-                std::env::current_exe().expect("failed to get current executable path");
-            let executable_dir = executable_path
-                .parent()
-                .expect("failed to get executable directory")
-                .to_path_buf();
-            let runtime_paths = RuntimePaths::new(executable_dir);
-            runtime_paths
-                .ensure_dirs()
-                .expect("failed to initialize runtime directories");
+        .setup(
+            |app: &mut tauri::App| -> Result<(), Box<dyn std::error::Error>> {
+                let executable_path =
+                    std::env::current_exe().context("failed to get current executable path")?;
+                let executable_dir = executable_path
+                    .parent()
+                    .ok_or_else(|| anyhow!("failed to get executable directory"))?
+                    .to_path_buf();
+                let runtime_paths = RuntimePaths::new(executable_dir);
+                runtime_paths.ensure_dirs().map_err(anyhow::Error::msg)?;
 
-            let db_path = runtime_paths.data_dir.join("nexus.db");
-            let key_path = runtime_paths.data_dir.join(".encryption_key");
+                let db_path = runtime_paths.data_dir.join("nexus.db");
+                let key_path = runtime_paths.data_dir.join(".encryption_key");
 
-            // Init or load encryption key
-            let crypto = if key_path.exists() {
-                let hex_key =
-                    std::fs::read_to_string(&key_path).expect("failed to read encryption key");
-                shared_utils::crypto::CryptoService::from_hex_key(hex_key.trim())
-                    .expect("invalid encryption key")
-            } else {
-                let hex_key = shared_utils::crypto::CryptoService::generate_key_hex();
-                std::fs::write(&key_path, &hex_key).expect("failed to write encryption key");
-                shared_utils::crypto::CryptoService::from_hex_key(&hex_key)
-                    .expect("invalid encryption key")
-            };
+                // Init or load encryption key
+                let crypto = if key_path.exists() {
+                    let hex_key = std::fs::read_to_string(&key_path).with_context(|| {
+                        format!("failed to read encryption key: {}", key_path.display())
+                    })?;
+                    shared_utils::crypto::CryptoService::from_hex_key(hex_key.trim())
+                        .map_err(|error| anyhow!("invalid encryption key: {error}"))?
+                } else {
+                    let hex_key = shared_utils::crypto::CryptoService::generate_key_hex();
+                    std::fs::write(&key_path, &hex_key).with_context(|| {
+                        format!("failed to write encryption key: {}", key_path.display())
+                    })?;
+                    shared_utils::crypto::CryptoService::from_hex_key(&hex_key)
+                        .map_err(|error| anyhow!("invalid generated encryption key: {error}"))?
+                };
 
-            let storage = tauri::async_runtime::block_on(async {
-                storage_sqlite::init_pool(&db_path)
-                    .await
-                    .expect("failed to init database")
-            });
+                let storage = tauri::async_runtime::block_on(async {
+                    storage_sqlite::init_pool(&db_path)
+                        .await
+                        .map_err(|error| anyhow!("failed to init database: {error}"))
+                })?;
 
-            let app_state = AppState::new(storage, crypto, runtime_paths);
-            tauri::async_runtime::block_on(app_state.init_auth_state());
+                let app_state = AppState::new(storage, crypto, runtime_paths);
+                tauri::async_runtime::block_on(app_state.init_auth_state());
 
-            app.manage(app_state);
-            Ok(())
-        })
+                app.manage(app_state);
+                Ok(())
+            },
+        )
         .invoke_handler(tauri::generate_handler![
             // Status
             commands::status::get_backend_health,
@@ -98,6 +112,8 @@ pub fn run() {
             commands::connections::connection_clone,
             commands::connections::connection_export,
             commands::connections::connection_import,
+            commands::connections::app_export,
+            commands::connections::app_import,
             // Settings
             commands::settings::settings_get_all,
             commands::settings::settings_set,
@@ -168,6 +184,14 @@ pub fn run() {
             commands::ssh::ssh_session_list,
             commands::ssh::ssh_exec_command,
             commands::ssh::ssh_take_output_backlog,
+            commands::ssh::ssh_accept_host_key,
+            commands::ssh::ssh_host_key_list,
+            commands::ssh::ssh_host_key_delete,
+            commands::ssh::ssh_host_key_get,
+            commands::ssh_suspend::ssh_suspend_list,
+            commands::ssh_suspend::ssh_suspend,
+            commands::ssh_suspend::ssh_resume,
+            commands::ssh_suspend::ssh_suspend_terminate,
             // SFTP
             commands::sftp::sftp_open,
             commands::sftp::sftp_open_override,
@@ -179,12 +203,15 @@ pub fn run() {
             commands::sftp::sftp_rmdir,
             commands::sftp::sftp_remove_file,
             commands::sftp::sftp_rename,
+            commands::sftp::sftp_copy_entry,
             commands::sftp::sftp_stat,
             commands::sftp::sftp_chmod,
             commands::sftp::sftp_upload_chunk,
             commands::sftp::sftp_download_file,
             commands::sftp::sftp_download_to_disk,
             commands::sftp::sftp_upload_from_disk,
+            commands::sftp::sftp_upload_entry_from_disk,
+            commands::sftp::sftp_collect_local_upload_entries,
             commands::sftp::sftp_cancel_task,
             commands::sftp::sftp_download_directory_to_disk,
             // Transfer
@@ -192,6 +219,12 @@ pub fn run() {
             commands::transfer::transfer_list,
             commands::transfer::transfer_get,
             commands::transfer::transfer_cancel,
+            commands::transfer::transfer_pause,
+            commands::transfer::transfer_resume,
+            commands::transfer::transfer_pause_all,
+            commands::transfer::transfer_resume_all,
+            commands::transfer::transfer_cancel_all,
+            commands::transfer::transfer_cleanup_completed,
             // Desktop
             commands::desktop::desktop_open_rdp,
             commands::desktop::desktop_open_rdp_connection,
@@ -205,5 +238,7 @@ pub fn run() {
             commands::desktop::desktop_vnc_disconnect,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .unwrap_or_else(|error| {
+            tracing::error!("error while running tauri application: {error}");
+        });
 }

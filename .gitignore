@@ -9,3 +9,4 @@ apps/desktop/frontend/dist/
 
 /target-build
 **/target-build
+.ace-tool/

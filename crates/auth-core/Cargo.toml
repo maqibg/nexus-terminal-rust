@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -17,3 +18,7 @@ time = { workspace = true }
 session-core = { path = "../session-core" }
 api-contract = { path = "../api-contract" }
 shared-utils = { path = "../shared-utils" }
+ciborium = "0.2"
+sha2 = "0.10"
+rand = "0.9"
+base64 = { workspace = true }

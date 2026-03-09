@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { v4 as uuidv4 } from 'uuid';
 
 export type SessionProtocol = 'SSH' | 'RDP' | 'VNC';
 
@@ -95,7 +96,7 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   function createSession(connectionId: number, connectionName: string, protocol: SessionProtocol = 'SSH'): string {
-    const id = `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = `session-${uuidv4()}`;
     addSession({
       id,
       connectionId,
@@ -114,7 +115,7 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   function createVncSession(connectionId: number, connectionName: string, desktopSessionId: string, wsPort: number, password?: string | null): string {
-    const id = `vnc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = `vnc-${uuidv4()}`;
     addSession({
       id,
       connectionId,

@@ -1,13 +1,16 @@
 //! Cross-connection transfer commands.
 
-use api_contract::error::AppError;
+use api_contract::error::{AppError, CmdResult};
 use connection_core::repository::ConnectionRepository;
 use serde::Deserialize;
+use ssh_core::host_key::HostKeyStore;
+use std::sync::Arc;
 use tauri::State;
+use tokio::time::{sleep, Duration};
 
 use crate::state::AppState;
 
-type CmdResult<T> = Result<T, AppError>;
+const TRANSFER_BUFFER_SIZE: usize = 1024 * 1024;
 
 #[derive(Deserialize)]
 pub struct TransferSendRequest {
@@ -22,65 +25,34 @@ pub struct TransferTaskRequest {
     pub task_id: String,
 }
 
-async fn build_creds(
-    state: &AppState,
-    connection_id: i64,
-) -> Result<ssh_core::session::SshCredentials, AppError> {
+async fn wait_if_paused(
+    manager: &transfer_core::TransferManager,
+    task_id: &str,
+    cancel_rx: &tokio::sync::watch::Receiver<bool>,
+) -> Result<(), String> {
+    while manager.is_paused(task_id) {
+        if *cancel_rx.borrow() {
+            return Err("cancelled".into());
+        }
+        sleep(Duration::from_millis(120)).await;
+    }
+    Ok(())
+}
+
+/// 校验目标连接是 SSH 类型，transfer_send 专用。
+async fn require_ssh_target(state: &AppState, connection_id: i64) -> Result<(), AppError> {
     let conn = state
         .conn_repo
         .get_connection(connection_id)
         .await
-        .map_err(AppError::Database)?
+        .map_err(AppError::from)?
         .ok_or(AppError::NotFound("connection not found".into()))?;
-
     if !conn.conn_type.eq_ignore_ascii_case("SSH") {
         return Err(AppError::Validation(
             "only SSH connection can be used as transfer target".into(),
         ));
     }
-
-    let auth = if conn.auth_method == "key" {
-        let key_id = conn
-            .ssh_key_id
-            .ok_or(AppError::Validation("no SSH key configured".into()))?;
-        let key = state
-            .conn_repo
-            .get_ssh_key(key_id)
-            .await
-            .map_err(AppError::Database)?
-            .ok_or(AppError::NotFound("SSH key not found".into()))?;
-        let private_key = state
-            .crypto
-            .decrypt(&key.encrypted_private_key)
-            .map_err(|e| AppError::Crypto(e.to_string()))?;
-        let passphrase = key
-            .encrypted_passphrase
-            .as_deref()
-            .map(|p| state.crypto.decrypt(p))
-            .transpose()
-            .map_err(|e| AppError::Crypto(e.to_string()))?;
-        ssh_core::session::SshAuth::Key {
-            private_key_pem: private_key,
-            passphrase,
-        }
-    } else {
-        let password = conn
-            .encrypted_password
-            .as_deref()
-            .ok_or(AppError::Validation("no password configured".into()))?;
-        let decrypted = state
-            .crypto
-            .decrypt(password)
-            .map_err(|e| AppError::Crypto(e.to_string()))?;
-        ssh_core::session::SshAuth::Password(decrypted)
-    };
-
-    Ok(ssh_core::session::SshCredentials {
-        host: conn.host,
-        port: conn.port as u16,
-        username: conn.username,
-        auth,
-    })
+    Ok(())
 }
 
 #[tauri::command]
@@ -95,22 +67,34 @@ pub async fn transfer_send(
         .ssh_manager
         .get_sftp(&req.source_session_id)
         .await
-        .map_err(AppError::Ssh)?;
+        .map_err(AppError::Sftp)?;
 
     let stat = sftp_core::service::stat(&source_sftp, &req.source_path)
         .await
-        .map_err(AppError::Ssh)?;
+        .map_err(AppError::Sftp)?;
     if stat.is_dir {
         return Err(AppError::Validation(
             "directory transfer is not supported in send-file mode".into(),
         ));
     }
 
-    let creds = build_creds(&state, req.target_connection_id).await?;
+    let creds = {
+        require_ssh_target(&state, req.target_connection_id).await?;
+        super::build_creds(&state, req.target_connection_id).await?
+    };
     let target_session_id = format!("transfer-target-{}", uuid::Uuid::new_v4());
+    let host_key_store: Arc<dyn HostKeyStore> = Arc::new(super::SettingsHostKeyStore {
+        repo: state.host_key_repo.clone(),
+    });
     state
         .ssh_manager
-        .open_sftp(target_session_id.clone(), creds, req.target_connection_id)
+        .open_sftp(
+            target_session_id.clone(),
+            creds,
+            req.target_connection_id,
+            Some(host_key_store),
+            Some(app_handle.clone()),
+        )
         .await
         .map_err(AppError::Ssh)?;
 
@@ -118,7 +102,7 @@ pub async fn transfer_send(
         .ssh_manager
         .get_sftp(&target_session_id)
         .await
-        .map_err(AppError::Ssh)?;
+        .map_err(AppError::Sftp)?;
 
     let file_name = req
         .source_path
@@ -164,13 +148,14 @@ pub async fn transfer_send(
                 .await
                 .map_err(|e| format!("create target failed: {e}"))?;
 
-            let mut buf = vec![0u8; 64 * 1024];
+            let mut buf = vec![0u8; TRANSFER_BUFFER_SIZE];
             let mut transferred = 0u64;
 
             loop {
                 if *cancel_rx.borrow() {
                     return Err("cancelled".into());
                 }
+                wait_if_paused(&tm, &task_id, &cancel_rx).await?;
 
                 let n = source
                     .read(&mut buf)
@@ -273,5 +258,54 @@ pub async fn transfer_cancel(
     state
         .transfer_manager
         .cancel(&req.task_id)
-        .map_err(AppError::Ssh)
+        .map_err(|_| AppError::NotFound(format!("transfer task '{}' not found", req.task_id)))
+}
+
+#[tauri::command]
+pub async fn transfer_pause(state: State<'_, AppState>, req: TransferTaskRequest) -> CmdResult<()> {
+    state.auth.require_auth().await?;
+    state
+        .transfer_manager
+        .pause(&req.task_id)
+        .map_err(|_| AppError::NotFound(format!("transfer task '{}' not found", req.task_id)))
+}
+
+#[tauri::command]
+pub async fn transfer_resume(
+    state: State<'_, AppState>,
+    req: TransferTaskRequest,
+) -> CmdResult<()> {
+    state.auth.require_auth().await?;
+    state
+        .transfer_manager
+        .resume(&req.task_id)
+        .map_err(|_| AppError::NotFound(format!("transfer task '{}' not found", req.task_id)))
+}
+
+#[tauri::command]
+pub async fn transfer_pause_all(state: State<'_, AppState>) -> CmdResult<()> {
+    state.auth.require_auth().await?;
+    state.transfer_manager.pause_all();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn transfer_resume_all(state: State<'_, AppState>) -> CmdResult<()> {
+    state.auth.require_auth().await?;
+    state.transfer_manager.resume_all();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn transfer_cancel_all(state: State<'_, AppState>) -> CmdResult<()> {
+    state.auth.require_auth().await?;
+    state.transfer_manager.cancel_all();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn transfer_cleanup_completed(state: State<'_, AppState>) -> CmdResult<()> {
+    state.auth.require_auth().await?;
+    state.transfer_manager.cleanup();
+    Ok(())
 }

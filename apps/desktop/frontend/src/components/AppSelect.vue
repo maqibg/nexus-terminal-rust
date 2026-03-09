@@ -42,6 +42,7 @@ const emit = defineEmits<{
 
 const rootRef = ref<HTMLElement | null>(null);
 const menuOpen = ref(false);
+const activeOptionIndex = ref(-1);
 
 const selectedOption = computed(() => props.options.find(option => Object.is(option.value, props.modelValue)));
 
@@ -63,10 +64,14 @@ const toggleMenu = () => {
     return;
   }
   menuOpen.value = !menuOpen.value;
+  if (menuOpen.value) {
+    syncActiveOption();
+  }
 };
 
 const closeMenu = () => {
   menuOpen.value = false;
+  activeOptionIndex.value = -1;
 };
 
 const selectOption = (option: SelectOption) => {
@@ -79,6 +84,88 @@ const selectOption = (option: SelectOption) => {
 };
 
 const isOptionActive = (option: SelectOption) => Object.is(option.value, props.modelValue);
+
+const enabledOptionIndexes = computed(() =>
+  props.options
+    .map((option, index) => ({ option, index }))
+    .filter(({ option }) => !option.disabled)
+    .map(({ index }) => index),
+);
+
+const syncActiveOption = () => {
+  const selectedIndex = props.options.findIndex((option) => isOptionActive(option) && !option.disabled);
+  if (selectedIndex >= 0) {
+    activeOptionIndex.value = selectedIndex;
+    return;
+  }
+  activeOptionIndex.value = enabledOptionIndexes.value[0] ?? -1;
+};
+
+const moveActiveOption = (direction: 1 | -1) => {
+  const indexes = enabledOptionIndexes.value;
+  if (indexes.length === 0) {
+    activeOptionIndex.value = -1;
+    return;
+  }
+
+  if (!menuOpen.value) {
+    menuOpen.value = true;
+    syncActiveOption();
+    return;
+  }
+
+  const currentPosition = indexes.findIndex((index) => index === activeOptionIndex.value);
+  const nextPosition = currentPosition < 0
+    ? 0
+    : (currentPosition + direction + indexes.length) % indexes.length;
+  activeOptionIndex.value = indexes[nextPosition] ?? indexes[0];
+};
+
+const selectActiveOption = () => {
+  if (!menuOpen.value) {
+    toggleMenu();
+    return;
+  }
+
+  const option = props.options[activeOptionIndex.value];
+  if (option && !option.disabled) {
+    selectOption(option);
+  }
+};
+
+const handleTriggerKeydown = (event: KeyboardEvent) => {
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault();
+      moveActiveOption(1);
+      return;
+    case 'ArrowUp':
+      event.preventDefault();
+      moveActiveOption(-1);
+      return;
+    case 'Home':
+      if (!menuOpen.value || enabledOptionIndexes.value.length === 0) {
+        return;
+      }
+      event.preventDefault();
+      activeOptionIndex.value = enabledOptionIndexes.value[0] ?? -1;
+      return;
+    case 'End':
+      if (!menuOpen.value || enabledOptionIndexes.value.length === 0) {
+        return;
+      }
+      event.preventDefault();
+      activeOptionIndex.value = enabledOptionIndexes.value[enabledOptionIndexes.value.length - 1] ?? -1;
+      return;
+    case 'Enter':
+    case ' ':
+      event.preventDefault();
+      selectActiveOption();
+      return;
+    default:
+      return;
+  }
+};
 
 const handleOutsidePointerDown = (event: MouseEvent) => {
   const target = event.target as Node | null;
@@ -105,12 +192,19 @@ watch(() => props.disabled, (value) => {
 watch(() => props.options, () => {
   if (props.options.length === 0) {
     closeMenu();
+    return;
   }
+  syncActiveOption();
+});
+
+watch(() => props.modelValue, () => {
+  syncActiveOption();
 });
 
 onMounted(() => {
   document.addEventListener('mousedown', handleOutsidePointerDown);
   window.addEventListener('keydown', handleEscape);
+  syncActiveOption();
 });
 
 onUnmounted(() => {
@@ -141,6 +235,7 @@ onUnmounted(() => {
       :aria-expanded="menuOpen ? 'true' : 'false'"
       aria-haspopup="listbox"
       @click="toggleMenu"
+      @keydown="handleTriggerKeydown"
     >
       <span class="app-select-label">{{ selectedLabel }}</span>
       <i class="fas fa-chevron-down app-select-icon"></i>
@@ -152,11 +247,12 @@ onUnmounted(() => {
         :key="`${index}-${typeof option.value}-${String(option.value)}`"
         type="button"
         class="app-select-option"
-        :class="[optionClass, { 'is-active': isOptionActive(option) }]"
+        :class="[optionClass, { 'is-active': isOptionActive(option), 'is-highlighted': activeOptionIndex === index }]"
         :disabled="option.disabled"
         role="option"
         :aria-selected="isOptionActive(option) ? 'true' : 'false'"
         @click="selectOption(option)"
+        @mouseenter="activeOptionIndex = index"
       >
         {{ option.label }}
       </button>
@@ -267,6 +363,10 @@ onUnmounted(() => {
 .app-select-option.is-active {
   background: var(--blue);
   color: var(--button-text-color);
+}
+
+.app-select-option.is-highlighted:not(.is-active) {
+  background: color-mix(in srgb, var(--blue) 20%, var(--bg-base));
 }
 
 .app-select-option:disabled {

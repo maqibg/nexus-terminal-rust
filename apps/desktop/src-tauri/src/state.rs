@@ -9,12 +9,13 @@ use std::{
 use auth_core::service::AuthService;
 use session_core::{AuthState, AuthStateStore, SessionRegistry};
 use shared_utils::crypto::CryptoService;
-use ssh_core::manager::SshSessionManager;
+use ssh_core::{host_key::HostKeyRepository, manager::SshSessionManager};
+use ssh_suspend_core::SuspendManager;
 use storage_sqlite::{
-    SqliteAuditRepo, SqliteAuthRepo, SqliteConnectionRepo, SqliteHistoryRepo,
+    SqliteAuditRepo, SqliteAuthRepo, SqliteConnectionRepo, SqliteHistoryRepo, SqliteHostKeyRepo,
     SqliteQuickCommandRepo, SqliteSettingsRepo, SqliteStorage,
 };
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
 use transfer_core::TransferManager;
 
 use crate::status_monitor::StatusMonitorService;
@@ -59,16 +60,19 @@ pub struct AppState {
     pub sessions: SessionRegistry,
     pub conn_repo: Arc<SqliteConnectionRepo>,
     pub settings_repo: Arc<SqliteSettingsRepo>,
+    pub host_key_repo: Arc<dyn HostKeyRepository>,
     pub audit_repo: Arc<SqliteAuditRepo>,
     pub history_repo: Arc<SqliteHistoryRepo>,
     pub qc_repo: Arc<SqliteQuickCommandRepo>,
     pub ssh_manager: SshSessionManager,
     pub transfer_manager: TransferManager,
     pub status_monitor: StatusMonitorService,
+    pub suspend_manager: SuspendManager,
     pub crypto: CryptoService,
     pub storage: SqliteStorage,
     pub runtime_paths: RuntimePaths,
     pub ai_cancel_flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
+    pub sftp_upload_limiter: Arc<Semaphore>,
 }
 
 impl AppState {
@@ -84,16 +88,19 @@ impl AppState {
             sessions: SessionRegistry::new(),
             conn_repo: Arc::new(SqliteConnectionRepo::new(pool.clone())),
             settings_repo: Arc::new(SqliteSettingsRepo::new(pool.clone())),
+            host_key_repo: Arc::new(SqliteHostKeyRepo::new(pool.clone())),
             audit_repo: Arc::new(SqliteAuditRepo::new(pool.clone())),
             history_repo: Arc::new(SqliteHistoryRepo::new(pool.clone())),
             qc_repo: Arc::new(SqliteQuickCommandRepo::new(pool)),
             ssh_manager: SshSessionManager::new(),
             transfer_manager: TransferManager::new(),
             status_monitor: StatusMonitorService::new(),
+            suspend_manager: SuspendManager::new(),
             crypto,
             storage,
             runtime_paths,
             ai_cancel_flags: Arc::new(Mutex::new(HashMap::new())),
+            sftp_upload_limiter: Arc::new(Semaphore::new(4)),
         }
     }
 

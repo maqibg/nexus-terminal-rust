@@ -10,10 +10,10 @@ export type PaneName =
   | 'commandBar'
   | 'statusMonitor'
   | 'commandHistory'
-  | 'quickCommands'
-  | 'dockerManager';
+  | 'quickCommands';
 
 export interface LayoutNode {
+  id?: string;
   type: 'split' | 'pane';
   direction?: 'horizontal' | 'vertical';
   size?: number;
@@ -36,7 +36,6 @@ const ALL_POSSIBLE_PANES: PaneName[] = [
   'statusMonitor',
   'commandHistory',
   'quickCommands',
-  'dockerManager',
 ];
 
 const SETTINGS_KEYS = {
@@ -59,47 +58,97 @@ const DEFAULT_RIGHT_SIZE = 27.4;
 
 const DEFAULT_LAYOUT: LayoutConfig = {
   root: {
+    id: 'root',
     type: 'split',
     direction: 'horizontal',
     children: [
       {
+        id: 'status-column',
         type: 'split',
         direction: 'vertical',
         size: DEFAULT_STATUS_COLUMN_SIZE,
         children: [
-          { type: 'pane', pane: 'statusMonitor', size: 44.6 },
-          { type: 'pane', pane: 'commandHistory', size: 26.2 },
-          { type: 'pane', pane: 'quickCommands', size: 29.2 },
+          { id: 'status-monitor', type: 'pane', pane: 'statusMonitor', size: 44.6 },
+          { id: 'command-history', type: 'pane', pane: 'commandHistory', size: 26.2 },
+          { id: 'quick-commands', type: 'pane', pane: 'quickCommands', size: 29.2 },
         ],
       },
       {
+        id: 'main-column',
         type: 'split',
         direction: 'vertical',
         size: DEFAULT_MAIN_COLUMN_SIZE,
         children: [
-          { type: 'pane', pane: 'terminal', size: 59.9 },
-          { type: 'pane', pane: 'commandBar', size: 5 },
-          { type: 'pane', pane: 'fileManager', size: 35.1 },
+          { id: 'terminal-pane', type: 'pane', pane: 'terminal', size: 59.9 },
+          { id: 'command-bar', type: 'pane', pane: 'commandBar', size: 5 },
+          { id: 'file-manager', type: 'pane', pane: 'fileManager', size: 35.1 },
         ],
       },
       {
+        id: 'editor-column',
         type: 'split',
         direction: 'vertical',
         size: 27.4,
-        children: [{ type: 'pane', pane: 'editor', size: 100 }],
+        children: [{ id: 'editor-pane', type: 'pane', pane: 'editor', size: 100 }],
       },
     ],
   },
   leftSidebar: {
+    id: 'left-sidebar',
     type: 'split',
     direction: 'vertical',
     children: [
-      { type: 'pane', pane: 'connections', size: 50 },
-      { type: 'pane', pane: 'dockerManager', size: 50 },
+      { id: 'connections-pane', type: 'pane', pane: 'connections', size: 100 },
     ],
   },
   rightSidebar: undefined,
 };
+
+let globalLayoutResizeRaf = 0;
+
+function createLayoutNodeId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).slice(2, 11);
+}
+
+function ensureLayoutNodeIds(node: LayoutNode): LayoutNode {
+  const nextNode: LayoutNode = {
+    ...node,
+    id: node.id ?? createLayoutNodeId(),
+  };
+
+  if (Array.isArray(node.children)) {
+    nextNode.children = node.children.map((child) => ensureLayoutNodeIds(child));
+  }
+
+  return nextNode;
+}
+
+function ensureLayoutConfigNodeIds(config: LayoutConfig): LayoutConfig {
+  return {
+    root: ensureLayoutNodeIds(config.root),
+    leftSidebar: config.leftSidebar ? ensureLayoutNodeIds(config.leftSidebar) : undefined,
+    rightSidebar: config.rightSidebar ? ensureLayoutNodeIds(config.rightSidebar) : undefined,
+  };
+}
+
+export function notifyGlobalLayoutResized(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  if (globalLayoutResizeRaf) {
+    window.cancelAnimationFrame(globalLayoutResizeRaf);
+  }
+
+  globalLayoutResizeRaf = window.requestAnimationFrame(() => {
+    window.dispatchEvent(new Event('resize'));
+    window.dispatchEvent(new CustomEvent('nexus:layout-resized'));
+    globalLayoutResizeRaf = 0;
+  });
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -120,7 +169,7 @@ function parseNumber(raw: string, fallback: number, min: number, max: number): n
 }
 
 function deepCloneLayoutConfig(config: LayoutConfig): LayoutConfig {
-  return JSON.parse(JSON.stringify(config)) as LayoutConfig;
+  return ensureLayoutConfigNodeIds(JSON.parse(JSON.stringify(config)) as LayoutConfig);
 }
 
 function approximatelyEqual(value: number | undefined, target: number, tolerance = 0.05): boolean {
@@ -166,6 +215,7 @@ export const useLayoutStore = defineStore('layout', () => {
   const rightSidebarSize = ref(DEFAULT_RIGHT_SIZE);
   const headerVisible = ref(true);
   const layoutLocked = ref(false);
+  let persistSizesTimer: ReturnType<typeof setTimeout> | null = null;
 
   async function ensureSettingsLoaded() {
     const settings = useSettingsStore();
@@ -185,6 +235,16 @@ export const useLayoutStore = defineStore('layout', () => {
     await settings.set(SETTINGS_KEYS.layoutLocked, String(layoutLocked.value));
   }
 
+  function scheduleSizePersistence() {
+    if (persistSizesTimer) {
+      clearTimeout(persistSizesTimer);
+    }
+    persistSizesTimer = setTimeout(() => {
+      persistSizesTimer = null;
+      void saveLayout();
+    }, 200);
+  }
+
   async function loadLayout() {
     const settings = await ensureSettingsLoaded();
 
@@ -196,6 +256,7 @@ export const useLayoutStore = defineStore('layout', () => {
         layoutConfig.value = deepCloneLayoutConfig(DEFAULT_LAYOUT);
       }
     }
+    layoutConfig.value = ensureLayoutConfigNodeIds(layoutConfig.value);
     patchLegacyStatusColumnWidth(layoutConfig.value);
 
     leftSidebarVisible.value = parseBoolean(settings.get(SETTINGS_KEYS.leftVisible, 'false'), false);
@@ -248,10 +309,12 @@ export const useLayoutStore = defineStore('layout', () => {
 
   function setLeftSidebarSize(size: number) {
     leftSidebarSize.value = clamp(size, 10, 30);
+    scheduleSizePersistence();
   }
 
   function setRightSidebarSize(size: number) {
     rightSidebarSize.value = clamp(size, 15, 40);
+    scheduleSizePersistence();
   }
 
   function setHeaderVisibility(visible: boolean) {
@@ -281,7 +344,7 @@ export const useLayoutStore = defineStore('layout', () => {
   }
 
   function generateId(): string {
-    return Math.random().toString(36).slice(2, 11);
+    return createLayoutNodeId();
   }
 
   function getSystemDefaultLayoutConfig(): LayoutConfig {

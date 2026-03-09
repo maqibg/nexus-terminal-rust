@@ -8,6 +8,7 @@ use tokio::sync::RwLock;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SuspendedSession {
     pub id: String,
+    pub connection_id: i64,
     pub connection_name: String,
     pub suspended_at: String,
     /// 缓存的最近终端输出 (ring buffer)
@@ -29,10 +30,16 @@ impl SuspendManager {
     }
 
     /// 挂起一个会话
-    pub async fn suspend(&self, session_id: &str, connection_name: &str) -> Result<(), String> {
+    pub async fn suspend(
+        &self,
+        session_id: &str,
+        connection_id: i64,
+        connection_name: &str,
+    ) -> Result<(), String> {
         let now = chrono_now();
         let entry = SuspendedSession {
             id: session_id.to_string(),
+            connection_id,
             connection_name: connection_name.to_string(),
             suspended_at: now,
             output_buffer: Vec::new(),

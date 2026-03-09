@@ -1,12 +1,23 @@
 import { tauriInvoke } from './invoke';
 
+/** UI-facing transfer task state (used by TransferProgressModal & useTransferProgress). */
+export interface TransferTask {
+  id: string;
+  kind: 'upload' | 'download';
+  fileName: string;
+  totalBytes: number;
+  transferredBytes: number;
+  percent: number;
+  status: 'active' | 'paused' | 'completed' | 'failed' | 'cancelled';
+}
+
 export interface TransferTaskDto {
   id: string;
-  kind: 'Upload' | 'Download';
+  kind: 'upload' | 'download';
   file_name: string;
   total_bytes: number;
   transferred_bytes: number;
-  status: 'Pending' | 'InProgress' | 'Completed' | 'Failed' | 'Cancelled';
+  status: 'Pending' | 'InProgress' | 'Paused' | 'Completed' | 'Failed' | 'Cancelled';
   error?: string | null;
 }
 
@@ -32,4 +43,26 @@ export const transferApi = {
     tauriInvoke<void>('transfer_cancel', {
       req: { task_id: taskId },
     }),
+
+  pause: (taskId: string) =>
+    tauriInvoke<void>('transfer_pause', {
+      req: { task_id: taskId },
+    }),
+
+  resume: (taskId: string) =>
+    tauriInvoke<void>('transfer_resume', {
+      req: { task_id: taskId },
+    }),
+
+  pauseAll: () =>
+    tauriInvoke<void>('transfer_pause_all'),
+
+  resumeAll: () =>
+    tauriInvoke<void>('transfer_resume_all'),
+
+  cancelAll: () =>
+    tauriInvoke<void>('transfer_cancel_all'),
+
+  cleanupCompleted: () =>
+    tauriInvoke<void>('transfer_cleanup_completed'),
 };

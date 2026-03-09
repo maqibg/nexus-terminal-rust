@@ -11,7 +11,9 @@
       </div>
       <div v-if="!passkeys.length" class="empty">暂无 Passkey</div>
     </div>
-    <button class="btn-add" @click="register">注册新 Passkey</button>
+    <button class="btn-add" :disabled="registering" @click="register">
+      {{ registering ? '注册中...' : '注册新 Passkey' }}
+    </button>
   </section>
 </template>
 
@@ -22,23 +24,87 @@ import { useUINotificationStore } from '@/stores/uiNotifications';
 
 const notify = useUINotificationStore();
 const passkeys = ref<PasskeyInfo[]>([]);
+const registering = ref(false);
 
 async function load() {
   try { passkeys.value = await authApi.passkeyList(); } catch { passkeys.value = []; }
 }
 onMounted(load);
 
+/** Convert ArrayBuffer to base64url string (no padding). */
+function bufferToBase64url(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let str = '';
+  for (const b of bytes) str += String.fromCharCode(b);
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+/** Decode base64url string to Uint8Array. */
+function base64urlToUint8Array(s: string): Uint8Array<ArrayBuffer> {
+  const padded = s.replace(/-/g, '+').replace(/_/g, '/').padEnd(s.length + (4 - (s.length % 4)) % 4, '=');
+  const binary = atob(padded);
+  const bytes = new Uint8Array(new ArrayBuffer(binary.length));
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/**
+ * Serialize a PublicKeyCredential (from navigator.credentials.create) to the JSON format
+ * expected by webauthn-rs's RegisterPublicKeyCredential.
+ */
+function serializeCredential(credential: PublicKeyCredential): string {
+  const response = credential.response as AuthenticatorAttestationResponse;
+  const transports = response.getTransports ? response.getTransports() : [];
+  return JSON.stringify({
+    id: credential.id,
+    rawId: bufferToBase64url(credential.rawId),
+    type: credential.type,
+    response: {
+      clientDataJSON: bufferToBase64url(response.clientDataJSON),
+      attestationObject: bufferToBase64url(response.attestationObject),
+      transports,
+    },
+  });
+}
+
 async function register() {
   const name = prompt('Passkey 名称:');
-  if (!name) return;
+  if (!name?.trim()) return;
+
+  registering.value = true;
   try {
-    const options = await authApi.passkeyRegisterStart();
-    // 简化：直接用随机 credential_id 注册（完整实现需要 navigator.credentials.create）
-    const credentialId = crypto.randomUUID();
-    await authApi.passkeyRegisterFinish(credentialId, '{}', name);
+    // 1. Get creation options from server (CreationChallengeResponse JSON)
+    const optionsJson = await authApi.passkeyRegisterStart();
+    const options = JSON.parse(optionsJson) as { publicKey: PublicKeyCredentialCreationOptions };
+
+    // Convert base64url-encoded fields to ArrayBuffer as required by the WebAuthn API
+    const pubKeyOpts: PublicKeyCredentialCreationOptions = {
+      ...options.publicKey,
+      challenge: base64urlToUint8Array(options.publicKey.challenge as unknown as string),
+      user: {
+        ...options.publicKey.user,
+        id: base64urlToUint8Array(options.publicKey.user.id as unknown as string),
+      },
+    };
+
+    // 2. Invoke the browser authenticator
+    const credential = await navigator.credentials.create({ publicKey: pubKeyOpts });
+    if (!credential || !(credential instanceof PublicKeyCredential)) {
+      throw new Error('authenticator returned no credential');
+    }
+
+    // 3. Serialize and send to server for verification and storage
+    const credentialJson = serializeCredential(credential);
+    await authApi.passkeyRegisterFinish(credentialJson, name.trim());
+
     notify.addNotification('success', 'Passkey 已注册');
     load();
-  } catch (e: any) { notify.addNotification('error', e.message); }
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    notify.addNotification('error', `注册失败: ${msg}`);
+  } finally {
+    registering.value = false;
+  }
 }
 
 async function remove(pk: PasskeyInfo) {
@@ -47,7 +113,9 @@ async function remove(pk: PasskeyInfo) {
     await authApi.passkeyDelete(pk.credential_id);
     notify.addNotification('success', 'Passkey 已删除');
     load();
-  } catch (e: any) { notify.addNotification('error', e.message); }
+  } catch (e: unknown) {
+    notify.addNotification('error', e instanceof Error ? e.message : String(e));
+  }
 }
 
 async function rename(pk: PasskeyInfo) {
@@ -57,7 +125,9 @@ async function rename(pk: PasskeyInfo) {
     await authApi.passkeyRename(pk.credential_id, name);
     notify.addNotification('success', '已重命名');
     load();
-  } catch (e: any) { notify.addNotification('error', e.message); }
+  } catch (e: unknown) {
+    notify.addNotification('error', e instanceof Error ? e.message : String(e));
+  }
 }
 </script>
 
@@ -73,6 +143,7 @@ async function rename(pk: PasskeyInfo) {
 .btn-sm.danger { color: var(--red); border-color: var(--red); }
 .btn-sm.danger:hover { background: rgba(243,139,168,0.1); }
 .btn-add { align-self: flex-start; padding: 5px 14px; border-radius: 4px; border: none; background: var(--blue); color: var(--bg-base); cursor: pointer; font-size: 13px; font-weight: 600; }
-.btn-add:hover { opacity: 0.9; }
+.btn-add:hover:not(:disabled) { opacity: 0.9; }
+.btn-add:disabled { opacity: 0.5; cursor: not-allowed; }
 .empty { text-align: center; color: var(--text-dim); font-size: 13px; padding: 12px; }
 </style>

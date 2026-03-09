@@ -1,7 +1,19 @@
 //! Database migrations.
 
 use sqlx::SqlitePool;
-use tracing::info;
+use tracing::{info, warn};
+
+/// 解析旧 settings 键 "ssh.known_hosts.HOST:PORT" 为 (host, port)。
+fn parse_legacy_known_hosts_key(key: &str) -> Option<(String, u16)> {
+    const PREFIX: &str = "ssh.known_hosts.";
+    let endpoint = key.strip_prefix(PREFIX)?;
+    let (host, port_raw) = endpoint.rsplit_once(':')?;
+    if host.is_empty() {
+        return None;
+    }
+    let port = port_raw.parse::<u16>().ok()?;
+    Some((host.to_string(), port))
+}
 
 /// Run all migrations in order.
 pub async fn run(pool: &SqlitePool) -> Result<(), sqlx::Error> {
@@ -60,6 +72,85 @@ pub async fn run(pool: &SqlitePool) -> Result<(), sqlx::Error> {
         }
     }
 
-    info!("Migrations complete. {} total.", migrations.len());
+    // v7: 修复 passkeys 表列名漂移（counter → sign_count）
+    // 仅当表中实际存在 counter 列时才重建，否则仅标记为已应用
+    if !applied.contains(&7i64) {
+        let has_counter: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('passkeys') WHERE name = 'counter'",
+        )
+        .fetch_one(pool)
+        .await?;
+
+        if has_counter {
+            info!("Applying migration 7: fix_passkeys_sign_count (table rebuild)");
+            let mut tx = pool.begin().await?;
+            let sql = include_str!("sql/007_fix_passkeys.sql");
+            for statement in sql.split(';').filter(|s| !s.trim().is_empty()) {
+                sqlx::query(statement.trim()).execute(&mut *tx).await?;
+            }
+            tx.commit().await?;
+        } else {
+            info!("Migration 7: passkeys already uses sign_count, no rebuild needed");
+        }
+
+        sqlx::query("INSERT INTO _migrations (version, name) VALUES (?, ?)")
+            .bind(7i64)
+            .bind("fix_passkeys_sign_count")
+            .execute(pool)
+            .await?;
+    }
+
+    info!("Migrations complete. {} total.", migrations.len() + 1);
+
+    // v8: 新建 ssh_known_hosts 专用表，并从 settings 回填历史数据
+    if !applied.contains(&8i64) {
+        info!("Applying migration 8: create_ssh_known_hosts");
+        let mut tx = pool.begin().await?;
+
+        let sql = include_str!("sql/008_create_ssh_known_hosts.sql");
+        for statement in sql.split(';').filter(|s| !s.trim().is_empty()) {
+            sqlx::query(statement.trim()).execute(&mut *tx).await?;
+        }
+
+        // 从 settings 回填旧的 known_hosts 数据
+        let legacy_rows: Vec<(String, String)> =
+            sqlx::query_as("SELECT key, value FROM settings WHERE key LIKE 'ssh.known_hosts.%'")
+                .fetch_all(&mut *tx)
+                .await?;
+
+        for (legacy_key, fingerprint) in legacy_rows {
+            let Some((host, port)) = parse_legacy_known_hosts_key(&legacy_key) else {
+                warn!(
+                    key = %legacy_key,
+                    "Skipping malformed ssh known_hosts key during migration v8"
+                );
+                continue;
+            };
+
+            sqlx::query(
+                "INSERT INTO ssh_known_hosts (host, port, fingerprint) VALUES (?, ?, ?)
+                 ON CONFLICT(host, port)
+                 DO UPDATE SET fingerprint = excluded.fingerprint, updated_at = datetime('now')",
+            )
+            .bind(&host)
+            .bind(i64::from(port))
+            .bind(&fingerprint)
+            .execute(&mut *tx)
+            .await?;
+
+            sqlx::query("DELETE FROM settings WHERE key = ?")
+                .bind(&legacy_key)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        tx.commit().await?;
+        sqlx::query("INSERT INTO _migrations (version, name) VALUES (?, ?)")
+            .bind(8i64)
+            .bind("create_ssh_known_hosts")
+            .execute(pool)
+            .await?;
+    }
+
     Ok(())
 }

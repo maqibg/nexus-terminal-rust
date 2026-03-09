@@ -41,7 +41,7 @@ router.beforeEach(async (to) => {
   }
 
   if (auth.state === 'NeedsSetup') return '/setup';
-  if (auth.state === 'Locked') return '/login';
+  if (auth.state !== 'Authenticated') return '/login';
   return true;
 });
 

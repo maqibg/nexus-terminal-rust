@@ -28,10 +28,12 @@
 import { ref, watch } from 'vue';
 import { sshSuspendApi, type SuspendedSession } from '@/lib/api';
 import { useUINotificationStore } from '@/stores/uiNotifications';
+import { useSessionStore } from '@/stores/session';
 
 const props = defineProps<{ visible: boolean }>();
 defineEmits<{ close: [] }>();
 const notify = useUINotificationStore();
+const sessionStore = useSessionStore();
 const sessions = ref<SuspendedSession[]>([]);
 
 watch(() => props.visible, async (v) => {
@@ -42,7 +44,25 @@ watch(() => props.visible, async (v) => {
 
 async function resume(id: string) {
   try {
-    await sshSuspendApi.resume(id);
+    const resumed = sessions.value.find((session) => session.id === id);
+    const sessionId = await sshSuspendApi.resume(id);
+    if (resumed) {
+      sessionStore.addSession({
+        id: sessionId,
+        connectionId: resumed.connection_id,
+        connectionName: resumed.connection_name,
+        protocol: 'SSH',
+        status: 'connected',
+        createdAt: new Date().toISOString(),
+        sftpReady: false,
+        sftpSessionId: null,
+        currentPath: '/',
+        desktopSessionId: null,
+        vncWsPort: null,
+        vncPassword: null,
+      });
+      sessionStore.setActive(sessionId);
+    }
     sessions.value = sessions.value.filter(s => s.id !== id);
     notify.addNotification('success', '会话已恢复');
   } catch (e: any) { notify.addNotification('error', e.message); }

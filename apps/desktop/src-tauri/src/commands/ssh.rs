@@ -1,15 +1,16 @@
 //! SSH/SFTP Tauri commands.
 
-use api_contract::error::AppError;
+use api_contract::error::{AppError, CmdResult};
+use connection_core::model::AuthMethod;
 use connection_core::repository::ConnectionRepository;
-use settings_core::repository::SettingsRepository;
 use serde::{Deserialize, Serialize};
+use settings_core::repository::SettingsRepository;
+use ssh_core::host_key::{HostKeyEntry, HostKeyStore};
+use std::sync::Arc;
 use tauri::State;
 use tokio::time::Duration;
 
 use crate::state::AppState;
-
-type CmdResult<T> = Result<T, AppError>;
 
 #[derive(Deserialize)]
 pub struct SshConnectRequest {
@@ -53,6 +54,7 @@ pub struct SshExecResponse {
     pub stdout: String,
     pub stderr: String,
     pub exit_code: u32,
+    pub truncated: bool,
 }
 
 #[tauri::command]
@@ -67,46 +69,49 @@ pub async fn ssh_connect(
         .conn_repo
         .get_connection(req.connection_id)
         .await
-        .map_err(AppError::Database)?
+        .map_err(AppError::from)?
         .ok_or(AppError::NotFound("connection not found".into()))?;
 
-    let auth = if conn.auth_method == "key" {
-        let key_id = conn
-            .ssh_key_id
-            .ok_or(AppError::Validation("no SSH key configured".into()))?;
-        let key = state
-            .conn_repo
-            .get_ssh_key(key_id)
-            .await
-            .map_err(AppError::Database)?
-            .ok_or(AppError::NotFound("SSH key not found".into()))?;
+    let auth = match conn.auth_method_enum() {
+        AuthMethod::Key => {
+            let key_id = conn
+                .ssh_key_id
+                .ok_or(AppError::Validation("no SSH key configured".into()))?;
+            let key = state
+                .conn_repo
+                .get_ssh_key(key_id)
+                .await
+                .map_err(AppError::from)?
+                .ok_or(AppError::NotFound("SSH key not found".into()))?;
 
-        let private_key = state
-            .crypto
-            .decrypt(&key.encrypted_private_key)
-            .map_err(|e| AppError::Crypto(e.to_string()))?;
-        let passphrase = key
-            .encrypted_passphrase
-            .as_deref()
-            .map(|p| state.crypto.decrypt(p))
-            .transpose()
-            .map_err(|e| AppError::Crypto(e.to_string()))?;
+            let private_key = state
+                .crypto
+                .decrypt(&key.encrypted_private_key)
+                .map_err(|e| AppError::Crypto(e.to_string()))?;
+            let passphrase = key
+                .encrypted_passphrase
+                .as_deref()
+                .map(|p| state.crypto.decrypt(p))
+                .transpose()
+                .map_err(|e| AppError::Crypto(e.to_string()))?;
 
-        ssh_core::session::SshAuth::Key {
-            private_key_pem: private_key,
-            passphrase,
+            ssh_core::session::SshAuth::Key {
+                private_key_pem: private_key,
+                passphrase,
+            }
         }
-    } else {
-        let password = conn
-            .encrypted_password
-            .as_deref()
-            .ok_or(AppError::Validation("no password configured".into()))?;
-        let decrypted = state
-            .crypto
-            .decrypt(password)
-            .map_err(|e| AppError::Crypto(e.to_string()))?;
+        AuthMethod::Password => {
+            let password = conn
+                .encrypted_password
+                .as_deref()
+                .ok_or(AppError::Validation("no password configured".into()))?;
+            let decrypted = state
+                .crypto
+                .decrypt(password)
+                .map_err(|e| AppError::Crypto(e.to_string()))?;
 
-        ssh_core::session::SshAuth::Password(decrypted)
+            ssh_core::session::SshAuth::Password(decrypted)
+        }
     };
 
     let creds = ssh_core::session::SshCredentials {
@@ -115,6 +120,10 @@ pub async fn ssh_connect(
         username: conn.username,
         auth,
     };
+
+    let host_key_store: Arc<dyn HostKeyStore> = Arc::new(super::SettingsHostKeyStore {
+        repo: state.host_key_repo.clone(),
+    });
 
     let session_id = uuid::Uuid::new_v4().to_string();
     state
@@ -127,6 +136,7 @@ pub async fn ssh_connect(
             req.cols.unwrap_or(80),
             req.rows.unwrap_or(24),
             app_handle.clone(),
+            Some(host_key_store),
         )
         .await
         .map_err(AppError::Ssh)?;
@@ -135,7 +145,7 @@ pub async fn ssh_connect(
         .settings_repo
         .get_setting("statusMonitorIntervalSeconds")
         .await
-        .map_err(AppError::Database)?
+        .map_err(AppError::from)?
         .and_then(|raw| raw.trim().parse::<u64>().ok())
         .filter(|seconds| *seconds >= 1)
         .map(Duration::from_secs);
@@ -236,6 +246,61 @@ pub async fn ssh_exec_command(
         stdout: output.stdout,
         stderr: output.stderr,
         exit_code: output.exit_code,
+        truncated: output.truncated,
     })
 }
 
+/// Accept a changed SSH host key — overwrites the stored fingerprint.
+#[tauri::command]
+pub async fn ssh_accept_host_key(
+    state: State<'_, AppState>,
+    host: String,
+    port: u16,
+    fingerprint: String,
+) -> CmdResult<()> {
+    state.auth.require_auth().await?;
+    let store = super::SettingsHostKeyStore {
+        repo: state.host_key_repo.clone(),
+    };
+    store
+        .set_fingerprint(&host, port, &fingerprint)
+        .await
+        .map_err(AppError::Ssh)
+}
+
+/// 列出所有已知 SSH 主机指纹（known_hosts 管理）。
+#[tauri::command]
+pub async fn ssh_host_key_list(state: State<'_, AppState>) -> CmdResult<Vec<HostKeyEntry>> {
+    state.auth.require_auth().await?;
+    state.host_key_repo.list().await.map_err(AppError::from)
+}
+
+/// 删除指定主机的 SSH 指纹记录。
+#[tauri::command]
+pub async fn ssh_host_key_delete(
+    state: State<'_, AppState>,
+    host: String,
+    port: u16,
+) -> CmdResult<bool> {
+    state.auth.require_auth().await?;
+    state
+        .host_key_repo
+        .delete(&host, port)
+        .await
+        .map_err(AppError::from)
+}
+
+/// 查询指定主机的 SSH 指纹。
+#[tauri::command]
+pub async fn ssh_host_key_get(
+    state: State<'_, AppState>,
+    host: String,
+    port: u16,
+) -> CmdResult<Option<String>> {
+    state.auth.require_auth().await?;
+    state
+        .host_key_repo
+        .get(&host, port)
+        .await
+        .map_err(AppError::from)
+}

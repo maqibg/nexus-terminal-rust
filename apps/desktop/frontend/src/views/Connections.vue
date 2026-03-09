@@ -5,11 +5,11 @@ import { storeToRefs } from 'pinia';
 import AddConnectionForm from '@/components/AddConnectionForm.vue';
 import BatchEditConnectionForm from '@/components/BatchEditConnectionForm.vue';
 import { useConnectionsStore } from '@/stores/connections';
-import { useSessionStore } from '@/stores/session';
 import { useSettingsStore } from '@/stores/settings';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import { useAlertDialog } from '@/composables/useAlertDialog';
-import { connectionsApi, desktopApi, sftpApi, sshApi, type Connection, type Tag } from '@/lib/api';
+import { useSessionLifecycle } from '@/composables/useSessionLifecycle';
+import { connectionsApi, type Connection, type Tag } from '@/lib/api';
 
 type SortField = 'last_connected_at' | 'name' | 'type' | 'updated_at' | 'created_at';
 type SortOrder = 'asc' | 'desc';
@@ -60,7 +60,6 @@ const sortOptions: { value: SortField; label: string }[] = [
 ];
 
 const store = useConnectionsStore();
-const sessionStore = useSessionStore();
 const settingsStore = useSettingsStore();
 const { list: connections, tags, loading: isLoadingConnections } = storeToRefs(store);
 const isLoadingTags = computed(() => isLoadingConnections.value);
@@ -74,6 +73,7 @@ const showConnectionTags = computed(() => settingsStore.getBoolean('showConnecti
 const router = useRouter();
 const { confirm } = useConfirmDialog();
 const { alert } = useAlertDialog();
+const { connectConnection } = useSessionLifecycle(alert);
 
 const localSortBy = ref<SortField>((localStorage.getItem(LS_SORT_BY_KEY) as SortField) || 'last_connected_at');
 if (!sortOptions.some(option => option.value === localSortBy.value)) {
@@ -650,71 +650,12 @@ const getConnectionIconClass = (conn: ExtendedConnection): string => {
   return 'fas fa-server';
 };
 
-const warmupSftp = async (sessionId: string, connectionId: number) => {
-  try {
-    const sftpSessionId = await sftpApi.open(connectionId);
-    sessionStore.setSftpSession(sessionId, sftpSessionId);
-  } catch {
-  }
-};
-
 const connectTo = async (conn: ExtendedConnection) => {
-  const connType = getConnectionType(conn);
-  const connectionName = getConnectionName(conn);
-
-  if (connType === 'RDP') {
-    try {
-      await desktopApi.openRdpConnection(conn.id);
-    } catch (error) {
-      await alert('RDP 启动失败', getErrorMessage(error));
-    }
-    return;
-  }
-
-  if (connType === 'VNC') {
-    try {
-      const vncSession = await desktopApi.openVncConnection(conn.id);
-      const localSessionId = sessionStore.createVncSession(
-        conn.id,
-        connectionName,
-        vncSession.session_id,
-        vncSession.ws_port,
-        vncSession.password,
-      );
-      sessionStore.setActive(localSessionId);
-      void router.push('/workspace');
-    } catch (error) {
-      await alert('VNC 启动失败', getErrorMessage(error));
-    }
-    return;
-  }
-
-  const pendingSessionId = sessionStore.createSession(conn.id, connectionName, 'SSH');
-  sessionStore.setActive(pendingSessionId);
-  void router.push('/workspace');
-
-  try {
-    const realSessionId = await sshApi.connect(conn.id);
-    sessionStore.removeSession(pendingSessionId);
-    sessionStore.addSession({
-      id: realSessionId,
-      connectionId: conn.id,
-      connectionName,
-      protocol: 'SSH',
-      status: 'connected',
-      createdAt: new Date().toISOString(),
-      sftpReady: false,
-      sftpSessionId: null,
-      currentPath: '/',
-      desktopSessionId: null,
-      vncWsPort: null,
-      vncPassword: null,
-    });
-    sessionStore.setActive(realSessionId);
-    void warmupSftp(realSessionId, conn.id);
-  } catch {
-    sessionStore.updateStatus(pendingSessionId, 'disconnected');
-  }
+  await connectConnection(conn, {
+    onSessionActivated: async () => {
+      await router.push('/workspace');
+    },
+  });
 };
 
 const handleConnectAllFilteredConnections = async () => {
@@ -729,9 +670,7 @@ const handleConnectAllFilteredConnections = async () => {
 
   isConnectingAll.value = true;
   try {
-    sshConnectionsToConnect.forEach((conn) => {
-      void connectTo(conn);
-    });
+    await Promise.allSettled(sshConnectionsToConnect.map((conn) => connectTo(conn)));
   } finally {
     isConnectingAll.value = false;
   }

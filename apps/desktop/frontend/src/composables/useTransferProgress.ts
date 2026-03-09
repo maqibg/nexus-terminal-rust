@@ -1,7 +1,6 @@
 import { ref, onUnmounted } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { transferApi, sftpApi, type TransferTaskDto } from '@/lib/api';
-import type { TransferTask } from '@/components/TransferProgressModal.vue';
+import { transferApi, sftpApi, type TransferTask, type TransferTaskDto } from '@/lib/api';
 
 interface TransferProgressEvent {
   task_id: string;
@@ -16,20 +15,21 @@ interface TransferStatusEvent {
   task_id: string;
   file_name?: string;
   kind?: 'upload' | 'download';
-  status: 'active' | 'completed' | 'failed' | 'cancelled';
+  status: 'active' | 'paused' | 'completed' | 'failed' | 'cancelled';
   error?: string | null;
 }
 
 const statusMap: Record<TransferTaskDto['status'], TransferTask['status']> = {
   Pending: 'active',
   InProgress: 'active',
+  Paused: 'paused',
   Completed: 'completed',
   Failed: 'failed',
   Cancelled: 'cancelled',
 };
 
 function fromDto(dto: TransferTaskDto): TransferTask {
-  const kind = dto.kind === 'Upload' ? 'upload' : 'download';
+  const kind = dto.kind;
   const percent = dto.total_bytes > 0
     ? Math.min(100, Math.round((dto.transferred_bytes / dto.total_bytes) * 100))
     : 0;
@@ -51,6 +51,7 @@ export function useTransferProgress() {
   let progressUnlisten: UnlistenFn | null = null;
   let statusUnlisten: UnlistenFn | null = null;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let isListening = false;
 
   function updateList() {
     taskList.value = Array.from(tasks.value.values()).sort((a, b) => {
@@ -120,20 +121,28 @@ export function useTransferProgress() {
   }
 
   async function startListening() {
-    await syncFromBackend();
+    if (isListening) return;
+    isListening = true;
 
-    progressUnlisten = await listen<TransferProgressEvent>('transfers/progress', (e) => {
-      upsertFromProgress(e.payload);
-    });
+    try {
+      await syncFromBackend();
 
-    statusUnlisten = await listen<TransferStatusEvent>('transfers/status', (e) => {
-      upsertFromStatus(e.payload);
-    });
+      progressUnlisten = await listen<TransferProgressEvent>('transfers/progress', (e) => {
+        upsertFromProgress(e.payload);
+      });
 
-    if (!pollTimer) {
-      pollTimer = setInterval(() => {
-        void syncFromBackend();
-      }, 1500);
+      statusUnlisten = await listen<TransferStatusEvent>('transfers/status', (e) => {
+        upsertFromStatus(e.payload);
+      });
+
+      if (!pollTimer) {
+        pollTimer = setInterval(() => {
+          void syncFromBackend();
+        }, 1500);
+      }
+    } catch (error) {
+      cleanup();
+      throw error;
     }
   }
 
@@ -155,11 +164,55 @@ export function useTransferProgress() {
     }
   }
 
+  async function pauseAll(): Promise<void> {
+    await transferApi.pauseAll();
+    for (const task of tasks.value.values()) {
+      if (task.status === 'active') {
+        task.status = 'paused';
+      }
+    }
+    updateList();
+  }
+
+  async function resumeAll(): Promise<void> {
+    await transferApi.resumeAll();
+    for (const task of tasks.value.values()) {
+      if (task.status === 'paused') {
+        task.status = task.percent >= 100 ? 'completed' : 'active';
+      }
+    }
+    updateList();
+  }
+
+  async function cancelAll(): Promise<void> {
+    await transferApi.cancelAll();
+    for (const task of tasks.value.values()) {
+      if (task.status === 'active' || task.status === 'paused') {
+        task.status = 'cancelled';
+      }
+    }
+    updateList();
+  }
+
+  async function clearCompleted(): Promise<void> {
+    await transferApi.cleanupCompleted();
+    const next = new Map<string, TransferTask>();
+    for (const [id, task] of tasks.value.entries()) {
+      if (task.status === 'active' || task.status === 'paused') {
+        next.set(id, task);
+      }
+    }
+    tasks.value = next;
+    updateList();
+    await syncFromBackend();
+  }
+
   function cleanup() {
     progressUnlisten?.();
     statusUnlisten?.();
     progressUnlisten = null;
     statusUnlisten = null;
+    isListening = false;
 
     if (pollTimer) {
       clearInterval(pollTimer);
@@ -169,5 +222,15 @@ export function useTransferProgress() {
 
   onUnmounted(cleanup);
 
-  return { taskList, startListening, cancelTask, cleanup, syncFromBackend };
+  return {
+    taskList,
+    startListening,
+    cancelTask,
+    pauseAll,
+    resumeAll,
+    cancelAll,
+    clearCompleted,
+    cleanup,
+    syncFromBackend,
+  };
 }

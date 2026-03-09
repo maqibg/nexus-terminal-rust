@@ -473,4 +473,3 @@ fn now_timestamp_ms() -> i64 {
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
 }
-

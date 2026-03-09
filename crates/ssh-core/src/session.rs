@@ -9,11 +9,54 @@
 use russh::keys::*;
 use russh::*;
 use russh_keys::key::PrivateKeyWithHashAlg;
+use serde_json::json;
+use ssh_key::HashAlg;
 use std::sync::Arc;
-use tracing::info;
+use tauri::Emitter;
+use tracing::{info, warn};
 
-/// Minimal russh client handler.
-pub struct SshHandler;
+use crate::host_key::HostKeyStore;
+
+const SSH_WINDOW_SIZE: u32 = 16 * 1024 * 1024;
+const SSH_MAX_PACKET_SIZE: u32 = 65_535;
+
+/// russh 客户端处理器。
+///
+/// - `store` 为 None 时：接受所有主机密钥（用于跳板 hop）。
+/// - `store` 为 Some 时：TOFU 验证（首次信任，后续比对指纹）。
+pub struct SshHandler {
+    pub host: String,
+    pub port: u16,
+    pub store: Option<Arc<dyn HostKeyStore>>,
+    pub app_handle: Option<tauri::AppHandle>,
+}
+
+impl SshHandler {
+    /// 宽松模式：接受所有主机密钥（用于跳板 hop）。
+    pub fn permissive(host: String, port: u16) -> Self {
+        Self {
+            host,
+            port,
+            store: None,
+            app_handle: None,
+        }
+    }
+
+    /// TOFU 模式：首次连接存储指纹，后续比对。密钥变更时发出事件。
+    pub fn with_tofu(
+        host: String,
+        port: u16,
+        store: Arc<dyn HostKeyStore>,
+        app_handle: tauri::AppHandle,
+    ) -> Self {
+        Self {
+            host,
+            port,
+            store: Some(store),
+            app_handle: Some(app_handle),
+        }
+    }
+}
 
 #[async_trait::async_trait]
 impl client::Handler for SshHandler {
@@ -21,14 +64,54 @@ impl client::Handler for SshHandler {
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &ssh_key::PublicKey,
+        server_public_key: &ssh_key::PublicKey,
     ) -> Result<bool, Self::Error> {
-        // Desktop app: accept all host keys (user-trusted connections)
-        Ok(true)
+        let store = match &self.store {
+            None => return Ok(true), // 跳板 hop：宽松模式
+            Some(s) => s.clone(),
+        };
+
+        let fingerprint = server_public_key.fingerprint(HashAlg::Sha256).to_string();
+
+        match store.get_fingerprint(&self.host, self.port).await {
+            Ok(None) => {
+                // 首次连接：TOFU，存储指纹
+                if let Err(e) = store
+                    .set_fingerprint(&self.host, self.port, &fingerprint)
+                    .await
+                {
+                    warn!("Failed to store host key fingerprint: {e}");
+                }
+                info!(host = %self.host, port = self.port, "SSH host key trusted (first connection)");
+                Ok(true)
+            }
+            Ok(Some(ref known)) if known == &fingerprint => Ok(true),
+            Ok(Some(old_fp)) => {
+                // 密钥变更：发出事件并拒绝连接
+                warn!(host = %self.host, port = self.port, "SSH host key changed!");
+                if let Some(ah) = &self.app_handle {
+                    let _ = ah.emit(
+                        "ssh:host_key_changed",
+                        json!({
+                            "host": self.host,
+                            "port": self.port,
+                            "old_fingerprint": old_fp,
+                            "new_fingerprint": fingerprint,
+                        }),
+                    );
+                }
+                Ok(false)
+            }
+            Err(e) => {
+                warn!("Host key store error: {e}; rejecting connection");
+                Ok(false)
+            }
+        }
     }
 }
 
 /// Decoded connection credentials for SSH.
+#[derive(Clone)]
 pub struct SshCredentials {
     pub host: String,
     pub port: u16,
@@ -36,6 +119,7 @@ pub struct SshCredentials {
     pub auth: SshAuth,
 }
 
+#[derive(Clone)]
 pub enum SshAuth {
     Password(String),
     Key {
@@ -44,18 +128,21 @@ pub enum SshAuth {
     },
 }
 
-/// Connect to SSH server and authenticate. Returns the Handle for opening channels.
+/// 连接并认证。Returns the Handle for opening channels.
 pub async fn connect_and_authenticate(
     creds: &SshCredentials,
+    handler: SshHandler,
 ) -> Result<client::Handle<SshHandler>, String> {
     let config = Arc::new(client::Config {
         inactivity_timeout: Some(std::time::Duration::from_secs(30)),
         keepalive_interval: Some(std::time::Duration::from_secs(5)),
         keepalive_max: 10,
+        window_size: SSH_WINDOW_SIZE,
+        maximum_packet_size: SSH_MAX_PACKET_SIZE,
         ..Default::default()
     });
 
-    let mut handle = client::connect(config, (creds.host.as_str(), creds.port), SshHandler)
+    let mut handle = client::connect(config, (creds.host.as_str(), creds.port), handler)
         .await
         .map_err(|e| format!("SSH connect failed: {e}"))?;
 
@@ -95,7 +182,8 @@ pub async fn connect_and_open_shell(
     rows: u32,
     term: &str,
 ) -> Result<Channel<client::Msg>, String> {
-    let handle = connect_and_authenticate(creds).await?;
+    let handler = SshHandler::permissive(creds.host.clone(), creds.port);
+    let handle = connect_and_authenticate(creds, handler).await?;
 
     open_shell_channel(&handle, cols, rows, term).await
 }
@@ -126,9 +214,30 @@ pub async fn open_shell_channel(
     Ok(channel)
 }
 /// Connect to SSH server, authenticate, open SFTP subsystem channel.
-pub async fn connect_and_open_sftp(creds: &SshCredentials) -> Result<Channel<client::Msg>, String> {
-    let handle = connect_and_authenticate(creds).await?;
+/// 传入 `host_key_store` 启用 TOFU 主机密钥校验；否则使用宽松模式。
+pub async fn connect_and_open_sftp(
+    creds: &SshCredentials,
+    host_key_store: Option<Arc<dyn HostKeyStore>>,
+    app_handle: Option<tauri::AppHandle>,
+) -> Result<Channel<client::Msg>, String> {
+    let handler = match host_key_store {
+        Some(store) => SshHandler::with_tofu(
+            creds.host.clone(),
+            creds.port,
+            store,
+            app_handle.expect("app_handle required when host_key_store is Some"),
+        ),
+        None => SshHandler::permissive(creds.host.clone(), creds.port),
+    };
+    let handle = connect_and_authenticate(creds, handler).await?;
 
+    open_sftp_channel(&handle).await
+}
+
+/// Open an SFTP subsystem channel on an existing authenticated SSH handle.
+pub async fn open_sftp_channel(
+    handle: &client::Handle<SshHandler>,
+) -> Result<Channel<client::Msg>, String> {
     let channel = handle
         .channel_open_session()
         .await
@@ -158,7 +267,8 @@ pub async fn connect_via_jump_chain(
     target: &SshCredentials,
 ) -> Result<client::Handle<SshHandler>, String> {
     if jumps.is_empty() {
-        return connect_and_authenticate(target).await;
+        let handler = SshHandler::permissive(target.host.clone(), target.port);
+        return connect_and_authenticate(target, handler).await;
     }
 
     // Connect to first jump host
@@ -178,7 +288,8 @@ pub async fn connect_via_jump_chain(
             },
         },
     };
-    let mut current_handle = connect_and_authenticate(&first_creds).await?;
+    let first_handler = SshHandler::permissive(first_creds.host.clone(), first_creds.port);
+    let mut current_handle = connect_and_authenticate(&first_creds, first_handler).await?;
 
     // Chain through remaining jump hosts
     for jump in &jumps[1..] {
@@ -194,7 +305,8 @@ pub async fn connect_via_jump_chain(
             ..Default::default()
         });
 
-        let mut handle = client::connect_stream(config, forwarded.into_stream(), SshHandler)
+        let jump_handler = SshHandler::permissive(jump.host.clone(), jump.port);
+        let mut handle = client::connect_stream(config, forwarded.into_stream(), jump_handler)
             .await
             .map_err(|e| format!("jump connect failed: {e}"))?;
 
@@ -220,7 +332,8 @@ pub async fn connect_via_jump_chain(
         ..Default::default()
     });
 
-    let mut final_handle = client::connect_stream(config, forwarded.into_stream(), SshHandler)
+    let target_handler = SshHandler::permissive(target.host.clone(), target.port);
+    let mut final_handle = client::connect_stream(config, forwarded.into_stream(), target_handler)
         .await
         .map_err(|e| format!("target connect failed: {e}"))?;
 

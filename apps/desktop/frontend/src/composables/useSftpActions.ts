@@ -1,6 +1,7 @@
 import type { Ref } from 'vue';
 import { sftpApi, type FileEntry } from '@/lib/api';
 import { useAlertDialog } from './useAlertDialog';
+import { toAppError } from '@/lib/errors';
 
 /**
  * SFTP operations composable — wraps api-sftp with error handling.
@@ -11,8 +12,8 @@ export function useSftpActions(sessionId: Ref<string>) {
   async function withError<T>(fn: () => Promise<T>): Promise<T | undefined> {
     try {
       return await fn();
-    } catch (e: any) {
-      await alert('SFTP Error', e.message ?? String(e));
+    } catch (e: unknown) {
+      await alert('SFTP Error', toAppError(e).message);
       return undefined;
     }
   }
