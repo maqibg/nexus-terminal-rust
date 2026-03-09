@@ -14,28 +14,14 @@ import { useConfirmDialog } from './useConfirmDialog';
 const VIEWPORT_PADDING = 8;
 const CONTEXT_SUBMENU_MIN_WIDTH = 190;
 const SUPPORTED_ARCHIVE_EXTENSIONS = ['.zip', '.tar.gz', '.tgz', '.tar.bz2', '.tbz2'];
-const SFTP_SORT_KEY_STORAGE = 'sftp_sort_key';
-const SFTP_SORT_DIRECTION_STORAGE = 'sftp_sort_direction';
 
 function decodeUtf8Base64(base64: string): string {
   const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
   return new TextDecoder('utf-8').decode(bytes);
 }
 
-type SftpSortKey = 'type' | 'name' | 'size' | 'permissions' | 'modified';
+type SftpSortKey = 'type' | 'name' | 'size' | 'modified';
 type SftpSortDirection = 'asc' | 'desc';
-
-function getInitialSortKey(): SftpSortKey {
-  const raw = localStorage.getItem(SFTP_SORT_KEY_STORAGE);
-  if (raw === 'type' || raw === 'name' || raw === 'size' || raw === 'permissions' || raw === 'modified') {
-    return raw;
-  }
-  return 'name';
-}
-
-function getInitialSortDirection(): SftpSortDirection {
-  return localStorage.getItem(SFTP_SORT_DIRECTION_STORAGE) === 'desc' ? 'desc' : 'asc';
-}
 
 export interface BrowserContextMenuItem {
   key: string;
@@ -84,64 +70,77 @@ export function useSftpBrowser(
   const isSearchActive = ref(false);
 
   const entries = ref<FileEntry[]>([]);
-  const sortKey = ref<SftpSortKey>(getInitialSortKey());
-  const sortDirection = ref<SftpSortDirection>(getInitialSortDirection());
+  const sortKey = ref<SftpSortKey>('name');
+  const sortDirection = ref<SftpSortDirection>('asc');
   const filteredEntries = computed(() => {
     const query = searchQuery.value.trim().toLowerCase();
     const baseEntries = query
       ? entries.value.filter((entry) => entry.name.toLowerCase().includes(query))
       : entries.value;
 
-    const compareString = (left: string, right: string) =>
-      left.localeCompare(right, 'zh-CN', { numeric: true, sensitivity: 'base' });
-
-    const getTypeValue = (entry: FileEntry) => {
-      if (entry.is_dir) {
-        return '';
+    const compareText = (left: string, right: string) => {
+      const lowerLeft = left.toLowerCase();
+      const lowerRight = right.toLowerCase();
+      if (lowerLeft < lowerRight) {
+        return -1;
       }
-      const index = entry.name.lastIndexOf('.');
-      return index >= 0 ? entry.name.slice(index + 1).toLowerCase() : '';
+      if (lowerLeft > lowerRight) {
+        return 1;
+      }
+      return 0;
     };
 
     const direction = sortDirection.value === 'asc' ? 1 : -1;
     return [...baseEntries].sort((left, right) => {
-      if (left.is_dir !== right.is_dir) {
-        return left.is_dir ? -1 : 1;
+      if (sortKey.value !== 'type') {
+        if (left.is_dir && !right.is_dir) {
+          return -1;
+        }
+        if (!left.is_dir && right.is_dir) {
+          return 1;
+        }
       }
 
-      let result = 0;
+      let leftValue: string | number;
+      let rightValue: string | number;
       switch (sortKey.value) {
         case 'type':
-          result = compareString(getTypeValue(left), getTypeValue(right));
-          if (result === 0) {
-            result = compareString(left.name, right.name);
-          }
+          leftValue = left.is_dir ? 0 : 2;
+          rightValue = right.is_dir ? 0 : 2;
           break;
         case 'size':
-          result = (left.size ?? 0) - (right.size ?? 0);
-          if (result === 0) {
-            result = compareString(left.name, right.name);
-          }
-          break;
-        case 'permissions':
-          result = (left.permissions ?? -1) - (right.permissions ?? -1);
-          if (result === 0) {
-            result = compareString(left.name, right.name);
-          }
+          leftValue = left.is_dir ? -1 : (left.size ?? 0);
+          rightValue = right.is_dir ? -1 : (right.size ?? 0);
           break;
         case 'modified':
-          result = (left.modified ?? 0) - (right.modified ?? 0);
-          if (result === 0) {
-            result = compareString(left.name, right.name);
-          }
+          leftValue = left.modified ?? 0;
+          rightValue = right.modified ?? 0;
           break;
         case 'name':
         default:
-          result = compareString(left.name, right.name);
+          leftValue = left.name;
+          rightValue = right.name;
           break;
       }
 
-      return result * direction;
+      let result = 0;
+      if (typeof leftValue === 'string' && typeof rightValue === 'string') {
+        result = compareText(leftValue, rightValue);
+      } else if (leftValue < rightValue) {
+        result = -1;
+      } else if (leftValue > rightValue) {
+        result = 1;
+      }
+
+      if (result !== 0) {
+        return result * direction;
+      }
+
+      if (sortKey.value !== 'name') {
+        return left.name.localeCompare(right.name);
+      }
+
+      return 0;
     });
   });
 
@@ -309,6 +308,8 @@ export function useSftpBrowser(
     ctxEntry.value = null;
     ctxSubmenuKey.value = null;
     clipboardState.value = null;
+    sortKey.value = 'name';
+    sortDirection.value = 'asc';
     clearSelection();
   }
 
@@ -1370,19 +1371,13 @@ export function useSftpBrowser(
     showUpload.value = true;
   }
 
-  function persistSortState(): void {
-    localStorage.setItem(SFTP_SORT_KEY_STORAGE, sortKey.value);
-    localStorage.setItem(SFTP_SORT_DIRECTION_STORAGE, sortDirection.value);
-  }
-
   function toggleSort(nextKey: SftpSortKey): void {
     if (sortKey.value === nextKey) {
       sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
     } else {
       sortKey.value = nextKey;
-      sortDirection.value = nextKey === 'modified' || nextKey === 'size' ? 'desc' : 'asc';
+      sortDirection.value = 'asc';
     }
-    persistSortState();
   }
 
   async function uploadLocalPaths(paths: string[]): Promise<void> {
@@ -1821,6 +1816,14 @@ export function useSftpBrowser(
     searchInputRef.value.select();
     return document.activeElement === searchInputRef.value;
   }
+
+  watch(sortKey, () => {
+    clearSelection();
+  });
+
+  watch(sortDirection, () => {
+    clearSelection();
+  });
 
   onMounted(() => {
     void settingsStore.loadAll().catch(() => undefined);

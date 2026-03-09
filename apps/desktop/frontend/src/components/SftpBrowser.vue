@@ -234,11 +234,10 @@
               <span v-if="sortKey === 'size'" class="sort-indicator">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
               <span class="resize-handle" @mousedown.prevent.stop="startResize($event, 'size')"></span>
             </button>
-            <button class="file-header-btn" :class="{ active: sortKey === 'permissions' }" @click="toggleSort('permissions')">
+            <div class="file-header-static">
               <span>权限</span>
-              <span v-if="sortKey === 'permissions'" class="sort-indicator">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
               <span class="resize-handle" @mousedown.prevent.stop="startResize($event, 'permissions')"></span>
-            </button>
+            </div>
             <button class="file-header-btn" :class="{ active: sortKey === 'modified' }" @click="toggleSort('modified')">
               <span>修改时间</span>
               <span v-if="sortKey === 'modified'" class="sort-indicator">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
@@ -886,6 +885,16 @@ function handleUploadTasksCreated(taskIds: string[]): void {
 
 .file-header-btn.active {
   color: var(--blue, #89b4fa);
+}
+
+.file-header-static {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  height: 36px;
+  padding: 0 14px 0 0;
+  color: inherit;
 }
 
 .file-header-btn.align-right {
