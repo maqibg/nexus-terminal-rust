@@ -84,7 +84,17 @@ impl HistoryRepository for SqliteHistoryRepo {
         offset: i64,
     ) -> Result<Vec<CommandHistory>, StorageError> {
         sqlx::query_as::<_, (i64, String, Option<String>, Option<i64>, String)>(
-            "SELECT id, command, session_id, connection_id, timestamp FROM command_history ORDER BY id DESC LIMIT ? OFFSET ?",
+            "SELECT c.id, c.command, c.session_id, c.connection_id, c.timestamp
+             FROM command_history c
+             WHERE c.id = (
+                 SELECT c2.id
+                 FROM command_history c2
+                 WHERE c2.command = c.command
+                 ORDER BY datetime(c2.timestamp) DESC, c2.id DESC
+                 LIMIT 1
+             )
+             ORDER BY datetime(c.timestamp) DESC, c.id DESC
+             LIMIT ? OFFSET ?",
         ).bind(limit).bind(offset)
         .fetch_all(&self.pool).await
         .map(|rows| rows.into_iter().map(|(id, command, session_id, connection_id, timestamp)| CommandHistory { id, command, session_id, connection_id, timestamp }).collect())
@@ -97,16 +107,53 @@ impl HistoryRepository for SqliteHistoryRepo {
         session_id: Option<&str>,
         connection_id: Option<i64>,
     ) -> Result<i64, StorageError> {
-        let r = sqlx::query(
+        let normalized = command.trim();
+
+        let existing_id = sqlx::query_scalar::<_, i64>(
+            "SELECT id
+             FROM command_history
+             WHERE command = ?
+             ORDER BY datetime(timestamp) DESC, id DESC
+             LIMIT 1",
+        )
+        .bind(normalized)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| StorageError(e.to_string()))?;
+
+        if let Some(existing_id) = existing_id {
+          sqlx::query(
+              "UPDATE command_history
+               SET session_id = ?, connection_id = ?, timestamp = datetime('now')
+               WHERE id = ?",
+          )
+          .bind(session_id)
+          .bind(connection_id)
+          .bind(existing_id)
+          .execute(&self.pool)
+          .await
+          .map_err(|e| StorageError(e.to_string()))?;
+
+          sqlx::query("DELETE FROM command_history WHERE command = ? AND id <> ?")
+              .bind(normalized)
+              .bind(existing_id)
+              .execute(&self.pool)
+              .await
+              .map_err(|e| StorageError(e.to_string()))?;
+
+          return Ok(existing_id);
+        }
+
+        let result = sqlx::query(
             "INSERT INTO command_history (command, session_id, connection_id) VALUES (?, ?, ?)",
         )
-        .bind(command)
+        .bind(normalized)
         .bind(session_id)
         .bind(connection_id)
         .execute(&self.pool)
         .await
         .map_err(|e| StorageError(e.to_string()))?;
-        Ok(r.last_insert_rowid())
+        Ok(result.last_insert_rowid())
     }
 
     async fn clear_command_history(&self) -> Result<(), StorageError> {
