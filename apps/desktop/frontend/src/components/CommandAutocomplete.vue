@@ -1,6 +1,6 @@
 <template>
   <div v-if="visible && suggestions.length > 0" class="autocomplete-popup" :style="popupStyle">
-    <div class="autocomplete-header">Tab 补全 · ↑↓ 选择 · Esc 取消</div>
+    <div class="autocomplete-header">Tab 补全 · ↑↓/PgUp/PgDn 选择 · Esc 取消</div>
     <div class="suggestions-list">
       <div
         v-for="(suggestion, index) in suggestions"
@@ -8,7 +8,7 @@
         :ref="(element) => setSuggestionItemRef(element, index)"
         :class="['suggestion-item', { active: index === selectedIndex }]"
         @click="selectSuggestion(suggestion)"
-        @mouseenter="selectedIndex = index"
+        @mouseenter="activateSuggestionIndex(index)"
       >
         <span class="suggestion-icon">{{ iconOf(suggestion.type) }}</span>
         <div class="suggestion-main">
@@ -134,6 +134,43 @@ const iconOf = (type: string): string => ({
   hint: 'TIP',
 } as Record<string, string>)[type] ?? 'TIP';
 
+function typeOrderOf(type: CompletionType): number {
+  switch (type) {
+    case 'subcommand':
+      return 90;
+    case 'option':
+      return 80;
+    case 'path':
+      return 70;
+    case 'shortcut':
+      return 60;
+    case 'snippet':
+      return 50;
+    case 'history':
+      return 40;
+    case 'command':
+      return 30;
+    case 'hint':
+      return 10;
+    default:
+      return 0;
+  }
+}
+
+function compareSuggestions(a: Suggestion, b: Suggestion): number {
+  const ap = a.priority ?? 50;
+  const bp = b.priority ?? 50;
+  if (ap !== bp) {
+    return bp - ap;
+  }
+  const ao = typeOrderOf(a.type);
+  const bo = typeOrderOf(b.type);
+  if (ao !== bo) {
+    return bo - ao;
+  }
+  return a.text.localeCompare(b.text);
+}
+
 async function loadCommandHistory() {
   try {
     const rows = await historyApi.list(300, 0);
@@ -245,12 +282,23 @@ async function generateSuggestions() {
   }
   lastProcessedInput = rawInput;
   const requestId = ++currentRequestId;
+  const previousSelection = hasUserSelected.value ? suggestions.value[selectedIndex.value] : null;
   const words = rawInput.split(' ');
   const currentWord = currentWordOf(rawInput);
 
   const registrySuggestions = await buildRegistrySuggestions(rawInput, words, requestId);
   if (registrySuggestions && registrySuggestions.length > 0) {
     suggestions.value = registrySuggestions;
+    if (previousSelection) {
+      const preservedIndex = registrySuggestions.findIndex(
+        (item) => item.type === previousSelection.type && item.text === previousSelection.text,
+      );
+      if (preservedIndex >= 0) {
+        selectedIndex.value = preservedIndex;
+        hasUserSelected.value = true;
+        return;
+      }
+    }
     selectedIndex.value = 0;
     hasUserSelected.value = false;
     return;
@@ -298,8 +346,19 @@ async function generateSuggestions() {
   }
 
   if (requestId !== currentRequestId) return;
-  all.sort((a, b) => (b.priority ?? 50) - (a.priority ?? 50));
-  suggestions.value = Array.from(new Map(all.map((item) => [item.text, item])).values()).slice(0, 20);
+  all.sort(compareSuggestions);
+  const nextSuggestions = Array.from(new Map(all.map((item) => [item.text, item])).values()).slice(0, 20);
+  suggestions.value = nextSuggestions;
+  if (previousSelection) {
+    const preservedIndex = nextSuggestions.findIndex(
+      (item) => item.type === previousSelection.type && item.text === previousSelection.text,
+    );
+    if (preservedIndex >= 0) {
+      selectedIndex.value = preservedIndex;
+      hasUserSelected.value = true;
+      return;
+    }
+  }
   selectedIndex.value = 0;
   hasUserSelected.value = false;
 }
@@ -343,6 +402,13 @@ function scrollActiveSuggestionIntoView(): void {
   });
 }
 
+function activateSuggestionIndex(index: number): void {
+  if (suggestions.value.length === 0) return;
+  const nextIndex = Math.max(0, Math.min(index, suggestions.value.length - 1));
+  selectedIndex.value = nextIndex;
+  hasUserSelected.value = true;
+}
+
 function selectSuggestion(suggestion: Suggestion) {
   const text = consumeSuggestionSelection(suggestion);
   emit('select', text);
@@ -369,6 +435,10 @@ watch(selectedIndex, () => {
 
 watch(() => props.input, (newInput, oldInput) => {
   if (debounceTimer) clearTimeout(debounceTimer);
+  if (newInput !== oldInput) {
+    hasUserSelected.value = false;
+    selectedIndex.value = 0;
+  }
   if (!newInput || !props.visible) {
     suggestions.value = [];
     suggestionItemRefs.value = [];
@@ -428,6 +498,28 @@ defineExpose({
   selectPrevious: () => {
     if (suggestions.value.length === 0) return;
     selectedIndex.value = selectedIndex.value === 0 ? suggestions.value.length - 1 : selectedIndex.value - 1;
+    hasUserSelected.value = true;
+  },
+  selectPageDown: () => {
+    if (suggestions.value.length === 0) return;
+    const step = 5;
+    selectedIndex.value = Math.min(suggestions.value.length - 1, selectedIndex.value + step);
+    hasUserSelected.value = true;
+  },
+  selectPageUp: () => {
+    if (suggestions.value.length === 0) return;
+    const step = 5;
+    selectedIndex.value = Math.max(0, selectedIndex.value - step);
+    hasUserSelected.value = true;
+  },
+  selectFirst: () => {
+    if (suggestions.value.length === 0) return;
+    selectedIndex.value = 0;
+    hasUserSelected.value = true;
+  },
+  selectLast: () => {
+    if (suggestions.value.length === 0) return;
+    selectedIndex.value = suggestions.value.length - 1;
     hasUserSelected.value = true;
   },
   selectCurrent: () => {

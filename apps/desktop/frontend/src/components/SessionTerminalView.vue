@@ -27,6 +27,15 @@
       @close="showAutocomplete = false"
     />
 
+    <div
+      v-if="shouldRenderInlineSuggestion"
+      class="terminal-inline-suggestion"
+      :style="inlineSuggestionStyle"
+      aria-hidden="true"
+    >
+      {{ inlineSuggestion?.ghostText }}
+    </div>
+
     <Teleport to="body">
       <div
         v-if="terminalContextMenu.visible"
@@ -78,6 +87,7 @@ import { onSshOutput, sshApi } from '@/lib/api';
 import type { SshOutputChunk } from '@/lib/api';
 import VncSessionView from '@/components/VncSessionView.vue';
 import CommandAutocomplete from '@/components/CommandAutocomplete.vue';
+import { getInlineSuggestion, shouldShowInlineSuggestion, type InlineSuggestion } from '@/utils/inline-suggest';
 import { useSessionStore } from '@/stores/session';
 import { useAIStore } from '@/stores/ai';
 import { useAppearanceStore } from '@/stores/appearance';
@@ -103,6 +113,10 @@ const termRef = ref<HTMLElement>();
 interface CommandAutocompleteExpose {
   selectNext: () => void;
   selectPrevious: () => void;
+  selectPageDown: () => void;
+  selectPageUp: () => void;
+  selectFirst: () => void;
+  selectLast: () => void;
   selectCurrent: () => string | null;
   hasSuggestions: () => boolean;
   hasActiveSelection: () => boolean;
@@ -114,7 +128,10 @@ const showAutocomplete = ref(false);
 const autocompleteInput = ref('');
 const autocompleteCursorPosition = ref({ x: 0, y: 0 });
 let terminalInputBuffer = '';
+const terminalInputValue = ref('');
 let lastOutputSeq = -1;
+const inlineSuggestion = ref<InlineSuggestion | null>(null);
+let inlineSuggestTimer: ReturnType<typeof setTimeout> | null = null;
 
 let term: Terminal | null = null;
 let fitAddon: FitAddon | null = null;
@@ -192,6 +209,59 @@ function syncAutocompleteCursorPosition(): void {
   };
 }
 
+const inlineSuggestionStyle = computed<Record<string, string>>(() => {
+  const { x, y } = autocompleteCursorPosition.value;
+  if (x <= 0 && y <= 0) return { left: '-9999px', top: '-9999px', maxWidth: '0px', visibility: 'hidden' };
+  const viewportWidth = typeof window === 'undefined' ? x + 380 : window.innerWidth;
+  const maxWidth = Math.max(160, viewportWidth - x - 12);
+  return {
+    left: `${x}px`,
+    top: `${y}px`,
+    maxWidth: `${maxWidth}px`,
+    visibility: 'visible',
+  };
+});
+
+const shouldRenderInlineSuggestion = computed(() => {
+  return Boolean(!showAutocomplete.value && inlineSuggestion.value?.ghostText);
+});
+
+function clearInlineSuggestion(): void {
+  inlineSuggestion.value = null;
+  if (inlineSuggestTimer) {
+    clearTimeout(inlineSuggestTimer);
+    inlineSuggestTimer = null;
+  }
+}
+
+async function refreshInlineSuggestion(): Promise<void> {
+  if (showAutocomplete.value) {
+    inlineSuggestion.value = null;
+    return;
+  }
+  const input = terminalInputValue.value;
+  if (!shouldShowInlineSuggestion(input)) {
+    inlineSuggestion.value = null;
+    return;
+  }
+  inlineSuggestion.value = await getInlineSuggestion(input, currentSessionId.value).catch(() => null);
+}
+
+function scheduleInlineSuggestionRefresh(): void {
+  if (inlineSuggestTimer) {
+    clearTimeout(inlineSuggestTimer);
+  }
+  inlineSuggestTimer = setTimeout(() => {
+    void refreshInlineSuggestion();
+  }, 120);
+}
+
+watch(showAutocomplete, (visible) => {
+  if (visible) {
+    inlineSuggestion.value = null;
+  }
+});
+
 function refreshAutocompleteByBuffer(): void {
   if (!currentSessionId.value || currentSession.value?.protocol !== 'SSH') {
     resetAutocompleteState();
@@ -223,11 +293,15 @@ function applyTerminalInputDelta(data: string): void {
   }
   if (data === '\r' || data === '\n' || data.includes('\r') || data.includes('\n')) {
     terminalInputBuffer = '';
+    terminalInputValue.value = '';
+    clearInlineSuggestion();
     resetAutocompleteState();
     return;
   }
   if (data === '\u0015' || data === '\u0003') {
     terminalInputBuffer = '';
+    terminalInputValue.value = '';
+    clearInlineSuggestion();
     resetAutocompleteState();
     return;
   }
@@ -248,13 +322,17 @@ function applyTerminalInputDelta(data: string): void {
     }
     terminalInputBuffer += ch;
   }
+  terminalInputValue.value = terminalInputBuffer;
+  syncAutocompleteCursorPosition();
   refreshAutocompleteByBuffer();
+  scheduleInlineSuggestionRefresh();
 }
 
 async function handleAutocompleteSelect(text: string): Promise<void> {
   if (!currentSessionId.value || !text) {
     return;
   }
+  clearInlineSuggestion();
   const currentInput = autocompleteInput.value;
   const words = currentInput.split(/\s+/);
   const lastWord = words[words.length - 1] ?? '';
@@ -263,6 +341,7 @@ async function handleAutocompleteSelect(text: string): Promise<void> {
   await sshApi.write(currentSessionId.value, encodeUtf8Base64(payload)).catch(() => undefined);
 
   terminalInputBuffer = currentInput.slice(0, currentInput.length - deleteCount) + text;
+  terminalInputValue.value = terminalInputBuffer;
   if (text.endsWith(' ')) {
     autocompleteInput.value = terminalInputBuffer;
     showAutocomplete.value = true;
@@ -271,6 +350,7 @@ async function handleAutocompleteSelect(text: string): Promise<void> {
   } else {
     resetAutocompleteState();
   }
+  scheduleInlineSuggestionRefresh();
   term?.focus();
 }
 
@@ -280,6 +360,21 @@ function triggerAutocompleteSelection(): boolean {
     return false;
   }
   void handleAutocompleteSelect(selectedText);
+  return true;
+}
+
+function acceptInlineSuggestion(): boolean {
+  const ghostText = inlineSuggestion.value?.ghostText;
+  if (!currentSessionId.value || !ghostText) {
+    return false;
+  }
+  clearInlineSuggestion();
+  terminalInputBuffer += ghostText;
+  terminalInputValue.value = terminalInputBuffer;
+  sshApi.write(currentSessionId.value, encodeUtf8Base64(ghostText)).catch(() => undefined);
+  syncAutocompleteCursorPosition();
+  scheduleInlineSuggestionRefresh();
+  term?.focus();
   return true;
 }
 
@@ -295,15 +390,20 @@ function shouldConsumeChunk(chunk?: SshOutputChunk): boolean {
 }
 
 function handleAutocompleteKeydown(event: KeyboardEvent): boolean {
-  if (!showAutocomplete.value) {
-    return true;
-  }
   if (event.type !== 'keydown') {
     return true;
   }
   if (event.ctrlKey || event.altKey || event.metaKey) {
     return true;
   }
+
+  if (!showAutocomplete.value) {
+    if ((event.key === 'ArrowRight' || event.key === 'End') && acceptInlineSuggestion()) {
+      return false;
+    }
+    return true;
+  }
+
   const hasSuggestions = autocompleteRef.value?.hasSuggestions?.() ?? false;
   const hasActiveSelection = autocompleteRef.value?.hasActiveSelection?.() ?? false;
   switch (event.key) {
@@ -332,6 +432,30 @@ function handleAutocompleteKeydown(event: KeyboardEvent): boolean {
         return true;
       }
       autocompleteRef.value?.selectPrevious?.();
+      return false;
+    case 'PageDown':
+      if (!hasSuggestions) {
+        return true;
+      }
+      autocompleteRef.value?.selectPageDown?.();
+      return false;
+    case 'PageUp':
+      if (!hasSuggestions) {
+        return true;
+      }
+      autocompleteRef.value?.selectPageUp?.();
+      return false;
+    case 'Home':
+      if (!hasSuggestions) {
+        return true;
+      }
+      autocompleteRef.value?.selectFirst?.();
+      return false;
+    case 'End':
+      if (!hasSuggestions) {
+        return true;
+      }
+      autocompleteRef.value?.selectLast?.();
       return false;
     case 'Escape':
       resetAutocompleteState();
@@ -947,6 +1071,8 @@ function cleanup(): void {
   closeTerminalContextMenu();
   resetAutocompleteState();
   terminalInputBuffer = '';
+  terminalInputValue.value = '';
+  clearInlineSuggestion();
   lastOutputSeq = -1;
 
   term?.dispose();
@@ -1137,6 +1263,19 @@ onBeforeUnmount(() => {
   font-size: calc(11px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text-sub);
+}
+
+.terminal-inline-suggestion {
+  position: fixed;
+  z-index: 11000;
+  pointer-events: none;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: calc(13px + var(--ui-font-size-offset));
+  line-height: 1.2;
+  color: color-mix(in srgb, var(--text-sub) 62%, transparent);
 }
 </style>
 

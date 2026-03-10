@@ -3,6 +3,7 @@
  * 在光标后显示灰色的预览文本
  */
 
+import { historyApi } from '@/lib/api'
 import { registry } from './registry'
 
 export interface InlineSuggestion {
@@ -15,6 +16,7 @@ export interface InlineSuggestion {
 // 命令历史缓存
 let historyCache: string[] = []
 let historyCacheTime = 0
+let historyLoadPromise: Promise<string[]> | null = null
 const HISTORY_CACHE_TTL = 10000
 
 /**
@@ -25,18 +27,30 @@ async function loadHistory(): Promise<string[]> {
   if (now - historyCacheTime < HISTORY_CACHE_TTL && historyCache.length > 0) {
     return historyCache
   }
-  
-  try {
-    const result = await (window as any).electronAPI?.commandHistory?.getRecentUnique?.(100)
-    if (result?.success && result.data) {
-      historyCache = result.data
+
+  if (historyLoadPromise) {
+    return historyLoadPromise
+  }
+
+  historyLoadPromise = (async () => {
+    try {
+      const rows = await historyApi.list(200, 0)
+      const seen = new Set<string>()
+      historyCache = rows
+        .map((item) => item.command?.trim())
+        .filter((command): command is string => Boolean(command && !seen.has(command) && seen.add(command)))
+        .slice(0, 100)
       historyCacheTime = now
       return historyCache
+    } catch (e) {
+      console.warn('Failed to load history:', e)
+      return historyCache
+    } finally {
+      historyLoadPromise = null
     }
-  } catch (e) {
-    console.warn('Failed to load history:', e)
-  }
-  return historyCache
+  })()
+
+  return historyLoadPromise
 }
 
 /**
