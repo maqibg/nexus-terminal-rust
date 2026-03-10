@@ -295,7 +295,7 @@ const handleKeyDown = () => {
   border: 1px solid var(--border);
   background: var(--bg-surface1);
   color: var(--text);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .chip-remove,
@@ -318,7 +318,7 @@ const handleKeyDown = () => {
   border: none;
   background: transparent;
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   outline: none;
 }
 
@@ -341,7 +341,7 @@ const handleKeyDown = () => {
 .suggestion-item {
   padding: 6px 10px;
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 

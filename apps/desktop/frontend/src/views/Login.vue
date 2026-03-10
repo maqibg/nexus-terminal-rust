@@ -93,14 +93,14 @@ async function handleVerify2fa() {
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
 }
 h1 { text-align: center; font-weight: 300; color: var(--text); margin: 0; }
-.subtitle { text-align: center; color: var(--text-sub); font-size: 0.9rem; margin: 0; }
+.subtitle { text-align: center; color: var(--text-sub); font-size: calc(0.9rem + var(--ui-font-size-offset)); margin: 0; }
 input {
   padding: 0.6rem 0.8rem;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg-base);
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: calc(0.9rem + var(--ui-font-size-offset));
   outline: none;
 }
 input:focus {
@@ -115,10 +115,10 @@ button {
   background: var(--button-bg-color);
   color: var(--button-text-color);
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: calc(0.9rem + var(--ui-font-size-offset));
   transition: background 0.15s ease;
 }
 button:hover { background: var(--button-hover-bg-color); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
-.error { color: var(--red); font-size: 0.85rem; text-align: center; }
+.error { color: var(--red); font-size: calc(0.85rem + var(--ui-font-size-offset)); text-align: center; }
 </style>

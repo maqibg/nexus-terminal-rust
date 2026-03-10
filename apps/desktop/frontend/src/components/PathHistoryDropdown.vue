@@ -26,9 +26,9 @@ function select(path: string) { open.value = false; emit('navigate', path); }
 
 <style scoped>
 .path-history { position: relative; }
-.btn-icon { width: 26px; height: 26px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; justify-content: center; }
+.btn-icon { width: 26px; height: 26px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-size: calc(0.8rem + var(--ui-font-size-offset)); display: flex; align-items: center; justify-content: center; }
 .btn-icon:hover { background: var(--bg-surface1); }
 .dropdown { position: absolute; top: 100%; right: 0; background: var(--bg-surface0); border: 1px solid var(--border); border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 10; min-width: 200px; margin-top: 2px; }
-.dropdown-item { padding: 4px 10px; font-size: 12px; cursor: pointer; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dropdown-item { padding: 4px 10px; font-size: calc(12px + var(--ui-font-size-offset)); cursor: pointer; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dropdown-item:hover { background: var(--bg-surface1); }
 </style>

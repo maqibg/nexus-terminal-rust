@@ -134,7 +134,7 @@ function handleSave() {
 .dialog-title {
   margin: 0 0 22px;
   text-align: center;
-  font-size: 22px;
+  font-size: calc(22px + var(--ui-font-size-offset));
   font-weight: 650;
   letter-spacing: 0.1px;
 }
@@ -150,7 +150,7 @@ function handleSave() {
   flex-direction: column;
   gap: 6px;
   color: var(--text-sub, #a6adc8);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 500;
 }
 
@@ -165,7 +165,7 @@ function handleSave() {
   border-radius: 8px;
   background: var(--bg-surface0, #313244);
   color: var(--text, #cdd6f4);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   padding: 0 12px;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -185,7 +185,7 @@ function handleSave() {
   padding: 8px 10px;
   border-radius: 8px;
   color: var(--red, #f38ba8);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   background: rgba(243, 139, 168, 0.14);
 }
 
@@ -203,7 +203,7 @@ function handleSave() {
   height: 36px;
   border-radius: 8px;
   border: 1px solid transparent;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;

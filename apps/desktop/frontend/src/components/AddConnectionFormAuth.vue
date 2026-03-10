@@ -109,7 +109,7 @@ defineProps<{
   margin: 0;
   padding-bottom: 8px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  font-size: 16px;
+  font-size: calc(16px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text);
 }
@@ -121,7 +121,7 @@ defineProps<{
 }
 
 .field-label {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 500;
   color: var(--text-sub);
 }
@@ -133,7 +133,7 @@ defineProps<{
   border-radius: 6px;
   background: var(--bg-base);
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .field-input:focus {
@@ -156,7 +156,7 @@ defineProps<{
   border-right: 1px solid var(--border);
   background: var(--bg-base);
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 

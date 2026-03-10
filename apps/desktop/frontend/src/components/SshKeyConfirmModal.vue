@@ -105,7 +105,7 @@ function reject() {
 .modal-header.warn {
   padding: 14px 18px;
   font-weight: 600;
-  font-size: 15px;
+  font-size: calc(15px + var(--ui-font-size-offset));
   border-bottom: 1px solid var(--border-color, #313244);
   color: var(--color-warning, #f9e2af);
   display: flex;
@@ -115,7 +115,7 @@ function reject() {
 
 .modal-header.warn::before {
   content: '⚠';
-  font-size: 18px;
+  font-size: calc(18px + var(--ui-font-size-offset));
 }
 
 .modal-body {
@@ -126,7 +126,7 @@ function reject() {
 }
 
 .warn-text {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   color: var(--text-secondary, #cdd6f4);
   line-height: 1.6;
 }
@@ -138,7 +138,7 @@ function reject() {
 }
 
 .fp-label {
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -147,7 +147,7 @@ function reject() {
 
 .fp-value {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   padding: 6px 10px;
   border-radius: 4px;
   word-break: break-all;
@@ -176,7 +176,7 @@ function reject() {
 .btn {
   padding: 7px 16px;
   border-radius: 5px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
   border: 1px solid var(--border-color, #313244);
   background: var(--bg-tertiary, #313244);

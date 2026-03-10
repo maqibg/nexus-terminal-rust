@@ -279,7 +279,7 @@ onUnmounted(() => {
   background: var(--bg-base);
   color: var(--text);
   padding: 6px 10px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
@@ -321,7 +321,7 @@ onUnmounted(() => {
 
 .app-select-icon {
   color: var(--text-sub);
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   transition: transform 0.15s ease;
 }
 
@@ -351,7 +351,7 @@ onUnmounted(() => {
   text-align: left;
   padding: 5px 10px;
   min-height: 30px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   line-height: 1.2;
   cursor: pointer;
 }

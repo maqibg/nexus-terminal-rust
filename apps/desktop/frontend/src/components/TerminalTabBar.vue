@@ -121,9 +121,9 @@ function handleContextAction(type: string) {
 .tab {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 4px 12px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-sub);
   cursor: pointer;
   border-radius: 4px 4px 0 0;
@@ -160,17 +160,41 @@ function handleContextAction(type: string) {
 }
 
 .tab-close {
-  background: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-right: -2px;
+  background: transparent;
   border: none;
+  border-radius: 999px;
   color: var(--text-sub);
   cursor: pointer;
-  font-size: 14px;
-  padding: 0 2px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.tab:hover .tab-close,
+.tab.active:hover .tab-close {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .tab-close:hover {
+  background: var(--border);
   color: var(--text);
+}
+
+.tab.active:hover .tab-close:hover {
+  background: var(--bg-mantle);
 }
 
 .tab-actions {
@@ -185,7 +209,7 @@ function handleContextAction(type: string) {
   border-left: 1px solid var(--border);
   color: var(--text-sub);
   cursor: pointer;
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
   padding: 4px 10px;
   height: 36px;
   min-width: 34px;
@@ -200,6 +224,6 @@ function handleContextAction(type: string) {
 }
 
 .tab-action i {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 </style>

@@ -133,17 +133,17 @@ async function rename(pk: PasskeyInfo) {
 
 <style scoped>
 .passkey-section { display: flex; flex-direction: column; gap: 10px; }
-.section-title { font-size: 15px; font-weight: 600; margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.section-title { font-size: calc(15px + var(--ui-font-size-offset)); font-weight: 600; margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 .key-list { display: flex; flex-direction: column; gap: 4px; }
 .key-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-radius: 4px; background: var(--bg-mantle); }
-.key-name { font-size: 13px; }
+.key-name { font-size: calc(13px + var(--ui-font-size-offset)); }
 .key-actions { display: flex; gap: 4px; }
-.btn-sm { padding: 3px 10px; border-radius: 3px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-size: 12px; }
+.btn-sm { padding: 3px 10px; border-radius: 3px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-size: calc(12px + var(--ui-font-size-offset)); }
 .btn-sm:hover { background: var(--bg-surface1); }
 .btn-sm.danger { color: var(--red); border-color: var(--red); }
 .btn-sm.danger:hover { background: rgba(243,139,168,0.1); }
-.btn-add { align-self: flex-start; padding: 5px 14px; border-radius: 4px; border: none; background: var(--blue); color: var(--bg-base); cursor: pointer; font-size: 13px; font-weight: 600; }
+.btn-add { align-self: flex-start; padding: 5px 14px; border-radius: 4px; border: none; background: var(--blue); color: var(--bg-base); cursor: pointer; font-size: calc(13px + var(--ui-font-size-offset)); font-weight: 600; }
 .btn-add:hover:not(:disabled) { opacity: 0.9; }
 .btn-add:disabled { opacity: 0.5; cursor: not-allowed; }
-.empty { text-align: center; color: var(--text-dim); font-size: 13px; padding: 12px; }
+.empty { text-align: center; color: var(--text-dim); font-size: calc(13px + var(--ui-font-size-offset)); padding: 12px; }
 </style>

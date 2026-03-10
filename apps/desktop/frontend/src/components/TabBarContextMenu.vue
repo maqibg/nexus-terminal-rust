@@ -19,6 +19,6 @@ defineEmits<{ close: []; action: [type: string] }>();
 <style scoped>
 .ctx-backdrop { position: fixed; inset: 0; z-index: 99; }
 .ctx-menu { position: fixed; z-index: 100; background: var(--bg-surface0); border-radius: 6px; padding: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); min-width: 120px; border: 1px solid var(--border); }
-.ctx-item { padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; color: var(--text); }
+.ctx-item { padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: calc(13px + var(--ui-font-size-offset)); color: var(--text); }
 .ctx-item:hover { background: var(--bg-surface1); }
 </style>

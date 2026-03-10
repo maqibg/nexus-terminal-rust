@@ -128,7 +128,7 @@ const resetUiTheme = async () => {
 
 .style-customizer-header h2 {
   margin: 0;
-  font-size: 26px;
+  font-size: calc(26px + var(--ui-font-size-offset));
   line-height: 1;
   color: var(--text);
   font-weight: 600;
@@ -141,7 +141,7 @@ const resetUiTheme = async () => {
   border-radius: 6px;
   background: transparent;
   color: var(--text-sub);
-  font-size: 24px;
+  font-size: calc(24px + var(--ui-font-size-offset));
   line-height: 1;
   cursor: pointer;
 }
@@ -176,7 +176,7 @@ const resetUiTheme = async () => {
   color: var(--text);
   text-align: left;
   padding: 0 12px;
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
   cursor: pointer;
   transition: 0.15s ease;
 }
@@ -219,7 +219,7 @@ const resetUiTheme = async () => {
   border-radius: 6px;
   border: 1px solid var(--border);
   padding: 0 16px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   color: var(--text);
   background: var(--header-bg-color);
   cursor: pointer;

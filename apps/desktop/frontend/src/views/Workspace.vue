@@ -160,6 +160,7 @@ import { useFileEditorStore } from '@/stores/fileEditor';
 import { type Connection } from '@/lib/api';
 import { useTransferProgress } from '@/composables/useTransferProgress';
 import { useAlertDialog } from '@/composables/useAlertDialog';
+import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import { useSessionLifecycle } from '@/composables/useSessionLifecycle';
 import LayoutRenderer from '@/components/LayoutRenderer.vue';
 import TerminalTabBar from '@/components/TerminalTabBar.vue';
@@ -176,6 +177,7 @@ const layoutStore = useLayoutStore();
 const settingsStore = useSettingsStore();
 const fileEditorStore = useFileEditorStore();
 const { alert } = useAlertDialog();
+const { confirm } = useConfirmDialog();
 const { connectConnection, closeSession: closeManagedSession } = useSessionLifecycle(alert);
 const { activeSessionId, activeSession, sessionList } = storeToRefs(sessionStore);
 const { layoutConfig, leftSidebarVisible, rightSidebarVisible, leftSidebarSize, rightSidebarSize, headerVisible, layoutLocked } =
@@ -348,7 +350,23 @@ async function handleConnect(conn: Connection) {
   await connectConnection(conn);
 }
 
-async function closeSession(sessionId: string) {
+function isSessionCloseConfirmationEnabled(): boolean {
+  return settingsStore.getBoolean('terminalShowSessionCloseConfirmation', true);
+}
+
+function getSessionDisplayName(sessionId: string): string {
+  return sessionList.value.find((session) => session.id === sessionId)?.connectionName ?? '';
+}
+
+async function closeSession(sessionId: string, options: { skipConfirm?: boolean } = {}) {
+  if (!options.skipConfirm && isSessionCloseConfirmationEnabled()) {
+    const name = getSessionDisplayName(sessionId);
+    const confirmed = await confirm('关闭会话', name ? `确定关闭“${name}”吗？` : '确定关闭此会话吗？');
+    if (!confirmed) {
+      return;
+    }
+  }
+
   await closeManagedSession(sessionId);
 }
 
@@ -356,6 +374,21 @@ async function closeOthers(anchorSessionId: string) {
   const ids = sessionList.value
     .filter((session) => session.id !== anchorSessionId)
     .map((session) => session.id);
+  if (ids.length === 0) {
+    return;
+  }
+
+  if (isSessionCloseConfirmationEnabled()) {
+    const confirmed = await confirm('关闭会话', `确定关闭其它 ${ids.length} 个会话吗？`);
+    if (!confirmed) {
+      return;
+    }
+    for (const id of ids) {
+      await closeSession(id, { skipConfirm: true });
+    }
+    return;
+  }
+
   for (const id of ids) {
     await closeSession(id);
   }
@@ -365,6 +398,21 @@ async function closeRight(anchorSessionId: string) {
   const index = sessionList.value.findIndex((session) => session.id === anchorSessionId);
   if (index < 0) return;
   const ids = sessionList.value.slice(index + 1).map((session) => session.id);
+  if (ids.length === 0) {
+    return;
+  }
+
+  if (isSessionCloseConfirmationEnabled()) {
+    const confirmed = await confirm('关闭会话', `确定关闭右侧 ${ids.length} 个会话吗？`);
+    if (!confirmed) {
+      return;
+    }
+    for (const id of ids) {
+      await closeSession(id, { skipConfirm: true });
+    }
+    return;
+  }
+
   for (const id of ids) {
     await closeSession(id);
   }
@@ -374,6 +422,21 @@ async function closeLeft(anchorSessionId: string) {
   const index = sessionList.value.findIndex((session) => session.id === anchorSessionId);
   if (index <= 0) return;
   const ids = sessionList.value.slice(0, index).map((session) => session.id);
+  if (ids.length === 0) {
+    return;
+  }
+
+  if (isSessionCloseConfirmationEnabled()) {
+    const confirmed = await confirm('关闭会话', `确定关闭左侧 ${ids.length} 个会话吗？`);
+    if (!confirmed) {
+      return;
+    }
+    for (const id of ids) {
+      await closeSession(id, { skipConfirm: true });
+    }
+    return;
+  }
+
   for (const id of ids) {
     await closeSession(id);
   }
@@ -444,7 +507,7 @@ onUnmounted(() => {
   border-radius: 8px;
   background: transparent;
   color: var(--text-dim);
-  font-size: 15px;
+  font-size: calc(15px + var(--ui-font-size-offset));
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
@@ -481,7 +544,7 @@ onUnmounted(() => {
 }
 
 .workspace-left-panel-title {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text);
 }
@@ -500,7 +563,7 @@ onUnmounted(() => {
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
@@ -584,7 +647,7 @@ onUnmounted(() => {
 
 .popup-title {
   padding: 12px 16px;
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text);
   border-bottom: 1px solid var(--border);
@@ -612,7 +675,7 @@ onUnmounted(() => {
 }
 
 .workspace-modal-title {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text);
 }

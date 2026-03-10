@@ -38,6 +38,7 @@ const UI_THEME_LABELS: Record<string, string> = {
   '--color-error': '错误色',
   '--color-warning': '警告色',
   '--font-family-sans-serif': '无衬线字体',
+  '--ui-font-size-offset': '界面字号增量',
   '--base-padding': '基础内边距',
   '--base-margin': '基础外边距',
 };
@@ -65,6 +66,7 @@ const UI_THEME_FIELD_ORDER: string[] = [
   '--input-focus-glow',
   '--overlay-bg-color',
   '--font-family-sans-serif',
+  '--ui-font-size-offset',
   '--base-padding',
   '--base-margin',
   '--color-success',
@@ -96,7 +98,8 @@ const dayModeTheme: Record<string, string> = {
   '--color-success': '#5cb85c',
   '--color-error': '#d9534f',
   '--color-warning': '#f0ad4e',
-  '--font-family-sans-serif': 'sans-serif',
+  '--font-family-sans-serif': `'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif`,
+  '--ui-font-size-offset': '2px',
   '--base-padding': '1rem',
   '--base-margin': '0.5rem',
 };
@@ -355,7 +358,7 @@ defineExpose({
   margin: 0;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
-  font-size: 19px;
+  font-size: calc(19px + var(--ui-font-size-offset));
   line-height: 1.2;
   color: var(--text);
   font-weight: 600;
@@ -371,7 +374,7 @@ defineExpose({
 
 .mode-label {
   color: var(--text);
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
   font-weight: 500;
 }
 
@@ -388,7 +391,7 @@ defineExpose({
   background: var(--header-bg-color);
   color: var(--text);
   padding: 0 12px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 
@@ -399,7 +402,7 @@ defineExpose({
 .section-desc {
   margin: 0;
   color: var(--text-sub);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   line-height: 1.6;
 }
 
@@ -418,7 +421,7 @@ defineExpose({
 
 .theme-label {
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -450,7 +453,7 @@ defineExpose({
   background: var(--app-bg-color);
   color: var(--text);
   padding: 0 10px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .text-input:focus {
@@ -466,7 +469,7 @@ defineExpose({
 
 .json-title {
   margin: 0;
-  font-size: 16px;
+  font-size: calc(16px + var(--ui-font-size-offset));
   color: var(--text);
   font-weight: 600;
 }
@@ -484,7 +487,7 @@ defineExpose({
   background: var(--app-bg-color);
   color: var(--text);
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
   line-height: 1.45;
 }
@@ -501,7 +504,7 @@ defineExpose({
   background: color-mix(in srgb, var(--color-error) 14%, transparent);
   color: var(--color-error);
   padding: 8px 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .sr-only {

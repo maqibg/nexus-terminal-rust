@@ -525,12 +525,12 @@ function handleUploadTasksCreated(taskIds: string[]): void {
 }
 
 .placeholder-icon {
-  font-size: 28px;
+  font-size: calc(28px + var(--ui-font-size-offset));
   opacity: 0.5;
 }
 
 .placeholder-text {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .toolbar {
@@ -570,7 +570,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   transition: background 0.15s, color 0.15s, opacity 0.15s;
 }
 
@@ -619,7 +619,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-sub, #a6adc8);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   pointer-events: none;
 }
 
@@ -629,7 +629,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   border: none;
   background: transparent;
   color: var(--text, #cdd6f4);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   padding: 0 8px 0 24px;
 }
 
@@ -707,7 +707,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   border: none;
   background: transparent;
   color: var(--text, #cdd6f4);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   min-width: 80px;
   font-family: 'Cascadia Mono', 'Consolas', 'SFMono-Regular', monospace;
 }
@@ -740,7 +740,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   justify-content: center;
   gap: 8px;
   padding: 10px 12px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-sub, #a6adc8);
 }
 
@@ -753,7 +753,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   align-items: center;
   text-align: left;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   cursor: pointer;
   transition: background 0.12s;
 }
@@ -785,7 +785,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   background: var(--bg-base, #1e1e2e);
   color: var(--text, #cdd6f4);
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
@@ -817,7 +817,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   gap: 8px;
   padding: 20px;
   color: var(--text-dim, #6c7086);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .status-msg.error {
@@ -825,7 +825,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
 }
 
 .status-msg i {
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
 }
 
 .file-list {
@@ -855,7 +855,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   z-index: 2;
   padding: 0 12px;
   min-width: max-content;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text-sub, #6b7280);
   border-bottom: 1px solid var(--border, #313244);
@@ -902,7 +902,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
 }
 
 .sort-indicator {
-  font-size: 10px;
+  font-size: calc(10px + var(--ui-font-size-offset));
   line-height: 1;
 }
 
@@ -948,25 +948,25 @@ function handleUploadTasksCreated(taskIds: string[]): void {
 }
 
 .drag-upload-card i {
-  font-size: 32px;
+  font-size: calc(32px + var(--ui-font-size-offset));
   color: var(--blue, #89b4fa);
   margin-bottom: 12px;
 }
 
 .drag-upload-title {
-  font-size: 15px;
+  font-size: calc(15px + var(--ui-font-size-offset));
   font-weight: 600;
 }
 
 .drag-upload-path {
   margin-top: 8px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   word-break: break-all;
 }
 
 .drag-upload-desc {
   margin-top: 6px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-sub, #6b7280);
 }
 
@@ -1026,7 +1026,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
 
 .file-icon {
   text-align: center;
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
 }
 
 .folder-color {
@@ -1039,7 +1039,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
 
 .file-name {
   color: var(--text, #cdd6f4);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 500;
 }
 
@@ -1050,21 +1050,21 @@ function handleUploadTasksCreated(taskIds: string[]): void {
 
 .file-size {
   color: var(--text-sub, #6b7280);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   text-align: right;
   font-family: 'Cascadia Mono', 'Consolas', monospace;
 }
 
 .file-perms {
   color: var(--text-sub, #6b7280);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   font-family: 'Cascadia Mono', 'Consolas', monospace;
   text-align: center;
 }
 
 .file-modified {
   color: var(--text-sub, #6b7280);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   text-align: left;
   white-space: nowrap;
 }
@@ -1076,12 +1076,12 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   justify-content: center;
   padding: 40px 20px;
   color: var(--text-dim, #6c7086);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   gap: 8px;
 }
 
 .empty-dir i {
-  font-size: 24px;
+  font-size: calc(24px + var(--ui-font-size-offset));
   opacity: 0.5;
 }
 
@@ -1110,7 +1110,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   padding: 6px 12px;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text, #cdd6f4);
   transition: background 0.12s;
 }
@@ -1143,7 +1143,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
 }
 
 .ctx-submenu-arrow {
-  font-size: 10px;
+  font-size: calc(10px + var(--ui-font-size-offset));
   opacity: 0.65;
 }
 
@@ -1172,7 +1172,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
 .ctx-icon {
   width: 14px;
   text-align: center;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   opacity: 0.7;
 }
 
@@ -1205,7 +1205,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text, #cdd6f4);
   margin-bottom: 12px;
@@ -1222,7 +1222,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   border: 1px solid var(--border, #45475a);
   background: var(--bg-base, #1e1e2e);
   color: var(--text, #cdd6f4);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   outline: none;
   box-sizing: border-box;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -1239,7 +1239,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
 
 .root-mode-hint {
   margin: -2px 0 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-sub, #a6adc8);
 }
 
@@ -1257,7 +1257,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   background: transparent;
   color: var(--text-sub, #a6adc8);
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   transition: all 0.15s;
 }
 
@@ -1274,7 +1274,7 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   color: var(--bg-base, #1e1e2e);
   cursor: pointer;
   font-weight: 600;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   transition: opacity 0.15s;
 }
 

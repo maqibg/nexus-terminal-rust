@@ -149,9 +149,9 @@ const editorFontFamily = computed(() =>
 );
 
 const editorFontSize = computed(() => {
-  const raw = Number.parseInt(appearanceStore.get('editor_font_size', '14'), 10);
+  const raw = Number.parseInt(appearanceStore.get('editor_font_size', '16'), 10);
   if (Number.isNaN(raw)) {
-    return 14;
+    return 16;
   }
 
   return Math.min(40, Math.max(8, raw));
@@ -398,7 +398,7 @@ onUnmounted(() => {
   padding: 0.5rem 1rem;
   background-color: #333;
   border-bottom: 1px solid #555;
-  font-size: 0.9em;
+  font-size: calc(0.9em + var(--ui-font-size-offset));
   flex-shrink: 0;
 }
 
@@ -443,7 +443,7 @@ onUnmounted(() => {
   min-height: 0;
   padding: 0.3rem 0.5rem;
   border-radius: 6px;
-  font-size: 0.85em;
+  font-size: calc(0.85em + var(--ui-font-size-offset));
 }
 
 .encoding-select :deep(.app-select-trigger:hover) {
@@ -456,7 +456,7 @@ onUnmounted(() => {
 }
 
 .encoding-select-placeholder {
-  font-size: 0.85em;
+  font-size: calc(0.85em + var(--ui-font-size-offset));
   color: var(--text-dim);
   padding: 0.3rem 0.5rem;
   display: inline-block;
@@ -471,7 +471,7 @@ onUnmounted(() => {
   padding: 0.4rem 0.8rem;
   cursor: pointer;
   border-radius: 3px;
-  font-size: 0.9em;
+  font-size: calc(0.9em + var(--ui-font-size-offset));
 }
 
 .save-btn:disabled {
@@ -484,7 +484,7 @@ onUnmounted(() => {
 }
 
 .save-status {
-  font-size: 0.9em;
+  font-size: calc(0.9em + var(--ui-font-size-offset));
   padding: 0.2rem 0.5rem;
   border-radius: 3px;
   white-space: nowrap;
@@ -523,7 +523,7 @@ onUnmounted(() => {
 .editor-placeholder {
   padding: 2rem;
   text-align: center;
-  font-size: 1.1em;
+  font-size: calc(1.1em + var(--ui-font-size-offset));
   flex-grow: 1;
   display: flex;
   align-items: center;

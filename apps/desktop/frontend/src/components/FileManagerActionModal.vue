@@ -50,13 +50,13 @@ function submit() { emit('confirm', inputValue.value); }
 <style scoped>
 .dialog-backdrop { position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
 .dialog-card { background: var(--bg-surface0); border-radius: 8px; padding: 24px; min-width: 320px; border: 1px solid var(--border); }
-.dialog-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--text); }
-.dialog-message { font-size: 14px; color: var(--text-sub); margin-bottom: 16px; }
+.dialog-title { font-size: calc(16px + var(--ui-font-size-offset)); font-weight: 600; margin-bottom: 12px; color: var(--text); }
+.dialog-message { font-size: calc(14px + var(--ui-font-size-offset)); color: var(--text-sub); margin-bottom: 16px; }
 .field { margin-bottom: 16px; }
-.input { width: 100%; padding: 6px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 13px; }
+.input { width: 100%; padding: 6px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: calc(13px + var(--ui-font-size-offset)); }
 .input:focus { outline: none; border-color: var(--blue); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; }
+.btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: calc(13px + var(--ui-font-size-offset)); }
 .btn-cancel { background: var(--bg-surface1); color: var(--text-sub); }
 .btn-confirm { background: var(--blue); color: var(--bg-base); }
 </style>

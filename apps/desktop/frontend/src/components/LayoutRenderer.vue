@@ -91,7 +91,7 @@ export default defineComponent({
 :deep(.splitpanes--horizontal > .splitpanes__splitter) { height: 4px; margin: -2px 0; }
 :deep(.splitpanes--vertical > .splitpanes__splitter) { width: 4px; margin: 0 -2px; }
 :deep(.splitpanes__splitter:hover) { background: var(--blue); }
-:deep(.layout-pane-status-column) { min-width: 235px; }
+:deep(.layout-pane-status-column) { min-width: 335px; }
 
 .layout-locked :deep(.splitpanes__splitter) {
   pointer-events: none;

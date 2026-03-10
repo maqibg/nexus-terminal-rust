@@ -356,7 +356,7 @@ watch([localSequence, localItemConfigs], syncChangedFlag, { deep: true });
 
 .dialog-header h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: calc(20px + var(--ui-font-size-offset));
   letter-spacing: 0.5px;
   font-weight: 700;
   color: #f2f5ff;
@@ -366,7 +366,7 @@ watch([localSequence, localItemConfigs], syncChangedFlag, { deep: true });
   border: none;
   background: transparent;
   color: #aeb4ca;
-  font-size: 20px;
+  font-size: calc(20px + var(--ui-font-size-offset));
   line-height: 1;
   width: 28px;
   height: 28px;
@@ -390,7 +390,7 @@ watch([localSequence, localItemConfigs], syncChangedFlag, { deep: true });
 
 .hint {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-style: italic;
   color: #b9bfd6;
 }
@@ -414,7 +414,7 @@ watch([localSequence, localItemConfigs], syncChangedFlag, { deep: true });
 
 .panel h3 {
   margin: 0 0 10px;
-  font-size: 15px;
+  font-size: calc(15px + var(--ui-font-size-offset));
   font-weight: 600;
   color: #dbe0f4;
 }
@@ -439,7 +439,7 @@ watch([localSequence, localItemConfigs], syncChangedFlag, { deep: true });
   border-radius: 4px;
   padding: 0 10px;
   color: #d6dbf0;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   background: #323849;
   cursor: grab;
 }
@@ -461,7 +461,7 @@ watch([localSequence, localItemConfigs], syncChangedFlag, { deep: true });
   border: none;
   background: transparent;
   color: #aeb5cd;
-  font-size: 22px;
+  font-size: calc(22px + var(--ui-font-size-offset));
   line-height: 1;
   cursor: pointer;
 }
@@ -474,7 +474,7 @@ watch([localSequence, localItemConfigs], syncChangedFlag, { deep: true });
   margin: 18px 0;
   text-align: center;
   color: #98a0b9;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .shortcuts {
@@ -501,7 +501,7 @@ watch([localSequence, localItemConfigs], syncChangedFlag, { deep: true });
 
 .shortcut-label {
   color: #ced3e8;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -511,7 +511,7 @@ watch([localSequence, localItemConfigs], syncChangedFlag, { deep: true });
   width: 92px;
   flex-shrink: 0;
   text-align: center;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: #edf1ff;
   background: #242a38;
   border: 1px solid #5b647a;
@@ -540,7 +540,7 @@ watch([localSequence, localItemConfigs], syncChangedFlag, { deep: true });
   min-width: 70px;
   height: 32px;
   padding: 0 14px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 

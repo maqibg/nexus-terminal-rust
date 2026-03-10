@@ -25,9 +25,9 @@ const label = computed(() => {
 </script>
 
 <style scoped>
-.pane-title-bar { display: flex; align-items: center; gap: 6px; padding: 2px 8px; background: var(--bg-mantle); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-sub); min-height: 24px; }
-.pane-icon { font-size: 11px; }
+.pane-title-bar { display: flex; align-items: center; gap: 6px; padding: 2px 8px; background: var(--bg-mantle); border-bottom: 1px solid var(--border); font-size: calc(12px + var(--ui-font-size-offset)); color: var(--text-sub); min-height: 24px; }
+.pane-icon { font-size: calc(11px + var(--ui-font-size-offset)); }
 .pane-label { flex: 1; }
-.btn-icon { width: 20px; height: 20px; border-radius: 3px; border: 1px solid var(--border); background: transparent; color: var(--text-sub); cursor: pointer; font-size: 11px; display: flex; align-items: center; justify-content: center; }
+.btn-icon { width: 20px; height: 20px; border-radius: 3px; border: 1px solid var(--border); background: transparent; color: var(--text-sub); cursor: pointer; font-size: calc(11px + var(--ui-font-size-offset)); display: flex; align-items: center; justify-content: center; }
 .btn-icon:hover { background: var(--bg-surface1); }
 </style>

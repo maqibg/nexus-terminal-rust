@@ -75,26 +75,26 @@ onMounted(() => store.fetchAll());
 <style scoped>
 .page { padding: 20px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { font-size: 18px; color: var(--text); }
+.page-header h2 { font-size: calc(18px + var(--ui-font-size-offset)); color: var(--text); }
 .table { width: 100%; border-collapse: collapse; }
-.table th, .table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; }
+.table th, .table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: calc(13px + var(--ui-font-size-offset)); }
 .table th { color: var(--text-sub); font-weight: 500; }
 .cmd-cell { font-family: monospace; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-actions { display: flex; gap: 4px; }
-.btn-primary { padding: 6px 14px; background: var(--blue); color: var(--button-text-color); border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
-.btn-sm { padding: 3px 8px; background: var(--bg-surface1); color: var(--text-sub); border: none; border-radius: 3px; cursor: pointer; font-size: 12px; }
+.btn-primary { padding: 6px 14px; background: var(--blue); color: var(--button-text-color); border: none; border-radius: 4px; cursor: pointer; font-size: calc(13px + var(--ui-font-size-offset)); }
+.btn-sm { padding: 3px 8px; background: var(--bg-surface1); color: var(--text-sub); border: none; border-radius: 3px; cursor: pointer; font-size: calc(12px + var(--ui-font-size-offset)); }
 .btn-danger { color: var(--red); }
-.empty { text-align: center; color: var(--text-dim); padding: 40px; font-size: 14px; }
+.empty { text-align: center; color: var(--text-dim); padding: 40px; font-size: calc(14px + var(--ui-font-size-offset)); }
 .dialog-backdrop { position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
 .dialog-card { background: var(--bg-surface0); border-radius: 8px; padding: 24px; min-width: 400px; border: 1px solid var(--border); }
-.dialog-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: var(--text); }
+.dialog-title { font-size: calc(16px + var(--ui-font-size-offset)); font-weight: 600; margin-bottom: 16px; color: var(--text); }
 .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
-.label { font-size: 12px; color: var(--text-sub); }
-.input { padding: 6px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 13px; }
+.label { font-size: calc(12px + var(--ui-font-size-offset)); color: var(--text-sub); }
+.input { padding: 6px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: calc(13px + var(--ui-font-size-offset)); }
 .input:focus { outline: none; border-color: var(--blue); }
 .textarea { resize: vertical; font-family: monospace; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; }
+.btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: calc(13px + var(--ui-font-size-offset)); }
 .btn-cancel { background: var(--bg-surface1); color: var(--text-sub); }
 .btn-confirm { background: var(--blue); color: var(--button-text-color); }
 </style>

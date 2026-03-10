@@ -396,9 +396,9 @@ function isTerminalAutoCopyOnSelectEnabled(): boolean {
 }
 
 function getTerminalFontSize(): number {
-  const value = getAppearanceValue(['terminal_font_size', 'terminalFontSize'], '14');
+  const value = getAppearanceValue(['terminal_font_size', 'terminalFontSize'], '16');
   const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 14;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 16;
 }
 
 function normalizeImageUrl(pathValue: string): string {
@@ -1073,7 +1073,7 @@ onBeforeUnmount(() => {
 
 .placeholder-text {
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
 }
 
 .terminal-context-menu {
@@ -1097,7 +1097,7 @@ onBeforeUnmount(() => {
   padding: 7px 10px;
   background: transparent;
   color: var(--text);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   text-align: left;
   cursor: pointer;
   transition: background-color 0.14s ease, color 0.14s ease;
@@ -1121,7 +1121,7 @@ onBeforeUnmount(() => {
 
 .terminal-menu-group-title {
   padding: 4px 10px 3px;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text-sub);
 }

@@ -23,7 +23,7 @@ const emit = defineEmits<{ close: []; action: [type: string] }>();
 
 <style scoped>
 .ctx-menu { position: fixed; z-index: 9500; background: var(--bg-surface0); border: 1px solid var(--border); border-radius: 6px; padding: 4px 0; min-width: 160px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-.ctx-item { padding: 6px 14px; font-size: 13px; color: var(--text); cursor: pointer; }
+.ctx-item { padding: 6px 14px; font-size: calc(13px + var(--ui-font-size-offset)); color: var(--text); cursor: pointer; }
 .ctx-item:hover { background: var(--bg-surface1); }
 .ctx-danger { color: var(--red); }
 .ctx-divider { height: 1px; background: var(--border); margin: 4px 0; }

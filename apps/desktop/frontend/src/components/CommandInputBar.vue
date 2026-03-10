@@ -383,7 +383,7 @@ function historyDown() {
   color: var(--text-sub, #a6adc8);
   cursor: pointer;
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   transition: all 0.15s;
 }
 
@@ -401,7 +401,7 @@ function historyDown() {
   background: var(--bg-surface0, #313244);
   color: var(--text, #cdd6f4);
   font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   outline: none;
   min-width: 0;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -432,7 +432,7 @@ function historyDown() {
   border-radius: 6px;
   background: var(--bg-surface0, #313244);
   color: var(--text, #cdd6f4);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   outline: none;
 }
 
@@ -456,7 +456,7 @@ function historyDown() {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
 }
 
 .search-btn:hover {

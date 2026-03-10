@@ -86,14 +86,14 @@ async function submit() {
 <style scoped>
 .dialog-backdrop { position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
 .form-card { background: var(--bg-surface0); border-radius: 8px; padding: 24px; width: 420px; border: 1px solid var(--border); }
-.form-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+.form-title { font-size: calc(16px + var(--ui-font-size-offset)); font-weight: 600; margin-bottom: 16px; }
 .form-body { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
-.hint { font-size: 12px; color: var(--text-dim); margin: 0 0 4px; }
-.field-label { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
-.input { background: var(--bg-mantle); border: 1px solid var(--border); border-radius: 4px; padding: 8px; color: var(--text); font-size: 13px; outline: none; }
+.hint { font-size: calc(12px + var(--ui-font-size-offset)); color: var(--text-dim); margin: 0 0 4px; }
+.field-label { font-size: calc(12px + var(--ui-font-size-offset)); color: var(--text-sub); margin-top: 4px; }
+.input { background: var(--bg-mantle); border: 1px solid var(--border); border-radius: 4px; padding: 8px; color: var(--text); font-size: calc(13px + var(--ui-font-size-offset)); outline: none; }
 .input:focus { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
 .form-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; }
+.btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: calc(13px + var(--ui-font-size-offset)); }
 .btn-cancel { background: var(--bg-surface1); color: var(--text-sub); }
 .btn-primary { background: var(--blue); color: var(--bg-base); font-weight: 600; }
 .btn:disabled { opacity: 0.4; cursor: default; }

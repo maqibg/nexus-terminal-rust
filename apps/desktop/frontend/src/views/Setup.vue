@@ -57,13 +57,13 @@ async function handleSetup() {
 <style scoped>
 .setup-page { display: flex; align-items: center; justify-content: center; height: 100vh; background: var(--bg-base); }
 .setup-card { background: var(--bg-surface0); border: 1px solid var(--border); border-radius: 8px; padding: 32px; width: 360px; }
-.setup-card h2 { margin-bottom: 4px; color: var(--text); font-size: 18px; }
-.setup-desc { color: var(--text-dim); font-size: 13px; margin-bottom: 20px; }
+.setup-card h2 { margin-bottom: 4px; color: var(--text); font-size: calc(18px + var(--ui-font-size-offset)); }
+.setup-desc { color: var(--text-dim); font-size: calc(13px + var(--ui-font-size-offset)); margin-bottom: 20px; }
 .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
-.label { font-size: 12px; color: var(--text-sub); }
-.input { padding: 8px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 13px; }
+.label { font-size: calc(12px + var(--ui-font-size-offset)); color: var(--text-sub); }
+.input { padding: 8px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: calc(13px + var(--ui-font-size-offset)); }
 .input:focus { outline: none; border-color: var(--blue); }
-.error { color: var(--red); font-size: 12px; margin-bottom: 8px; }
-.btn-primary { width: 100%; padding: 8px; background: var(--blue); color: var(--button-text-color); border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+.error { color: var(--red); font-size: calc(12px + var(--ui-font-size-offset)); margin-bottom: 8px; }
+.btn-primary { width: 100%; padding: 8px; background: var(--blue); color: var(--button-text-color); border: none; border-radius: 4px; cursor: pointer; font-size: calc(14px + var(--ui-font-size-offset)); }
 .btn-primary:disabled { opacity: 0.5; }
 </style>

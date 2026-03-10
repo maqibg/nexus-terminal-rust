@@ -40,14 +40,14 @@ onMounted(() => store.fetchAll());
 <style scoped>
 .page { padding: 20px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { font-size: 18px; color: var(--text); }
+.page-header h2 { font-size: calc(18px + var(--ui-font-size-offset)); color: var(--text); }
 .add-row { display: flex; gap: 8px; }
-.input { padding: 6px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 13px; }
+.input { padding: 6px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: calc(13px + var(--ui-font-size-offset)); }
 .tag-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); }
-.tag-name { font-size: 13px; color: var(--text); }
-.btn-primary { padding: 6px 14px; background: var(--blue); color: var(--bg-base); border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+.tag-name { font-size: calc(13px + var(--ui-font-size-offset)); color: var(--text); }
+.btn-primary { padding: 6px 14px; background: var(--blue); color: var(--bg-base); border: none; border-radius: 4px; cursor: pointer; font-size: calc(13px + var(--ui-font-size-offset)); }
 .btn-primary:disabled { opacity: 0.5; }
-.btn-sm { padding: 3px 8px; background: var(--bg-surface1); color: var(--text-sub); border: none; border-radius: 3px; cursor: pointer; font-size: 12px; }
+.btn-sm { padding: 3px 8px; background: var(--bg-surface1); color: var(--text-sub); border: none; border-radius: 3px; cursor: pointer; font-size: calc(12px + var(--ui-font-size-offset)); }
 .btn-danger { color: var(--red); }
-.empty { text-align: center; color: var(--text-dim); padding: 40px; font-size: 14px; }
+.empty { text-align: center; color: var(--text-dim); padding: 40px; font-size: calc(14px + var(--ui-font-size-offset)); }
 </style>

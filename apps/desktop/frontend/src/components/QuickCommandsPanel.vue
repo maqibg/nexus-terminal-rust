@@ -541,7 +541,7 @@ onUnmounted(() => {
   background: var(--bg-base, #1e1e2e);
   color: var(--text, #cdd6f4);
   padding: 0 10px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   outline: none;
   box-sizing: border-box;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -615,7 +615,7 @@ onUnmounted(() => {
   background: transparent;
   color: var(--text, #cdd6f4);
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   font-weight: 600;
 }
 
@@ -625,7 +625,7 @@ onUnmounted(() => {
 
 .group-chevron {
   width: 14px;
-  font-size: 10px;
+  font-size: calc(10px + var(--ui-font-size-offset));
   color: var(--text-dim, #6c7086);
 }
 
@@ -644,7 +644,7 @@ onUnmounted(() => {
   border-radius: 999px;
   background: var(--bg-surface0, #313244);
   color: var(--text-dim, #6c7086);
-  font-size: 10px;
+  font-size: calc(10px + var(--ui-font-size-offset));
 }
 
 .group-items {
@@ -684,13 +684,13 @@ onUnmounted(() => {
 }
 
 .command-name {
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text, #cdd6f4);
 }
 
 .command-text {
   margin-top: 1px;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   color: var(--text-dim, #6c7086);
   font-family: 'Cascadia Mono', 'Consolas', monospace;
 }
@@ -719,7 +719,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
 }
 
 .item-btn:hover {
@@ -740,11 +740,11 @@ onUnmounted(() => {
   justify-content: center;
   gap: 8px;
   color: var(--text-dim, #6c7086);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .empty-state i {
-  font-size: 20px;
+  font-size: calc(20px + var(--ui-font-size-offset));
   opacity: 0.6;
 }
 
@@ -765,7 +765,7 @@ onUnmounted(() => {
   border-radius: 6px;
   background: transparent;
   color: var(--text, #cdd6f4);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   text-align: left;
   padding: 7px 10px;
   cursor: pointer;
@@ -797,13 +797,13 @@ onUnmounted(() => {
 .variable-dialog h3 {
   margin: 0;
   color: var(--text, #cdd6f4);
-  font-size: 15px;
+  font-size: calc(15px + var(--ui-font-size-offset));
 }
 
 .dialog-hint {
   margin: 6px 0 12px;
   color: var(--text-dim, #6c7086);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .variable-field {
@@ -812,7 +812,7 @@ onUnmounted(() => {
   gap: 4px;
   margin-bottom: 10px;
   color: var(--text-sub, #a6adc8);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .variable-field input {
@@ -842,7 +842,7 @@ onUnmounted(() => {
   height: 32px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .dialog-btn.secondary {
@@ -875,7 +875,7 @@ onUnmounted(() => {
 }
 
 .compact-mode .command-name {
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
 }
 </style>
 

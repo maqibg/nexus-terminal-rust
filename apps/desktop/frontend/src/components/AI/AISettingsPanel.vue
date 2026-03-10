@@ -537,7 +537,7 @@ onMounted(async () => {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0 12px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
   background: var(--bg-mantle);
   color: var(--text-sub);
@@ -561,7 +561,7 @@ onMounted(async () => {
   background: var(--bg-surface0);
   color: var(--text-sub);
   padding: 8px 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .banner.error {
@@ -594,14 +594,14 @@ onMounted(async () => {
 
 .section-title {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15px + var(--ui-font-size-offset));
   color: var(--text);
 }
 
 .section-desc {
   margin: -6px 0 0;
   color: var(--text-sub);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .channel-filter {
@@ -617,7 +617,7 @@ onMounted(async () => {
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   min-width: 840px;
 }
 
@@ -658,7 +658,7 @@ onMounted(async () => {
   background: transparent;
   color: var(--blue);
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .text-btn:disabled {
@@ -676,7 +676,7 @@ onMounted(async () => {
   color: var(--text-sub);
   text-align: center;
   padding: 16px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .field-row {
@@ -687,7 +687,7 @@ onMounted(async () => {
 
 .field-label {
   color: var(--text-sub);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .advanced-params-wrap {
@@ -707,7 +707,7 @@ onMounted(async () => {
   width: 140px;
   flex: 0 0 140px;
   color: var(--text-sub);
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
 }
 
 .param-main {
@@ -719,7 +719,7 @@ onMounted(async () => {
 
 .param-hint {
   color: var(--text-sub);
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
   white-space: nowrap;
 }
 
@@ -797,7 +797,7 @@ onMounted(async () => {
   border-right: 1px solid color-mix(in srgb, var(--border) 82%, var(--blue));
   background: color-mix(in srgb, var(--bg-surface1) 72%, var(--bg-base));
   color: var(--text-sub);
-  font-size: 17px;
+  font-size: calc(17px + var(--ui-font-size-offset));
   line-height: 1;
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
@@ -827,7 +827,7 @@ onMounted(async () => {
   outline: none;
   text-align: center;
   color: var(--text);
-  font-size: 17px;
+  font-size: calc(17px + var(--ui-font-size-offset));
   font-weight: 600;
   background: color-mix(in srgb, var(--bg-surface1) 82%, var(--bg-base));
   padding: 0 6px;
@@ -849,7 +849,7 @@ onMounted(async () => {
 }
 
 .stepper-control-sm .stepper-value {
-  font-size: 15px;
+  font-size: calc(15px + var(--ui-font-size-offset));
 }
 
 .mono {
@@ -864,7 +864,7 @@ onMounted(async () => {
   background: var(--bg-base);
   color: var(--text);
   padding: 6px 10px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .form-control:focus {
@@ -893,7 +893,7 @@ onMounted(async () => {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0 12px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
   background: transparent;
   color: var(--text);
@@ -938,7 +938,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   color: var(--text-sub);
   background: color-mix(in srgb, var(--bg-mantle) 88%, black);
 }
@@ -948,7 +948,7 @@ onMounted(async () => {
   border-radius: 8px;
   background: var(--bg-mantle);
   color: var(--text-sub);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   padding: 10px 12px;
 }
 
@@ -1000,7 +1000,7 @@ onMounted(async () => {
 
   .param-hint {
     white-space: normal;
-    font-size: 13px;
+    font-size: calc(13px + var(--ui-font-size-offset));
   }
 }
 </style>

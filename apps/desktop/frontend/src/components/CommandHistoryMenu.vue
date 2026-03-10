@@ -36,9 +36,9 @@ onMounted(() => { if (!items.value.length) store.fetchAll(100); });
 <style scoped>
 .history-menu { position: absolute; bottom: 100%; left: 0; width: 320px; max-height: 240px; background: var(--bg-surface0); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 -4px 12px rgba(0,0,0,0.3); display: flex; flex-direction: column; z-index: 100; }
 .menu-header { padding: 6px; border-bottom: 1px solid var(--border); }
-.input { width: 100%; padding: 4px 8px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 3px; color: var(--text); font-size: 12px; }
+.input { width: 100%; padding: 4px 8px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 3px; color: var(--text); font-size: calc(12px + var(--ui-font-size-offset)); }
 .menu-list { flex: 1; overflow-y: auto; }
-.menu-item { padding: 6px 10px; font-size: 12px; font-family: monospace; color: var(--text); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu-item { padding: 6px 10px; font-size: calc(12px + var(--ui-font-size-offset)); font-family: monospace; color: var(--text); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .menu-item:hover { background: var(--bg-surface1); }
-.empty { padding: 12px; text-align: center; color: var(--text-dim); font-size: 12px; }
+.empty { padding: 12px; text-align: center; color: var(--text-dim); font-size: calc(12px + var(--ui-font-size-offset)); }
 </style>

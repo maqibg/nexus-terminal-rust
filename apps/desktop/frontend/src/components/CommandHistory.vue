@@ -47,11 +47,11 @@ onMounted(load);
 .history-panel { display: flex; flex-direction: column; height: 100%; }
 .history-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 10px; border-bottom: 1px solid var(--border); font-size: 0.8rem; color: var(--text-sub);
+  padding: 6px 10px; border-bottom: 1px solid var(--border); font-size: calc(0.8rem + var(--ui-font-size-offset)); color: var(--text-sub);
 }
 .btn-icon {
   width: 20px; height: 20px; border-radius: 4px; border: 1px solid var(--border);
-  background: transparent; color: var(--red); cursor: pointer; font-size: 0.8rem;
+  background: transparent; color: var(--red); cursor: pointer; font-size: calc(0.8rem + var(--ui-font-size-offset));
   display: flex; align-items: center; justify-content: center;
 }
 .btn-icon:hover { background: var(--bg-surface1); }
@@ -61,7 +61,7 @@ onMounted(load);
   display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 1px;
 }
 .history-item:hover { background: var(--bg-surface1); }
-.history-cmd { font-size: 0.75rem; color: var(--blue); font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.history-time { font-size: 0.65rem; color: var(--text-dim); flex-shrink: 0; }
-.status { padding: 8px; text-align: center; color: var(--text-dim); font-size: 0.75rem; }
+.history-cmd { font-size: calc(0.75rem + var(--ui-font-size-offset)); color: var(--blue); font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-time { font-size: calc(0.65rem + var(--ui-font-size-offset)); color: var(--text-dim); flex-shrink: 0; }
+.status { padding: 8px; text-align: center; color: var(--text-dim); font-size: calc(0.75rem + var(--ui-font-size-offset)); }
 </style>

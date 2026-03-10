@@ -447,7 +447,7 @@ onUnmounted(() => {
   height: 32px;
   padding: 0 10px;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 500;
   color: var(--text-sub);
   text-decoration: none;
@@ -549,7 +549,7 @@ onUnmounted(() => {
 
 .startup-banner {
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   border-bottom: 1px solid var(--border);
 }
 
@@ -602,7 +602,7 @@ onUnmounted(() => {
 
   .nav-link {
     padding: 0 8px;
-    font-size: 12px;
+    font-size: calc(12px + var(--ui-font-size-offset));
   }
 
   .nav-link-desktop {

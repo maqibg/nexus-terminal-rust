@@ -1004,7 +1004,7 @@ onUnmounted(() => {
 
 .page-title {
   margin-bottom: 24px;
-  font-size: 26px;
+  font-size: calc(26px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text);
 }
@@ -1029,7 +1029,7 @@ onUnmounted(() => {
 
 .toolbar-title {
   flex-shrink: 0;
-  font-size: 18px;
+  font-size: calc(18px + var(--ui-font-size-offset));
   font-weight: 500;
   color: var(--text);
 }
@@ -1049,7 +1049,7 @@ onUnmounted(() => {
 
 .batch-toggle-label {
   margin-right: 8px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   color: var(--text-sub);
 }
 
@@ -1097,7 +1097,7 @@ onUnmounted(() => {
   border-radius: 6px;
   background: var(--bg-base);
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   outline: none;
 }
 
@@ -1157,7 +1157,7 @@ onUnmounted(() => {
 
 .custom-select-trigger-icon {
   color: var(--text-sub);
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   transition: transform 0.15s ease;
 }
 
@@ -1188,7 +1188,7 @@ onUnmounted(() => {
   color: var(--text);
   text-align: left;
   padding: 5px 10px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   line-height: 1.2;
   cursor: pointer;
 }
@@ -1242,7 +1242,7 @@ onUnmounted(() => {
   border-radius: 6px;
   background: var(--blue);
   color: var(--button-text-color);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 
@@ -1278,7 +1278,7 @@ onUnmounted(() => {
   height: 34px;
   padding: 0 12px;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 
@@ -1355,7 +1355,7 @@ onUnmounted(() => {
 .connection-name {
   display: flex;
   align-items: center;
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
   font-weight: 500;
   color: var(--text);
 }
@@ -1378,19 +1378,19 @@ onUnmounted(() => {
 
 .connection-detail {
   margin-top: 2px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   color: var(--text-sub);
 }
 
 .connection-last-time {
   margin-top: 1px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-dim);
 }
 
 .connection-notes {
   margin-top: 6px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-sub);
 }
 
@@ -1417,14 +1417,14 @@ onUnmounted(() => {
   border-radius: 4px;
   background: var(--bg-base);
   color: var(--text-sub);
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
 }
 
 .connection-test-result {
   margin-top: 7px;
   padding-top: 6px;
   border-top: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .test-result {
@@ -1470,7 +1470,7 @@ onUnmounted(() => {
   padding: 0 8px;
   border-radius: 999px;
   border: 1px solid transparent;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   font-weight: 600;
   white-space: nowrap;
 }
@@ -1501,7 +1501,7 @@ onUnmounted(() => {
   gap: 5px;
   height: 36px;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 500;
   cursor: pointer;
 }
@@ -1532,7 +1532,7 @@ onUnmounted(() => {
   padding: 34px 8px;
   text-align: center;
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
 }
 
 @media (max-width: 960px) {

@@ -276,7 +276,7 @@ async function submitSudoPassword() {
   border-radius: 8px;
   background: transparent;
   color: var(--text-sub, #a6adc8);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
@@ -296,7 +296,7 @@ async function submitSudoPassword() {
   border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--border, #45475a) 85%, transparent);
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 .primary-action-btn {
   background: var(--blue, #89b4fa);
@@ -322,20 +322,20 @@ async function submitSudoPassword() {
   text-align: center;
   color: var(--text-dim, #6c7086);
 }
-.docker-placeholder i { font-size: 32px; }
+.docker-placeholder i { font-size: calc(32px + var(--ui-font-size-offset)); }
 .docker-placeholder p { margin: 0; font-weight: 600; color: var(--text, #cdd6f4); }
-.docker-placeholder small { max-width: 80%; font-size: 12px; line-height: 1.6; }
+.docker-placeholder small { max-width: 80%; font-size: calc(12px + var(--ui-font-size-offset)); line-height: 1.6; }
 .docker-placeholder .primary-action-btn { margin-top: 8px; }
 .docker-placeholder.error i { color: var(--red, #f38ba8); }
 .docker-placeholder.compact { min-height: 100%; }
 .docker-content-area { flex: 1; overflow: auto; }
-.docker-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.docker-table { width: 100%; border-collapse: collapse; font-size: calc(13px + var(--ui-font-size-offset)); }
 .docker-table thead tr { background: var(--bg-mantle, #181825); }
 .docker-table th {
   padding: 9px 12px;
   border-bottom: 1px solid var(--border, #313244);
   text-align: left;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text-sub, #a6adc8);
   text-transform: uppercase;
@@ -367,7 +367,7 @@ async function submitSudoPassword() {
   align-items: center;
   padding: 3px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   font-weight: 600;
   color: #fff;
   white-space: nowrap;
@@ -387,11 +387,11 @@ async function submitSudoPassword() {
   grid-template-columns: max-content auto;
   gap: 8px 14px;
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 .stats-grid dt { font-weight: 600; color: var(--text-sub, #a6adc8); }
 .stats-grid dd { margin: 0; font-family: 'Cascadia Mono', 'Consolas', monospace; }
-.stats-empty { text-align: center; font-size: 12px; color: var(--text-dim, #6c7086); font-style: italic; }
+.stats-empty { text-align: center; font-size: calc(12px + var(--ui-font-size-offset)); color: var(--text-dim, #6c7086); font-style: italic; }
 .card-expand-btn {
   display: flex;
   align-items: center;
@@ -428,7 +428,7 @@ async function submitSudoPassword() {
   align-items: center;
   gap: 10px;
   color: var(--text, #cdd6f4);
-  font-size: 15px;
+  font-size: calc(15px + var(--ui-font-size-offset));
   font-weight: 600;
   margin-bottom: 12px;
 }
@@ -440,7 +440,7 @@ async function submitSudoPassword() {
   background: var(--bg-base, #1e1e2e);
   color: var(--text, #cdd6f4);
   padding: 0 12px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   outline: none;
 }
 .sudo-dialog-input:focus {
@@ -450,12 +450,12 @@ async function submitSudoPassword() {
 .sudo-dialog-error {
   margin-top: 10px;
   color: var(--red, #f38ba8);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 .sudo-dialog-hint {
   margin-top: 10px;
   color: var(--text-dim, #6c7086);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   line-height: 1.6;
 }
 .sudo-dialog-actions {

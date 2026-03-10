@@ -246,7 +246,7 @@ onBeforeUnmount(() => {
   border-radius: 6px;
   background: var(--bg-base, #1e1e2e);
   color: var(--text, #cdd6f4);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   padding: 0 10px;
   outline: none;
   box-sizing: border-box;
@@ -306,11 +306,11 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 8px;
   color: var(--text-dim, #6c7086);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .favorite-state i {
-  font-size: 15px;
+  font-size: calc(15px + var(--ui-font-size-offset));
   opacity: 0.8;
 }
 
@@ -350,14 +350,14 @@ onBeforeUnmount(() => {
 
 .favorite-name {
   color: var(--text, #cdd6f4);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 600;
 }
 
 .favorite-path {
   margin-top: 2px;
   color: var(--text, #cdd6f4);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .favorite-actions {
@@ -384,7 +384,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
 }
 
 .item-btn:hover {

@@ -51,7 +51,7 @@ async function logout() {
 }
 .nav-brand {
   padding: 16px 14px;
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
   font-weight: 700;
   color: var(--blue);
   border-bottom: 1px solid var(--border);
@@ -64,7 +64,7 @@ async function logout() {
 .nav-item {
   display: block;
   padding: 8px 14px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   color: var(--text-sub);
   text-decoration: none;
   border: none;

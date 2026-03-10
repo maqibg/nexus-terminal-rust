@@ -136,7 +136,7 @@ const handleHostIconMouseLeave = () => {
   margin: 0;
   padding-bottom: 8px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  font-size: 16px;
+  font-size: calc(16px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text);
 }
@@ -148,7 +148,7 @@ const handleHostIconMouseLeave = () => {
 }
 
 .field-label {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 500;
   color: var(--text-sub);
 }
@@ -160,7 +160,7 @@ const handleHostIconMouseLeave = () => {
   border-radius: 6px;
   background: var(--bg-base);
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .field-input:focus {
@@ -183,7 +183,7 @@ const handleHostIconMouseLeave = () => {
   border-right: 1px solid var(--border);
   background: var(--bg-base);
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 
@@ -210,7 +210,7 @@ const handleHostIconMouseLeave = () => {
 
 .info-icon {
   color: var(--text-sub);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: help;
 }
 
@@ -220,7 +220,7 @@ const handleHostIconMouseLeave = () => {
   border-radius: 6px;
   background: var(--ui-menu-bg);
   color: var(--text);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   line-height: 1.5;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   z-index: 9999;

@@ -522,7 +522,7 @@ const filteredRemoteHtmlPresets = computed(() => {
   margin: 0;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
-  font-size: 19px;
+  font-size: calc(19px + var(--ui-font-size-offset));
   line-height: 1.2;
   color: var(--text);
   font-weight: 600;
@@ -530,13 +530,13 @@ const filteredRemoteHtmlPresets = computed(() => {
 
 .group-title {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15px + var(--ui-font-size-offset));
   color: var(--text);
   font-weight: 600;
 }
 
 .field-label {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   color: var(--text);
   font-weight: 500;
 }
@@ -548,7 +548,7 @@ const filteredRemoteHtmlPresets = computed(() => {
   background: var(--app-bg-color);
   color: var(--text);
   padding: 0 10px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   min-width: 0;
 }
 
@@ -632,7 +632,7 @@ const filteredRemoteHtmlPresets = computed(() => {
   background: color-mix(in srgb, var(--app-bg-color) 85%, transparent);
   border-radius: 999px;
   padding: 4px 12px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text);
 }
 
@@ -649,7 +649,7 @@ const filteredRemoteHtmlPresets = computed(() => {
   background: var(--header-bg-color);
   color: var(--text);
   padding: 0 14px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
   white-space: nowrap;
 }
@@ -704,7 +704,7 @@ const filteredRemoteHtmlPresets = computed(() => {
   min-width: 40px;
   text-align: right;
   color: var(--text);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .disabled-tip,
@@ -715,7 +715,7 @@ const filteredRemoteHtmlPresets = computed(() => {
   padding: 12px;
   text-align: center;
   color: var(--text-sub);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .html-theme-panel {
@@ -758,7 +758,7 @@ const filteredRemoteHtmlPresets = computed(() => {
   background: transparent;
   color: var(--text-sub);
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .tab-btn.active {
@@ -814,7 +814,7 @@ const filteredRemoteHtmlPresets = computed(() => {
 }
 
 .preset-name {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -824,7 +824,7 @@ const filteredRemoteHtmlPresets = computed(() => {
 .preset-tag {
   padding: 1px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   font-weight: 600;
 }
 
@@ -851,7 +851,7 @@ const filteredRemoteHtmlPresets = computed(() => {
   background: var(--header-bg-color);
   color: var(--text);
   padding: 0 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 
@@ -918,7 +918,7 @@ const filteredRemoteHtmlPresets = computed(() => {
   background: var(--app-bg-color);
   color: var(--text);
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   line-height: 1.45;
   font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
 }
@@ -936,7 +936,7 @@ const filteredRemoteHtmlPresets = computed(() => {
   background: color-mix(in srgb, var(--color-error) 14%, transparent);
   color: var(--color-error);
   padding: 8px 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 @media (max-width: 860px) {

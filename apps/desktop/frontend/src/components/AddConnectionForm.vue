@@ -172,7 +172,7 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
 .dialog-title {
   margin: 0 0 16px;
   text-align: center;
-  font-size: 20px;
+  font-size: calc(20px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--ui-text-strong);
 }
@@ -198,7 +198,7 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
 
 .section-title {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text);
 }
@@ -247,7 +247,7 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
   border-radius: 6px;
   background: var(--bg-base);
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   line-height: 1.5;
   font-family: 'Consolas', 'Courier New', monospace;
 }
@@ -260,7 +260,7 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
 
 .script-mode-help {
   margin: 8px 0 0;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   line-height: 1.5;
   color: var(--text-dim);
   white-space: pre-line;
@@ -287,7 +287,7 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
   border-radius: 6px;
   background: var(--bg-base);
   color: var(--text-sub);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -297,7 +297,7 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
 .test-button:hover { background: var(--bg-surface1); color: var(--text); }
 .test-button:disabled { opacity: 0.55; cursor: not-allowed; }
 
-.test-tip-wrap { position: relative; color: var(--text-sub); font-size: 14px; cursor: help; }
+.test-tip-wrap { position: relative; color: var(--text-sub); font-size: calc(14px + var(--ui-font-size-offset)); cursor: help; }
 
 .test-tip-text {
   position: absolute;
@@ -310,7 +310,7 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
   border-radius: 6px;
   background: var(--ui-menu-bg);
   color: var(--text);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   line-height: 1.45;
   opacity: 0;
   pointer-events: none;
@@ -319,7 +319,7 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
 
 .test-tip-wrap:hover .test-tip-text { opacity: 1; }
 .test-result-row { min-height: 18px; }
-.test-result { font-size: 12px; font-weight: 500; }
+.test-result { font-size: calc(12px + var(--ui-font-size-offset)); font-weight: 500; }
 .test-result.testing { color: var(--text-sub); }
 .test-result.error { color: var(--red); }
 .test-area-placeholder { flex: 1; }
@@ -331,7 +331,7 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
   padding: 0 14px;
   border-radius: 6px;
   border: 1px solid transparent;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 

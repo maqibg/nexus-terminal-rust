@@ -416,13 +416,13 @@ function formatNetworkValue(value: number): string {
 .chart-title {
   margin: 0;
   color: #aeb7c9;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   font-weight: 600;
 }
 
 .chart-meta {
   color: #8f98aa;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   font-family: Consolas, 'Cascadia Mono', 'Microsoft YaHei UI', monospace;
   white-space: nowrap;
 }

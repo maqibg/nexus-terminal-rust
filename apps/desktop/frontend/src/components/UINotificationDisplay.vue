@@ -48,7 +48,7 @@ const icons: Record<string, string> = {
   border-radius: 6px;
   background: var(--bg-surface0);
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
   animation: slideIn 0.2s ease;
   border-left: 3px solid transparent;
@@ -57,7 +57,7 @@ const icons: Record<string, string> = {
 .notification-item.error { border-left-color: var(--red); }
 .notification-item.warning { border-left-color: var(--yellow); }
 .notification-item.info { border-left-color: var(--blue); }
-.notification-icon { font-size: 14px; flex-shrink: 0; }
+.notification-icon { font-size: calc(14px + var(--ui-font-size-offset)); flex-shrink: 0; }
 .notification-item.success .notification-icon { color: var(--green); }
 .notification-item.error .notification-icon { color: var(--red); }
 .notification-item.warning .notification-icon { color: var(--yellow); }

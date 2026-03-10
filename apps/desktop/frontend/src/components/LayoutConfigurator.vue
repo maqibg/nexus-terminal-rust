@@ -610,7 +610,7 @@ function handleAvailablePaneDragEnd(event: any) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
   box-shadow: 0 12px 48px var(--ui-dialog-shadow);
 }
 
@@ -624,7 +624,7 @@ function handleAvailablePaneDragEnd(event: any) {
 
 .dialog-header h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: calc(18px + var(--ui-font-size-offset));
   font-weight: 600;
   letter-spacing: 0.2px;
 }
@@ -634,7 +634,7 @@ function handleAvailablePaneDragEnd(event: any) {
   background: transparent;
   color: var(--ui-text-muted);
   cursor: pointer;
-  font-size: 24px;
+  font-size: calc(24px + var(--ui-font-size-offset));
   line-height: 1;
   width: 28px;
   height: 28px;
@@ -679,7 +679,7 @@ function handleAvailablePaneDragEnd(event: any) {
 .layout-preview-section h3,
 .sidebar-panel-section h3 {
   margin: 0 0 16px;
-  font-size: 16px;
+  font-size: calc(16px + var(--ui-font-size-offset));
   color: var(--ui-text-strong);
   font-weight: 600;
 }
@@ -706,7 +706,7 @@ function handleAvailablePaneDragEnd(event: any) {
   border-radius: 6px;
   background: var(--ui-item-bg);
   color: var(--ui-text-chip);
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
   padding: 8px;
   margin-bottom: 8px;
 }
@@ -758,7 +758,7 @@ function handleAvailablePaneDragEnd(event: any) {
 }
 
 .layout-lock-label {
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
   color: var(--ui-text-soft);
   cursor: pointer;
   user-select: none;
@@ -893,7 +893,7 @@ function handleAvailablePaneDragEnd(event: any) {
   height: 32px;
   border-radius: 6px;
   border: 1px solid var(--ui-item-border-strong);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
   padding: 0 14px;
 }
@@ -929,7 +929,7 @@ function handleAvailablePaneDragEnd(event: any) {
   align-items: center;
   justify-content: center;
   text-align: center;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--ui-text-dim);
   border: 1px dashed var(--ui-item-border);
   border-radius: 8px;

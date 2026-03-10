@@ -13,12 +13,15 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+withDefaults(defineProps<{
   visible: boolean;
   title?: string;
   message: string;
   confirmText?: string;
-}>();
+}>(), {
+  title: '提示',
+  confirmText: '确定',
+});
 const emit = defineEmits<{ close: [] }>();
 function close() { emit('close'); }
 </script>
@@ -32,10 +35,10 @@ function close() { emit('close'); }
   background: var(--bg-surface0); border-radius: 8px; padding: 24px;
   min-width: 320px; max-width: 480px; border: 1px solid var(--border);
 }
-.dialog-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--text); }
-.dialog-message { font-size: 14px; color: var(--text-sub); margin-bottom: 20px; line-height: 1.5; }
+.dialog-title { font-size: calc(16px + var(--ui-font-size-offset)); font-weight: 600; margin-bottom: 12px; color: var(--text); }
+.dialog-message { font-size: calc(14px + var(--ui-font-size-offset)); color: var(--text-sub); margin-bottom: 20px; line-height: 1.5; }
 .dialog-actions { display: flex; justify-content: flex-end; }
-.btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; }
+.btn { min-width: 72px; padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: calc(13px + var(--ui-font-size-offset)); }
 .btn-primary { background: var(--blue); color: var(--bg-base); }
 .btn-primary:hover { opacity: 0.9; }
 </style>

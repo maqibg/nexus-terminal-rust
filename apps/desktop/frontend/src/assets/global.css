@@ -23,7 +23,8 @@
   --color-success: #5cb85c;
   --color-error: #d9534f;
   --color-warning: #f0ad4e;
-  --font-family-sans-serif: sans-serif;
+  --font-family-sans-serif: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  --ui-font-size-offset: 2px;
   --base-padding: 1rem;
   --base-margin: 0.5rem;
 
@@ -123,9 +124,17 @@ html, body, #app {
 
 body {
   font-family: var(--font-family-sans-serif);
+  font-size: calc(16px + var(--ui-font-size-offset));
   background: var(--bg-base);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 select {

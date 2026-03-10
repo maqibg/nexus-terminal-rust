@@ -332,7 +332,7 @@ onUnmounted(() => {
   border-radius: 10px;
   background: var(--bg-surface0, #313244);
   color: var(--text, #cdd6f4);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -409,7 +409,7 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: 'Cascadia Mono', 'Consolas', monospace;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   color: var(--text, #cdd6f4);
 }
 
@@ -455,12 +455,12 @@ onUnmounted(() => {
   gap: 8px;
   padding: 24px;
   color: var(--text-dim, #6c7086);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   text-align: center;
 }
 
 .empty-state i {
-  font-size: 20px;
+  font-size: calc(20px + var(--ui-font-size-offset));
   opacity: 0.65;
 }
 
@@ -481,7 +481,7 @@ onUnmounted(() => {
   border-radius: 8px;
   background: transparent;
   color: var(--text, #cdd6f4);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   text-align: left;
   padding: 8px 10px;
   cursor: pointer;

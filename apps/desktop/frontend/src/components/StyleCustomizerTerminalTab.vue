@@ -36,7 +36,7 @@ const {
 } = storeToRefs(appearanceStore);
 
 const editableTerminalFontFamily = ref('');
-const editableTerminalFontSize = ref(14);
+const editableTerminalFontSize = ref(16);
 
 const editableTerminalTextStrokeEnabled = ref(false);
 const editableTerminalTextStrokeWidth = ref(1);
@@ -740,7 +740,7 @@ watch(
   margin: 0;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
-  font-size: 19px;
+  font-size: calc(19px + var(--ui-font-size-offset));
   line-height: 1.2;
   color: var(--text);
   font-weight: 700;
@@ -748,7 +748,7 @@ watch(
 
 .group-title {
   margin: 0;
-  font-size: 16px;
+  font-size: calc(16px + var(--ui-font-size-offset));
   line-height: 1;
   color: var(--text);
   font-weight: 600;
@@ -775,7 +775,7 @@ watch(
 }
 
 .field-label {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   color: var(--text);
   font-weight: 600;
 }
@@ -787,7 +787,7 @@ watch(
   background: color-mix(in srgb, var(--app-bg-color) 76%, var(--header-bg-color) 24%);
   color: var(--text);
   padding: 0 10px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   min-width: 0;
 }
 
@@ -803,7 +803,7 @@ watch(
 
 .hint-text {
   margin: -4px 0 0;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-sub);
   line-height: 1.5;
 }
@@ -815,7 +815,7 @@ watch(
   background: color-mix(in srgb, var(--header-bg-color) 86%, transparent);
   color: var(--text);
   padding: 0 14px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
   white-space: nowrap;
 }
@@ -904,7 +904,7 @@ watch(
 
 .active-theme-row {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   color: var(--text-sub);
 }
 
@@ -937,7 +937,7 @@ watch(
   padding: 12px;
   text-align: center;
   color: var(--text-sub);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .theme-item {
@@ -962,7 +962,7 @@ watch(
 }
 
 .theme-name {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -987,7 +987,7 @@ watch(
   background: color-mix(in srgb, var(--header-bg-color) 85%, transparent);
   color: var(--text);
   padding: 0 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 
@@ -1021,7 +1021,7 @@ watch(
   background: color-mix(in srgb, var(--app-bg-color) 76%, var(--header-bg-color) 24%);
   color: var(--text);
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
   line-height: 1.45;
 }
@@ -1038,7 +1038,7 @@ watch(
   background: color-mix(in srgb, var(--color-error) 14%, transparent);
   color: var(--color-error);
   padding: 8px 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .footer-actions {

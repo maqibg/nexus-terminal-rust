@@ -42,12 +42,12 @@ onMounted(() => store.fetchAll(200));
 <style scoped>
 .page { padding: 20px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { font-size: 18px; color: var(--text); }
+.page-header h2 { font-size: calc(18px + var(--ui-font-size-offset)); color: var(--text); }
 .actions { display: flex; gap: 8px; }
-.input { padding: 6px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 13px; }
+.input { padding: 6px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: calc(13px + var(--ui-font-size-offset)); }
 .history-item { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); }
-.cmd { font-family: monospace; font-size: 13px; color: var(--text); }
-.time { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
-.btn-danger { padding: 6px 14px; background: var(--bg-surface1); color: var(--red); border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
-.empty { text-align: center; color: var(--text-dim); padding: 40px; font-size: 14px; }
+.cmd { font-family: monospace; font-size: calc(13px + var(--ui-font-size-offset)); color: var(--text); }
+.time { font-size: calc(11px + var(--ui-font-size-offset)); color: var(--text-dim); white-space: nowrap; }
+.btn-danger { padding: 6px 14px; background: var(--bg-surface1); color: var(--red); border: none; border-radius: 4px; cursor: pointer; font-size: calc(13px + var(--ui-font-size-offset)); }
+.empty { text-align: center; color: var(--text-dim); padding: 40px; font-size: calc(14px + var(--ui-font-size-offset)); }
 </style>

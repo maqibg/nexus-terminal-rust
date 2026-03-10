@@ -54,7 +54,7 @@ watch(popupEditorEnabled, (enabled) => {
 .overlay-backdrop { position: fixed; inset: 0; z-index: 8000; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; }
 .overlay-card { width: 80vw; height: 70vh; background: var(--bg-base); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
 .overlay-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg-mantle); border-bottom: 1px solid var(--border); }
-.overlay-title { font-size: 13px; font-weight: 600; color: var(--text); }
-.btn-close { background: none; border: none; color: var(--text-dim); font-size: 18px; cursor: pointer; }
+.overlay-title { font-size: calc(13px + var(--ui-font-size-offset)); font-weight: 600; color: var(--text); }
+.btn-close { background: none; border: none; color: var(--text-dim); font-size: calc(18px + var(--ui-font-size-offset)); cursor: pointer; }
 .btn-close:hover { color: var(--red); }
 </style>

@@ -43,12 +43,12 @@ onMounted(() => store.fetch());
 <style scoped>
 .connection-list { display: flex; flex-direction: column; height: 100%; }
 .search-bar { padding: 8px; border-bottom: 1px solid var(--border); }
-.input { width: 100%; padding: 6px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 13px; }
+.input { width: 100%; padding: 6px 10px; background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: calc(13px + var(--ui-font-size-offset)); }
 .list-body { flex: 1; overflow-y: auto; }
 .conn-item { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--border); }
 .conn-item:hover { background: var(--bg-surface0); }
 .conn-item.active { background: var(--bg-surface1); }
-.conn-name { font-size: 13px; color: var(--text); }
-.conn-host { font-size: 11px; color: var(--text-dim); }
-.empty { padding: 16px; text-align: center; color: var(--text-dim); font-size: 13px; }
+.conn-name { font-size: calc(13px + var(--ui-font-size-offset)); color: var(--text); }
+.conn-host { font-size: calc(11px + var(--ui-font-size-offset)); color: var(--text-dim); }
+.empty { padding: 16px; text-align: center; color: var(--text-dim); font-size: calc(13px + var(--ui-font-size-offset)); }
 </style>

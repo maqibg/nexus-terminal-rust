@@ -80,18 +80,18 @@ async function terminate(id: string) {
 <style scoped>
 .dialog-backdrop { position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
 .modal-card { background: var(--bg-surface0); border-radius: 8px; padding: 20px; width: 480px; max-height: 70vh; overflow-y: auto; border: 1px solid var(--border); }
-.modal-header { display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: 600; margin-bottom: 16px; }
-.close-btn { cursor: pointer; font-size: 20px; color: var(--text-dim); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; font-size: calc(16px + var(--ui-font-size-offset)); font-weight: 600; margin-bottom: 16px; }
+.close-btn { cursor: pointer; font-size: calc(20px + var(--ui-font-size-offset)); color: var(--text-dim); }
 .close-btn:hover { color: var(--red); }
 .session-list { display: flex; flex-direction: column; gap: 4px; }
 .session-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-radius: 4px; background: var(--bg-mantle); }
 .session-info { display: flex; flex-direction: column; gap: 2px; }
-.session-name { font-size: 13px; }
-.session-time { font-size: 11px; color: var(--text-dim); }
+.session-name { font-size: calc(13px + var(--ui-font-size-offset)); }
+.session-time { font-size: calc(11px + var(--ui-font-size-offset)); color: var(--text-dim); }
 .session-actions { display: flex; gap: 4px; }
-.btn-sm { padding: 3px 10px; border-radius: 3px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-size: 12px; }
+.btn-sm { padding: 3px 10px; border-radius: 3px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-size: calc(12px + var(--ui-font-size-offset)); }
 .btn-sm:hover { background: var(--bg-surface1); }
 .btn-sm.danger { color: var(--red); border-color: var(--red); }
 .btn-sm.danger:hover { background: rgba(243,139,168,0.1); }
-.empty { text-align: center; color: var(--text-dim); font-size: 13px; padding: 16px; }
+.empty { text-align: center; color: var(--text-dim); font-size: calc(13px + var(--ui-font-size-offset)); padding: 16px; }
 </style>

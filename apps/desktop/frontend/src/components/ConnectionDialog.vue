@@ -125,14 +125,14 @@ async function handleSave() {
 }
 h3 { margin: 0 0 1rem; color: var(--text); font-weight: 500; }
 .form { display: flex; flex-direction: column; gap: 0.6rem; }
-label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--text-sub); }
+label { display: flex; flex-direction: column; gap: 4px; font-size: calc(0.8rem + var(--ui-font-size-offset)); color: var(--text-sub); }
 input {
   padding: 0.5rem 0.6rem;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg-base);
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: calc(0.85rem + var(--ui-font-size-offset));
   outline: none;
 }
 input:focus {
@@ -146,7 +146,7 @@ input:focus {
   border: 1px solid var(--border);
   background: var(--bg-base);
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: calc(0.85rem + var(--ui-font-size-offset));
 }
 .dialog-select :deep(.app-select-trigger:focus-visible) {
   border-color: var(--blue);
@@ -158,14 +158,14 @@ input:focus {
 .actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
 .btn-cancel {
   padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border);
-  background: transparent; color: var(--text-sub); cursor: pointer; font-size: 0.85rem;
+  background: transparent; color: var(--text-sub); cursor: pointer; font-size: calc(0.85rem + var(--ui-font-size-offset));
 }
 .btn-save {
   padding: 0.5rem 1rem; border-radius: 6px; border: none;
-  background: var(--blue); color: var(--button-text-color); cursor: pointer; font-weight: 600; font-size: 0.85rem;
+  background: var(--blue); color: var(--button-text-color); cursor: pointer; font-weight: 600; font-size: calc(0.85rem + var(--ui-font-size-offset));
 }
 .btn-save:hover { filter: brightness(1.05); }
 .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-cancel:hover { background: var(--bg-surface1); color: var(--text); }
-.error { color: var(--red); font-size: 0.8rem; margin-bottom: 0.5rem; }
+.error { color: var(--red); font-size: calc(0.8rem + var(--ui-font-size-offset)); margin-bottom: 0.5rem; }
 </style>

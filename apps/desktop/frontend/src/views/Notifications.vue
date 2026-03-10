@@ -44,15 +44,15 @@ onMounted(() => store.fetchAll());
 <style scoped>
 .page { padding: 20px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h2 { font-size: 18px; color: var(--text); }
+.page-header h2 { font-size: calc(18px + var(--ui-font-size-offset)); color: var(--text); }
 .table { width: 100%; border-collapse: collapse; }
-.table th, .table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; }
+.table th, .table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: calc(13px + var(--ui-font-size-offset)); }
 .table th { color: var(--text-sub); font-weight: 500; }
 .row-actions { display: flex; gap: 4px; }
 .on { color: var(--green); }
 .off { color: var(--text-dim); }
-.btn-primary { padding: 6px 14px; background: var(--blue); color: var(--bg-base); border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
-.btn-sm { padding: 3px 8px; background: var(--bg-surface1); color: var(--text-sub); border: none; border-radius: 3px; cursor: pointer; font-size: 12px; }
+.btn-primary { padding: 6px 14px; background: var(--blue); color: var(--bg-base); border: none; border-radius: 4px; cursor: pointer; font-size: calc(13px + var(--ui-font-size-offset)); }
+.btn-sm { padding: 3px 8px; background: var(--bg-surface1); color: var(--text-sub); border: none; border-radius: 3px; cursor: pointer; font-size: calc(12px + var(--ui-font-size-offset)); }
 .btn-danger { color: var(--red); }
-.empty { text-align: center; color: var(--text-dim); padding: 40px; font-size: 14px; }
+.empty { text-align: center; color: var(--text-dim); padding: 40px; font-size: calc(14px + var(--ui-font-size-offset)); }
 </style>

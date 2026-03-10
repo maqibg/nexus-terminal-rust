@@ -156,7 +156,7 @@ function handleContextAction(action: 'close' | 'close-others' | 'close-right' | 
   color: #cccccc;
   background: #2d2d2d;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   cursor: pointer;
   transition: background-color 0.12s;
 }
@@ -191,7 +191,7 @@ function handleContextAction(action: 'close' | 'close-others' | 'close-right' | 
   border: none;
   background: transparent;
   color: inherit;
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
   line-height: 1;
   margin-left: 6px;
   padding: 0 4px;
@@ -235,7 +235,7 @@ function handleContextAction(action: 'close' | 'close-others' | 'close-right' | 
   color: var(--text, #cdd6f4);
   text-align: left;
   padding: 0 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 

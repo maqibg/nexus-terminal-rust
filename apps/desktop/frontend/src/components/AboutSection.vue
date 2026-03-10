@@ -25,8 +25,8 @@ const version = (() => {
 
 <style scoped>
 .about-section { display: flex; flex-direction: column; gap: 8px; }
-.section-title { font-size: 15px; font-weight: 600; margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-.info-row { display: flex; gap: 12px; font-size: 13px; color: var(--text); }
+.section-title { font-size: calc(15px + var(--ui-font-size-offset)); font-weight: 600; margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.info-row { display: flex; gap: 12px; font-size: calc(13px + var(--ui-font-size-offset)); color: var(--text); }
 .info-row .label { color: var(--text-sub); min-width: 80px; }
 .info-row .link { color: var(--accent, #4a9eff); text-decoration: none; }
 .info-row .link:hover { text-decoration: underline; }

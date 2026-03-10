@@ -49,7 +49,7 @@ export default defineComponent({
 <style scoped>
 .preview-pane {
   border: 1px dashed var(--border); border-radius: 4px; padding: 8px;
-  text-align: center; font-size: 11px; color: var(--text-dim); cursor: pointer;
+  text-align: center; font-size: calc(11px + var(--ui-font-size-offset)); color: var(--text-dim); cursor: pointer;
   min-height: 40px; display: flex; align-items: center; justify-content: center; flex: 1;
 }
 .preview-pane:hover { border-color: var(--blue); color: var(--blue); }

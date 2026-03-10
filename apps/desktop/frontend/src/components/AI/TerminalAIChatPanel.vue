@@ -945,7 +945,7 @@ defineExpose({
 }
 
 .title {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text);
 }
@@ -957,7 +957,7 @@ defineExpose({
   color: var(--text-sub);
   border-radius: 999px;
   padding: 2px 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1023,7 +1023,7 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   flex-shrink: 0;
 }
 
@@ -1037,7 +1037,7 @@ defineExpose({
   align-items: center;
   gap: 8px;
   color: var(--text-sub);
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   margin-bottom: 4px;
 }
 
@@ -1048,7 +1048,7 @@ defineExpose({
 .message-text {
   margin: 0;
   line-height: 1.55;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 8px 10px;
@@ -1072,7 +1072,7 @@ defineExpose({
 
 .markdown-body :deep(code) {
   font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   padding: 1px 4px;
   border-radius: 4px;
   background: color-mix(in srgb, var(--bg-mantle) 85%, black);
@@ -1095,7 +1095,7 @@ defineExpose({
   background: var(--bg-surface1);
   color: var(--text-sub);
   padding: 0 8px;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 
@@ -1134,7 +1134,7 @@ defineExpose({
 .error-row {
   margin-top: 4px;
   color: var(--red);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1145,7 +1145,7 @@ defineExpose({
   background: transparent;
   color: var(--blue);
   cursor: pointer;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .empty-state {
@@ -1163,11 +1163,11 @@ defineExpose({
 }
 
 .empty-icon {
-  font-size: 28px;
+  font-size: calc(28px + var(--ui-font-size-offset));
 }
 
 .hint {
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .quick-actions {
@@ -1183,7 +1183,7 @@ defineExpose({
   background: transparent;
   color: var(--text-sub);
   border-radius: 6px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   padding: 4px 8px;
   cursor: pointer;
 }
@@ -1254,7 +1254,7 @@ defineExpose({
   align-items: center;
   gap: 6px;
   padding: 0 8px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text);
 }
 
@@ -1294,7 +1294,7 @@ defineExpose({
   background: var(--bg-base);
   color: var(--text);
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   resize: vertical;
 }
 
@@ -1327,7 +1327,7 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text);
 }
 
@@ -1368,7 +1368,7 @@ defineExpose({
   background: var(--bg-base);
   color: var(--text);
   padding: 0 8px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .path-input:focus {
@@ -1389,7 +1389,7 @@ defineExpose({
   border-radius: 999px;
   background: transparent;
   color: var(--text-sub);
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   height: 24px;
   padding: 0 8px;
   cursor: pointer;
@@ -1406,7 +1406,7 @@ defineExpose({
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-sub);
 }
 
@@ -1451,13 +1451,13 @@ defineExpose({
 }
 
 .file-size {
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   color: var(--text-sub);
 }
 
 .empty-file-list {
   padding: 18px 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-sub);
   text-align: center;
 }
@@ -1473,7 +1473,7 @@ defineExpose({
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   cursor: pointer;
   background: transparent;
   color: var(--text);
@@ -1530,7 +1530,7 @@ defineExpose({
 
 .dialog-header h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
   color: var(--text);
 }
 
@@ -1557,7 +1557,7 @@ defineExpose({
 
 .column-title {
   margin: 0 0 4px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-sub);
 }
 
@@ -1567,7 +1567,7 @@ defineExpose({
   background: transparent;
   color: var(--text-sub);
   padding: 6px 8px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   text-align: left;
   cursor: pointer;
 }
@@ -1585,7 +1585,7 @@ defineExpose({
 
 .empty-hint {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-sub);
 }
 

@@ -146,14 +146,14 @@ onUnmounted(() => {
 <style scoped>
 .dialog-backdrop { position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
 .upload-card { background: var(--bg-surface0); border-radius: 8px; padding: 24px; min-width: 400px; border: 1px solid var(--border); }
-.upload-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
-.drop-zone { border: 2px dashed var(--border); border-radius: 6px; padding: 32px; text-align: center; color: var(--text-dim); cursor: pointer; font-size: 13px; }
+.upload-title { font-size: calc(16px + var(--ui-font-size-offset)); font-weight: 600; margin-bottom: 16px; }
+.drop-zone { border: 2px dashed var(--border); border-radius: 6px; padding: 32px; text-align: center; color: var(--text-dim); cursor: pointer; font-size: calc(13px + var(--ui-font-size-offset)); }
 .drop-zone.dragging { border-color: var(--blue); color: var(--blue); }
 .drop-zone:hover { border-color: var(--text-dim); }
 .progress-bar { margin-top: 12px; height: 4px; background: var(--bg-surface1); border-radius: 2px; overflow: hidden; }
 .progress-fill { height: 100%; background: var(--blue); transition: width 0.2s; }
 .upload-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
-.btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; }
+.btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: calc(13px + var(--ui-font-size-offset)); }
 .btn-cancel { background: var(--bg-surface1); color: var(--text-sub); }
 .btn:disabled { opacity: 0.4; }
 </style>

@@ -178,7 +178,7 @@ const submit = async () => {
 
 .dialog-title {
   margin: 0;
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text);
 }
@@ -213,7 +213,7 @@ const submit = async () => {
 }
 
 .field-label {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   color: var(--text-sub);
 }
 
@@ -225,7 +225,7 @@ const submit = async () => {
   background: var(--bg-base);
   color: var(--text);
   padding: 6px 10px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .form-control:focus {
@@ -235,7 +235,7 @@ const submit = async () => {
 
 .error-text {
   color: var(--red);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .dialog-footer {
@@ -252,7 +252,7 @@ const submit = async () => {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0 12px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
   background: transparent;
   color: var(--text);

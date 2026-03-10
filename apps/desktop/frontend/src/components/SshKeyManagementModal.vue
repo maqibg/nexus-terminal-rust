@@ -74,23 +74,23 @@ function onFileSelect(e: Event) {
 <style scoped>
 .dialog-backdrop { position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
 .modal-card { background: var(--bg-surface0); border-radius: 8px; padding: 20px; width: 480px; max-height: 80vh; overflow-y: auto; border: 1px solid var(--border); }
-.modal-header { display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: 600; margin-bottom: 16px; }
-.close-btn { cursor: pointer; font-size: 20px; color: var(--text-dim); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; font-size: calc(16px + var(--ui-font-size-offset)); font-weight: 600; margin-bottom: 16px; }
+.close-btn { cursor: pointer; font-size: calc(20px + var(--ui-font-size-offset)); color: var(--text-dim); }
 .close-btn:hover { color: var(--red); }
 .key-list { margin-bottom: 12px; }
 .key-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-radius: 4px; background: var(--bg-mantle); margin-bottom: 4px; }
-.key-name { font-size: 13px; }
-.btn-del { background: none; border: none; color: var(--red); cursor: pointer; font-size: 12px; }
-.empty { color: var(--text-dim); font-size: 13px; text-align: center; padding: 12px; }
+.key-name { font-size: calc(13px + var(--ui-font-size-offset)); }
+.btn-del { background: none; border: none; color: var(--red); cursor: pointer; font-size: calc(12px + var(--ui-font-size-offset)); }
+.empty { color: var(--text-dim); font-size: calc(13px + var(--ui-font-size-offset)); text-align: center; padding: 12px; }
 .divider { height: 1px; background: var(--border); margin: 12px 0; }
 .add-form { display: flex; flex-direction: column; gap: 8px; }
-.input { background: var(--bg-mantle); border: 1px solid var(--border); border-radius: 4px; padding: 8px; color: var(--text); font-size: 13px; outline: none; }
+.input { background: var(--bg-mantle); border: 1px solid var(--border); border-radius: 4px; padding: 8px; color: var(--text); font-size: calc(13px + var(--ui-font-size-offset)); outline: none; }
 .input:focus { border-color: var(--blue); }
-.textarea { resize: vertical; font-family: monospace; font-size: 12px; }
+.textarea { resize: vertical; font-family: monospace; font-size: calc(12px + var(--ui-font-size-offset)); }
 .form-row { display: flex; justify-content: space-between; align-items: center; }
-.upload-label { font-size: 12px; color: var(--blue); cursor: pointer; }
+.upload-label { font-size: calc(12px + var(--ui-font-size-offset)); color: var(--blue); cursor: pointer; }
 .upload-label:hover { text-decoration: underline; }
-.btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; }
+.btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: calc(13px + var(--ui-font-size-offset)); }
 .btn-primary { background: var(--blue); color: var(--bg-base); }
 .btn:disabled { opacity: 0.4; cursor: default; }
 </style>

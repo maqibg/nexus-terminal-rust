@@ -414,7 +414,7 @@ defineExpose({
 
 .autocomplete-header {
   padding: 7px 10px;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   color: var(--text-sub);
   border-bottom: 1px solid var(--border);
   background: var(--bg-mantle);
@@ -441,7 +441,7 @@ defineExpose({
 .suggestion-icon {
   width: 28px;
   text-align: center;
-  font-size: 10px;
+  font-size: calc(10px + var(--ui-font-size-offset));
   font-weight: 700;
   color: var(--text-sub);
   border: 1px solid var(--border);
@@ -450,10 +450,10 @@ defineExpose({
 }
 
 .suggestion-main { flex: 1; min-width: 0; }
-.suggestion-text { font-family: Consolas, 'Courier New', monospace; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.suggestion-text { font-family: Consolas, 'Courier New', monospace; font-size: calc(12px + var(--ui-font-size-offset)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .match-part { color: var(--blue); font-weight: 700; }
 .rest-part { color: var(--text); }
-.suggestion-meta { margin-top: 2px; font-size: 11px; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px; }
+.suggestion-meta { margin-top: 2px; font-size: calc(11px + var(--ui-font-size-offset)); color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px; }
 .usage { color: var(--blue); }
-.usage-count { font-size: 11px; color: var(--text-sub); }
+.usage-count { font-size: calc(11px + var(--ui-font-size-offset)); color: var(--text-sub); }
 </style>

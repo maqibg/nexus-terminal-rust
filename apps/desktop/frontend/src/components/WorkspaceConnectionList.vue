@@ -187,7 +187,7 @@ onUnmounted(() => {
   border: 1px solid var(--border);
   background: var(--bg-base);
   color: var(--text);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   outline: none;
 }
 
@@ -199,7 +199,7 @@ onUnmounted(() => {
 .search-icon {
   position: absolute;
   right: 9px;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   color: var(--text-dim);
 }
 
@@ -216,7 +216,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding: 4px 6px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   text-align: left;
   cursor: pointer;
 }
@@ -268,7 +268,7 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .ws-conn-host {
@@ -278,13 +278,13 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
 }
 
 .empty-state {
   padding: 20px 0;
   text-align: center;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 </style>

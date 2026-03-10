@@ -52,10 +52,14 @@ export const defaultUiTheme: Record<string, string> = {
   '--color-success': '#5cb85c',
   '--color-error': '#d9534f',
   '--color-warning': '#f0ad4e',
-  '--font-family-sans-serif': 'sans-serif',
+  '--font-family-sans-serif': `'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif`,
+  '--ui-font-size-offset': '2px',
   '--base-padding': '1rem',
   '--base-margin': '0.5rem',
 };
+export const DEFAULT_UI_FONT_SIZE_BASE = 16;
+export const DEFAULT_UI_FONT_SIZE_OFFSET = 2;
+export const DEFAULT_UI_FONT_FAMILY = defaultUiTheme['--font-family-sans-serif'];
 
 const DEFAULT_REMOTE_REPO_URL = 'https://github.com/Heavrnl/nexus-terminal/tree/main/doc/custom_html_theme';
 const LEGACY_REMOTE_REPO_URL = 'https://github.com/Heavrnl/nexus-terminal/tree/main/packages/backend/html-presets';
@@ -165,6 +169,14 @@ const toInteger = (value: string | undefined, fallback: number | null): number |
     return fallback;
   }
   const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const toPixelOffset = (value: string | undefined, fallback: number): number => {
+  if (value === undefined) {
+    return fallback;
+  }
+  const parsed = Number.parseFloat(String(value).replace(/px$/i, '').trim());
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
@@ -298,6 +310,15 @@ export const useAppearanceStore = defineStore('appearance', () => {
     const customUiTheme = safeJsonParse<Record<string, string>>(appearanceSettings.value.customUiTheme, {});
     return { ...defaultUiTheme, ...customUiTheme };
   });
+  const currentUiFontFamily = computed(() =>
+    currentUiTheme.value['--font-family-sans-serif'] ?? defaultUiTheme['--font-family-sans-serif']
+  );
+  const currentUiFontSizeOffset = computed(() =>
+    toPixelOffset(currentUiTheme.value['--ui-font-size-offset'], DEFAULT_UI_FONT_SIZE_OFFSET)
+  );
+  const currentUiFontSize = computed(() =>
+    DEFAULT_UI_FONT_SIZE_BASE + currentUiFontSizeOffset.value
+  );
 
   const activeTerminalThemeId = computed<number | null>(() => {
     return appearanceSettings.value.activeTerminalThemeId ?? null;
@@ -322,10 +343,10 @@ export const useAppearanceStore = defineStore('appearance', () => {
   const effectiveTerminalTheme = computed<ITheme>(() => currentTerminalTheme.value);
 
   const currentTerminalFontFamily = computed(() => appearanceSettings.value.terminalFontFamily ?? `Consolas, 'Courier New', monospace, 'Microsoft YaHei', '微软雅黑'`);
-  const currentTerminalFontSize = computed(() => appearanceSettings.value.terminalFontSize ?? 14);
-  const currentEditorFontSize = computed(() => appearanceSettings.value.editorFontSize ?? 14);
+  const currentTerminalFontSize = computed(() => appearanceSettings.value.terminalFontSize ?? 16);
+  const currentEditorFontSize = computed(() => appearanceSettings.value.editorFontSize ?? 16);
   const currentEditorFontFamily = computed(() => appearanceSettings.value.editorFontFamily ?? `Consolas, 'Noto Sans SC', 'Microsoft YaHei'`);
-  const currentMobileEditorFontSize = computed(() => appearanceSettings.value.mobileEditorFontSize ?? 16);
+  const currentMobileEditorFontSize = computed(() => appearanceSettings.value.mobileEditorFontSize ?? 18);
   const terminalBackgroundImage = computed(() => appearanceSettings.value.terminalBackgroundImage ?? '');
   const isTerminalBackgroundEnabled = computed(() => appearanceSettings.value.terminalBackgroundEnabled ?? true);
   const currentTerminalBackgroundOverlayOpacity = computed(() => appearanceSettings.value.terminalBackgroundOverlayOpacity ?? 0.5);
@@ -345,10 +366,10 @@ export const useAppearanceStore = defineStore('appearance', () => {
       customUiTheme: pickValue(APPEARANCE_ALIASES.customUiTheme, '{}'),
       activeTerminalThemeId: toInteger(pickValue(APPEARANCE_ALIASES.activeTerminalThemeId, undefined), null),
       terminalFontFamily: pickValue(APPEARANCE_ALIASES.terminalFontFamily, currentTerminalFontFamily.value),
-      terminalFontSize: toNumber(pickValue(APPEARANCE_ALIASES.terminalFontSize, undefined), 14),
-      editorFontSize: toNumber(pickValue(APPEARANCE_ALIASES.editorFontSize, undefined), 14),
+      terminalFontSize: toNumber(pickValue(APPEARANCE_ALIASES.terminalFontSize, undefined), 16),
+      editorFontSize: toNumber(pickValue(APPEARANCE_ALIASES.editorFontSize, undefined), 16),
       editorFontFamily: pickValue(APPEARANCE_ALIASES.editorFontFamily, currentEditorFontFamily.value),
-      mobileEditorFontSize: toNumber(pickValue(APPEARANCE_ALIASES.mobileEditorFontSize, undefined), 16),
+      mobileEditorFontSize: toNumber(pickValue(APPEARANCE_ALIASES.mobileEditorFontSize, undefined), 18),
       terminalBackgroundEnabled: toBoolean(pickValue(APPEARANCE_ALIASES.terminalBackgroundEnabled, undefined), true),
       terminalBackgroundImage: pickValue(APPEARANCE_ALIASES.terminalBackgroundImage, ''),
       terminalBackgroundOverlayOpacity: toNumber(
@@ -581,6 +602,33 @@ export const useAppearanceStore = defineStore('appearance', () => {
 
   async function resetCustomUiTheme() {
     await persistAliases(APPEARANCE_ALIASES.customUiTheme, '{}');
+  }
+
+  async function updateCustomUiThemeEntries(entries: Record<string, string | null>) {
+    const customUiTheme = safeJsonParse<Record<string, string>>(appearanceSettings.value.customUiTheme, {});
+
+    Object.entries(entries).forEach(([key, value]) => {
+      if (value === null || value === '' || value === defaultUiTheme[key]) {
+        delete customUiTheme[key];
+        return;
+      }
+      customUiTheme[key] = value;
+    });
+
+    await persistAliases(APPEARANCE_ALIASES.customUiTheme, JSON.stringify(customUiTheme));
+  }
+
+  async function setUiFontFamily(fontFamily: string) {
+    await updateCustomUiThemeEntries({
+      '--font-family-sans-serif': fontFamily.trim() || defaultUiTheme['--font-family-sans-serif'],
+    });
+  }
+
+  async function setUiFontSizeOffset(offset: number) {
+    const normalized = `${Math.max(-8, Math.min(16, Math.round(offset)))}px`;
+    await updateCustomUiThemeEntries({
+      '--ui-font-size-offset': normalized,
+    });
   }
 
   async function setActiveTerminalTheme(themeId: string | number) {
@@ -888,6 +936,9 @@ export const useAppearanceStore = defineStore('appearance', () => {
     appearanceSettings,
     allTerminalThemes,
     currentUiTheme,
+    currentUiFontFamily,
+    currentUiFontSize,
+    currentUiFontSizeOffset,
     currentTerminalTheme,
     effectiveTerminalTheme,
     activeTerminalThemeId,
@@ -922,6 +973,8 @@ export const useAppearanceStore = defineStore('appearance', () => {
     applyTheme,
     saveCustomUiTheme,
     resetCustomUiTheme,
+    setUiFontFamily,
+    setUiFontSizeOffset,
     setActiveTerminalTheme,
     setTerminalFontFamily,
     setTerminalFontSize,

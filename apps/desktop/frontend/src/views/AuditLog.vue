@@ -67,29 +67,29 @@ onMounted(() => { loadPage(0); loadCount(); });
   display: flex; align-items: center; gap: 12px; padding: 12px 16px;
   border-bottom: 1px solid var(--border); background: var(--bg-surface0);
 }
-.audit-header h2 { margin: 0; font-size: 1rem; font-weight: 500; }
-.audit-count { font-size: 0.8rem; color: var(--text-dim); margin-left: auto; }
+.audit-header h2 { margin: 0; font-size: calc(1rem + var(--ui-font-size-offset)); font-weight: 500; }
+.audit-count { font-size: calc(0.8rem + var(--ui-font-size-offset)); color: var(--text-dim); margin-left: auto; }
 .btn-back {
   background: none; border: none; color: var(--blue); cursor: pointer;
-  font-size: 0.85rem; padding: 4px 8px; border-radius: 4px;
+  font-size: calc(0.85rem + var(--ui-font-size-offset)); padding: 4px 8px; border-radius: 4px;
 }
 .btn-back:hover { background: var(--bg-surface1); }
 .btn-danger {
   padding: 4px 10px; border-radius: 4px; border: none;
-  background: var(--red); color: var(--button-text-color); cursor: pointer; font-size: 0.8rem; font-weight: 600;
+  background: var(--red); color: var(--button-text-color); cursor: pointer; font-size: calc(0.8rem + var(--ui-font-size-offset)); font-weight: 600;
 }
 .btn-danger:hover { filter: brightness(0.95); }
 .audit-body { flex: 1; overflow-y: auto; padding: 8px 16px; }
-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+table { width: 100%; border-collapse: collapse; font-size: calc(0.8rem + var(--ui-font-size-offset)); }
 th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--text-sub); font-weight: 500; }
 td { padding: 5px 8px; border-bottom: 1px solid color-mix(in srgb, var(--border) 75%, transparent); }
 .col-time { white-space: nowrap; color: var(--text-dim); width: 160px; }
 .col-detail { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
-.status { padding: 1rem; text-align: center; color: var(--text-dim); font-size: 0.8rem; }
+.status { padding: 1rem; text-align: center; color: var(--text-dim); font-size: calc(0.8rem + var(--ui-font-size-offset)); }
 .pager { display: flex; justify-content: center; gap: 8px; padding: 12px; }
 .pager button {
   padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border);
-  background: transparent; color: var(--text-sub); cursor: pointer; font-size: 0.8rem;
+  background: transparent; color: var(--text-sub); cursor: pointer; font-size: calc(0.8rem + var(--ui-font-size-offset));
 }
 .pager button:hover { background: var(--bg-surface1); }
 .pager button:disabled { opacity: 0.4; cursor: not-allowed; }

@@ -346,7 +346,7 @@ async function handleExecute() {
 .form-title {
   margin: 0 0 16px;
   text-align: center;
-  font-size: 36px;
+  font-size: calc(36px + var(--ui-font-size-offset));
   line-height: 1.1;
   font-weight: 700;
   letter-spacing: 0.3px;
@@ -371,7 +371,7 @@ async function handleExecute() {
 .pane-title {
   margin: 0;
   color: #c7d2ee;
-  font-size: 24px;
+  font-size: calc(24px + var(--ui-font-size-offset));
   font-weight: 600;
 }
 
@@ -387,7 +387,7 @@ async function handleExecute() {
 }
 
 .no-variables {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   line-height: 1.5;
   color: #9cabcf;
   border: 1px dashed rgba(138, 149, 180, 0.3);
@@ -411,7 +411,7 @@ async function handleExecute() {
   border-radius: 8px;
   background: #1d2230;
   color: #e3ebff;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   padding: 8px 10px;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -439,7 +439,7 @@ async function handleExecute() {
   background: transparent;
   color: var(--red, #f38ba8);
   height: 30px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -455,7 +455,7 @@ async function handleExecute() {
   border-radius: 8px;
   background: transparent;
   color: var(--mauve, #cba6f7);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
@@ -487,7 +487,7 @@ async function handleExecute() {
 }
 
 .field-row > label {
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
   color: #c4d1f0;
   font-weight: 500;
 }
@@ -515,7 +515,7 @@ async function handleExecute() {
 .error-message {
   margin: 0;
   color: var(--red, #f38ba8);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .form-footer {
@@ -531,7 +531,7 @@ async function handleExecute() {
   min-width: 72px;
   height: 34px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
@@ -588,11 +588,11 @@ async function handleExecute() {
   }
 
   .pane-title {
-    font-size: 20px;
+    font-size: calc(20px + var(--ui-font-size-offset));
   }
 
   .form-title {
-    font-size: 30px;
+    font-size: calc(30px + var(--ui-font-size-offset));
   }
 }
 </style>

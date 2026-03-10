@@ -36,10 +36,10 @@ function cancel() { emit('cancel'); }
   background: var(--bg-surface0); border-radius: 8px; padding: 24px;
   min-width: 320px; max-width: 480px; border: 1px solid var(--border);
 }
-.dialog-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--text); }
-.dialog-message { font-size: 14px; color: var(--text-sub); margin-bottom: 20px; line-height: 1.5; }
+.dialog-title { font-size: calc(16px + var(--ui-font-size-offset)); font-weight: 600; margin-bottom: 12px; color: var(--text); }
+.dialog-message { font-size: calc(14px + var(--ui-font-size-offset)); color: var(--text-sub); margin-bottom: 20px; line-height: 1.5; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; }
+.btn { padding: 6px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: calc(13px + var(--ui-font-size-offset)); }
 .btn-cancel { background: var(--bg-surface1); color: var(--text-sub); }
 .btn-cancel:hover { background: var(--bg-surface0); }
 .btn-confirm { background: var(--blue); color: var(--bg-base); }

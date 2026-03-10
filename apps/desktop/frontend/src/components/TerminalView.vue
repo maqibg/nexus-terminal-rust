@@ -39,6 +39,6 @@ const { activeSessionId } = storeToRefs(sessionStore);
 
 .placeholder-text {
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
 }
 </style>

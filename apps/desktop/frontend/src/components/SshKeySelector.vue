@@ -112,7 +112,7 @@ onMounted(async () => {
   border-radius: 6px;
   background: var(--bg-base);
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .selector-select :deep(.app-select-trigger:focus-visible) {
@@ -141,7 +141,7 @@ onMounted(async () => {
 }
 
 .status-text {
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-sub);
 }
 </style>

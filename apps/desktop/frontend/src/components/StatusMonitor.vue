@@ -290,16 +290,17 @@ async function copyIpToClipboard() {
 .status-monitor {
   display: flex;
   flex-direction: column;
+  container-type: inline-size;
   width: 100%;
   min-width: 0;
   height: 100%;
-  padding: 12px;
+  padding: 10px;
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--bg-base, #1e1e2e);
   color: var(--text, #cdd6f4);
   font-family: 'Inter', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
-  font-size: 0.8125rem;
+  font-size: calc(0.75rem + var(--ui-font-size-offset));
   line-height: 1.45;
 }
 
@@ -311,7 +312,7 @@ async function copyIpToClipboard() {
   margin: 0 0 12px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border, #45475a);
-  font-size: 16px;
+  font-size: calc(16px + var(--ui-font-size-offset));
   font-weight: 600;
   letter-spacing: 0.2px;
 }
@@ -328,7 +329,7 @@ async function copyIpToClipboard() {
 }
 
 .placeholder-state i {
-  font-size: 2.2em;
+  font-size: calc(2.2em + var(--ui-font-size-offset));
 }
 
 .error-state {
@@ -340,13 +341,13 @@ async function copyIpToClipboard() {
   flex-direction: column;
   width: 100%;
   min-width: 0;
-  gap: 10px;
+  gap: 8px;
   min-height: 0;
 }
 
 .info-grid {
   display: grid;
-  gap: 6px;
+  gap: 5px;
 }
 
 .status-item {
@@ -396,9 +397,9 @@ async function copyIpToClipboard() {
 
 .metric-row {
   display: grid;
-  grid-template-columns: 42px 1fr;
+  grid-template-columns: 40px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .metric-main {
@@ -408,12 +409,17 @@ async function copyIpToClipboard() {
 }
 
 .metric-main-with-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 8px;
 }
 
 .progress-track {
   position: relative;
-  width: 100%;
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
   height: 1rem;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--border, #d1d5db) 82%, #ffffff 18%);
@@ -454,7 +460,7 @@ async function copyIpToClipboard() {
   align-items: center;
   justify-content: center;
   color: #f8fafc;
-  font-size: 0.6875rem;
+  font-size: calc(0.6875rem + var(--ui-font-size-offset));
   font-weight: 700;
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
   letter-spacing: 0.1px;
@@ -462,14 +468,12 @@ async function copyIpToClipboard() {
 }
 
 .metric-detail {
-  flex-shrink: 1;
-  min-width: 0;
+  flex-shrink: 0;
+  min-width: max-content;
   color: var(--text, #cdd6f4);
-  font-size: 0.8125rem;
-  font-family: 'Inter', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
+  font-size: calc(0.6875rem + var(--ui-font-size-offset));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .network-row {
@@ -484,7 +488,7 @@ async function copyIpToClipboard() {
 .network-values {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
   overflow: hidden;
 }
@@ -493,7 +497,7 @@ async function copyIpToClipboard() {
   display: inline-flex;
   align-items: center;
   gap: 0.3em;
-  font-size: 0.8125rem;
+  font-size: calc(0.6875rem + var(--ui-font-size-offset));
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
   white-space: nowrap;
 }
@@ -507,8 +511,29 @@ async function copyIpToClipboard() {
 }
 
 .network-rate i {
-  font-size: 0.95em;
+  font-size: calc(0.95em + var(--ui-font-size-offset));
   line-height: 1;
+}
+
+@container (max-width: 270px) {
+  .metric-main-with-detail {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .metric-detail {
+    justify-self: end;
+  }
+
+  .network-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .network-values {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
 }
 </style>
 

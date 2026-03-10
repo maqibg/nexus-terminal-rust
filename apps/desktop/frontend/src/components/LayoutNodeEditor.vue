@@ -307,7 +307,7 @@ function handleChildRemove(payload: { parentNodeId: string | undefined; nodeInde
   background: var(--ui-control-bg);
   padding: 3px 8px;
   margin-bottom: 8px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   min-height: 24px;
   border-radius: 4px;
   min-width: 0;
@@ -317,7 +317,7 @@ function handleChildRemove(payload: { parentNodeId: string | undefined; nodeInde
   flex: 1 1 auto;
   min-width: 0;
   color: var(--text);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -339,7 +339,7 @@ function handleChildRemove(payload: { parentNodeId: string | undefined; nodeInde
   border-radius: 3px;
   padding: 1px 4px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   line-height: 1;
 }
 
@@ -438,7 +438,7 @@ function handleChildRemove(payload: { parentNodeId: string | undefined; nodeInde
   min-height: 30px;
   text-align: center;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   padding-top: 8px;
 }
 
@@ -453,7 +453,7 @@ function handleChildRemove(payload: { parentNodeId: string | undefined; nodeInde
   border: 1px dashed var(--ui-item-border);
   border-radius: 6px;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   text-align: center;
   overflow-wrap: anywhere;
   padding: 8px;
@@ -496,7 +496,7 @@ function handleChildRemove(payload: { parentNodeId: string | undefined; nodeInde
   border-radius: 6px;
   background: transparent;
   color: var(--ui-text-primary);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   display: inline-flex;
   align-items: center;
   gap: 8px;

@@ -195,6 +195,23 @@
             <hr class="section-divider">
 
             <div class="settings-section-content">
+              <h3 class="section-heading">关闭会话确认</h3>
+              <form class="section-form" @submit.prevent="saveWorkspaceBoolean('terminalShowSessionCloseConfirmation', workspaceForm.terminalShowSessionCloseConfirmation, 'sessionCloseConfirm', '关闭会话确认设置已保存')">
+                <div class="checkbox-row">
+                  <input id="workspace-session-close-confirm" v-model="workspaceForm.terminalShowSessionCloseConfirmation" class="checkbox-input" type="checkbox">
+                  <label for="workspace-session-close-confirm">关闭会话 (标签页) 时显示确认提示框</label>
+                </div>
+                <small class="section-desc">开启后，关闭单个会话或批量关闭会话前都会提示确认，避免误操作导致终端状态丢失。</small>
+                <div class="form-actions form-actions-top-padding">
+                  <button type="submit" class="btn btn-primary">保存</button>
+                  <p v-if="feedback.sessionCloseConfirm?.message" :class="['feedback-msg', feedback.sessionCloseConfirm.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.sessionCloseConfirm.message }}</p>
+                </div>
+              </form>
+            </div>
+
+            <hr class="section-divider">
+
+            <div class="settings-section-content">
               <h3 class="section-heading">文件管理器删除确认</h3>
               <form class="section-form" @submit.prevent="saveWorkspaceBoolean('fileManagerShowDeleteConfirmation', workspaceForm.fileManagerShowDeleteConfirmation, 'fileDeleteConfirm', '文件删除确认设置已保存')">
                 <div class="checkbox-row">
@@ -418,7 +435,43 @@
           <h2 class="card-title">外观设置</h2>
           <div class="card-body">
             <div class="settings-section-content">
-              <h3 class="section-heading">外观设置</h3>
+              <h3 class="section-heading">界面字体</h3>
+              <form class="section-form" @submit.prevent="saveUiTypography">
+                <div class="form-field">
+                  <label class="form-label" for="appearance-font-family">界面字体</label>
+                  <AppSelect
+                    id="appearance-font-family"
+                    v-model="appearanceForm.uiFontFamily"
+                    class="timezone-select"
+                    :options="uiFontFamilyOptions"
+                    aria-label="选择界面字体"
+                  />
+                </div>
+                <div class="form-field">
+                  <label class="form-label" for="appearance-font-size">当前字号 (px)</label>
+                  <input
+                    id="appearance-font-size"
+                    v-model.number="appearanceForm.uiFontSize"
+                    class="form-control"
+                    type="number"
+                    min="8"
+                    max="32"
+                    step="1"
+                  >
+                  <small class="section-desc">默认字号为 {{ DEFAULT_UI_FONT_SIZE_BASE + DEFAULT_UI_FONT_SIZE_OFFSET }}px。这里会作用到整个界面的默认文本和显式字号规则。</small>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">保存</button>
+                  <button type="button" class="btn btn-muted" @click="resetUiTypography">重置默认字体</button>
+                  <p v-if="feedback.uiTypography?.message" :class="['feedback-msg', feedback.uiTypography.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.uiTypography.message }}</p>
+                </div>
+              </form>
+            </div>
+
+            <hr class="section-divider">
+
+            <div class="settings-section-content">
+              <h3 class="section-heading">主题与背景</h3>
               <p class="section-desc">自定义应用程序的视觉主题和背景。</p>
               <button type="button" class="btn btn-primary appearance-customize-btn" @click="appearanceStore.toggleStyleCustomizer(true)">自定义外观</button>
             </div>
@@ -456,7 +509,12 @@ import AISettingsPanel from '@/components/AI/AISettingsPanel.vue';
 import { authApi, connectionsApi } from '@/lib/api';
 import type { ImportResult } from '@/lib/api';
 import { useUiNotificationsStore } from '@/stores/uiNotifications';
-import { useAppearanceStore } from '@/stores/appearance';
+import {
+  DEFAULT_UI_FONT_FAMILY,
+  DEFAULT_UI_FONT_SIZE_BASE,
+  DEFAULT_UI_FONT_SIZE_OFFSET,
+  useAppearanceStore,
+} from '@/stores/appearance';
 import { useSettingsStore } from '@/stores/settings';
 
 type AppVersionHost = {
@@ -492,6 +550,7 @@ const appearanceStore = useAppearanceStore();
 const settingsStore = useSettingsStore();
 const route = useRoute();
 const { settings: runtimeSettings } = storeToRefs(settingsStore);
+const { currentUiFontFamily, currentUiFontSize } = storeToRefs(appearanceStore);
 
 const activeTab = ref<TabKey>(getInitialActiveTab());
 
@@ -512,6 +571,13 @@ const commonTimezones = [
 ];
 
 const timezoneOptions = computed(() => commonTimezones.map(timezone => ({ value: timezone, label: timezone })));
+const uiFontFamilyOptions = [
+  { value: `'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif`, label: 'Segoe UI / 微软雅黑' },
+  { value: `'Microsoft YaHei UI', 'Microsoft YaHei', 'Segoe UI', sans-serif`, label: '微软雅黑 UI' },
+  { value: `'PingFang SC', 'Microsoft YaHei UI', 'Segoe UI', sans-serif`, label: '苹方 / 微软雅黑' },
+  { value: `'Noto Sans SC', 'Segoe UI', 'Microsoft YaHei UI', sans-serif`, label: 'Noto Sans SC' },
+  { value: `system-ui, 'Segoe UI', 'Microsoft YaHei UI', sans-serif`, label: '系统默认' },
+];
 
 const feedback = reactive<Record<string, { message: string; success: boolean }>>({});
 
@@ -569,6 +635,7 @@ const workspaceForm = reactive({
   showConnectionTags: true,
   showQuickCommandTags: true,
   terminalScrollbackLimit: 5000,
+  terminalShowSessionCloseConfirmation: true,
   fileManagerShowDeleteConfirmation: true,
   terminalEnableRightClickPaste: true,
   showStatusMonitorIpAddress: false,
@@ -576,6 +643,10 @@ const workspaceForm = reactive({
   dockerStatusIntervalSeconds: 5,
   dockerDefaultExpand: false,
   dockerUseSudo: false,
+});
+const appearanceForm = reactive({
+  uiFontFamily: '',
+  uiFontSize: DEFAULT_UI_FONT_SIZE_BASE + DEFAULT_UI_FONT_SIZE_OFFSET,
 });
 
 const systemForm = reactive({
@@ -700,6 +771,7 @@ function hydrateFormsFromSettings() {
   workspaceForm.showConnectionTags = toBool(map.showConnectionTags, true);
   workspaceForm.showQuickCommandTags = toBool(map.showQuickCommandTags, true);
   workspaceForm.terminalScrollbackLimit = toInt(map.terminalScrollbackLimit, 5000);
+  workspaceForm.terminalShowSessionCloseConfirmation = toBool(map.terminalShowSessionCloseConfirmation, true);
   workspaceForm.fileManagerShowDeleteConfirmation = toBool(map.fileManagerShowDeleteConfirmation, true);
   workspaceForm.terminalEnableRightClickPaste = toBool(map.terminalEnableRightClickPaste, true);
   workspaceForm.showStatusMonitorIpAddress = toBool(map.showStatusMonitorIpAddress, false);
@@ -709,6 +781,8 @@ function hydrateFormsFromSettings() {
   workspaceForm.dockerUseSudo = toBool(map.dockerUseSudo, false);
 
   systemForm.timezone = map.timezone || 'Asia/Shanghai';
+  appearanceForm.uiFontFamily = currentUiFontFamily.value;
+  appearanceForm.uiFontSize = currentUiFontSize.value;
   settingsStore.setRuntimeLocale('zh-CN');
 }
 
@@ -805,6 +879,35 @@ async function saveDockerStatusInterval() {
     'Docker 刷新间隔设置已保存',
     1,
   );
+}
+
+async function saveUiTypography() {
+  try {
+    const fontSize = Number(appearanceForm.uiFontSize);
+    if (!Number.isInteger(fontSize) || fontSize < 8 || fontSize > 32) {
+      throw new Error('当前字号请输入 8 到 32 之间的整数');
+    }
+
+    await appearanceStore.setUiFontFamily(appearanceForm.uiFontFamily);
+    await appearanceStore.setUiFontSizeOffset(fontSize - DEFAULT_UI_FONT_SIZE_BASE);
+    appearanceForm.uiFontFamily = currentUiFontFamily.value;
+    appearanceForm.uiFontSize = currentUiFontSize.value;
+    setFeedback('uiTypography', '界面字体设置已保存', true);
+  } catch (error) {
+    setFeedback('uiTypography', normalizeError(error, '保存失败'), false);
+  }
+}
+
+async function resetUiTypography() {
+  try {
+    await appearanceStore.setUiFontFamily(DEFAULT_UI_FONT_FAMILY);
+    await appearanceStore.setUiFontSizeOffset(DEFAULT_UI_FONT_SIZE_OFFSET);
+    appearanceForm.uiFontFamily = currentUiFontFamily.value;
+    appearanceForm.uiFontSize = currentUiFontSize.value;
+    setFeedback('uiTypography', '已恢复默认字体设置', true);
+  } catch (error) {
+    setFeedback('uiTypography', normalizeError(error, '重置失败'), false);
+  }
 }
 
 
@@ -986,6 +1089,7 @@ async function checkLatestVersion() {
 onMounted(async () => {
   document.addEventListener('mousedown', handleCommandSyncOutsideClick);
   window.addEventListener('keydown', handleCommandSyncEscape);
+  await appearanceStore.loadAll().catch(() => undefined);
   await loadSettings();
   await checkLatestVersion();
 });
@@ -1025,7 +1129,7 @@ onUnmounted(() => {
   cursor: pointer;
   background: transparent;
   color: var(--text-sub);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 500;
   transition: all 0.15s ease;
 }
@@ -1051,7 +1155,7 @@ onUnmounted(() => {
   background: var(--bg-surface0);
   color: var(--text-sub);
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .banner.error {
@@ -1076,7 +1180,7 @@ onUnmounted(() => {
 
 .card-title {
   margin: 0;
-  font-size: 18px;
+  font-size: calc(18px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text);
   padding: 14px 20px;
@@ -1099,7 +1203,7 @@ onUnmounted(() => {
 
 .section-heading {
   margin: 0;
-  font-size: 16px;
+  font-size: calc(16px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text);
 }
@@ -1110,7 +1214,7 @@ onUnmounted(() => {
 
 .section-desc {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   line-height: 1.6;
   color: var(--text-sub);
 }
@@ -1146,7 +1250,7 @@ onUnmounted(() => {
 }
 
 .form-label {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   color: var(--text-sub);
 }
 
@@ -1158,7 +1262,7 @@ onUnmounted(() => {
   background: var(--bg-base);
   color: var(--text);
   padding: 6px 10px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   box-sizing: border-box;
 }
 
@@ -1182,7 +1286,7 @@ onUnmounted(() => {
 
 .command-sync-trigger .fa-chevron-down {
   color: var(--text-sub);
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   transition: transform 0.15s ease;
 }
 
@@ -1210,7 +1314,7 @@ onUnmounted(() => {
   color: var(--text);
   text-align: left;
   padding: 5px 10px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   line-height: 1.2;
   cursor: pointer;
 }
@@ -1235,7 +1339,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   color: var(--text);
 }
 
@@ -1269,7 +1373,7 @@ onUnmounted(() => {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0 14px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
   background: var(--header-bg-color);
   color: var(--text);
@@ -1319,12 +1423,12 @@ onUnmounted(() => {
 .btn-xs {
   height: 28px;
   padding: 0 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .feedback-msg {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .feedback-ok {
@@ -1341,7 +1445,7 @@ onUnmounted(() => {
   min-height: 24px;
   border-radius: 999px;
   padding: 0 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .status-pill.success {
@@ -1392,7 +1496,7 @@ onUnmounted(() => {
   color: var(--text);
   padding: 2px 8px;
   font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .switch-btn {
@@ -1426,7 +1530,7 @@ onUnmounted(() => {
 }
 
 .table-title {
-  font-size: 14px;
+  font-size: calc(14px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text);
 }
@@ -1440,7 +1544,7 @@ onUnmounted(() => {
 .ip-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .ip-table th,
@@ -1468,7 +1572,7 @@ onUnmounted(() => {
   padding: 12px;
   text-align: center;
   color: var(--text-sub);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .warn-text {
@@ -1482,7 +1586,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   color: var(--text-sub);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .about-item {
@@ -1532,19 +1636,19 @@ onUnmounted(() => {
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--bg-surface1);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .import-result-item .label {
   color: var(--text-sub);
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   margin-bottom: 2px;
 }
 
 .import-result-item .value {
   color: var(--text-main);
   font-weight: 600;
-  font-size: 18px;
+  font-size: calc(18px + var(--ui-font-size-offset));
 }
 </style>
 

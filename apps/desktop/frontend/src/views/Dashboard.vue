@@ -304,10 +304,10 @@ function sendQuickCommand(command: string) {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0.75rem 1rem; border-bottom: 1px solid var(--border);
 }
-.sidebar-header h2 { font-size: 1rem; font-weight: 500; margin: 0; color: var(--text); }
+.sidebar-header h2 { font-size: calc(1rem + var(--ui-font-size-offset)); font-weight: 500; margin: 0; color: var(--text); }
 .btn-icon {
   width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border);
-  background: transparent; color: var(--text); cursor: pointer; font-size: 1.1rem;
+  background: transparent; color: var(--text); cursor: pointer; font-size: calc(1.1rem + var(--ui-font-size-offset));
   display: flex; align-items: center; justify-content: center;
 }
 .btn-icon:hover { background: var(--bg-surface1); }
@@ -318,11 +318,11 @@ function sendQuickCommand(command: string) {
 }
 .conn-item:hover { background: var(--bg-surface1); }
 .conn-item.active { background: color-mix(in srgb, var(--bg-surface1) 75%, transparent); }
-.conn-name { font-size: 0.85rem; color: var(--text); }
-.conn-host { font-size: 0.75rem; color: var(--text-dim); }
+.conn-name { font-size: calc(0.85rem + var(--ui-font-size-offset)); color: var(--text); }
+.conn-host { font-size: calc(0.75rem + var(--ui-font-size-offset)); color: var(--text-dim); }
 .conn-tags { display: flex; gap: 3px; margin-top: 2px; }
 .tag-badge {
-  font-size: 0.6rem; color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent);
+  font-size: calc(0.6rem + var(--ui-font-size-offset)); color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent);
   padding: 1px 4px; border-radius: 3px;
 }
 .sidebar-footer { padding: 0.5rem 1rem; border-top: 1px solid var(--border); display: flex; gap: 12px; }
@@ -330,13 +330,13 @@ function sendQuickCommand(command: string) {
 .sidebar-history { height: 160px; border-top: 1px solid var(--border); overflow: hidden; }
 .btn-text {
   background: none; border: none; color: var(--text-sub); cursor: pointer;
-  font-size: 0.8rem; padding: 0.25rem 0;
+  font-size: calc(0.8rem + var(--ui-font-size-offset)); padding: 0.25rem 0;
 }
 .btn-text:hover { color: var(--red); }
 .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .empty-state {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  color: var(--text-dim); font-size: 0.9rem;
+  color: var(--text-dim); font-size: calc(0.9rem + var(--ui-font-size-offset));
 }
 .tabs-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .tab-bar {
@@ -346,13 +346,13 @@ function sendQuickCommand(command: string) {
 .tab {
   display: flex; align-items: center; gap: 0.5rem;
   padding: 0 1rem; cursor: pointer; white-space: nowrap;
-  font-size: 0.8rem; color: var(--text-sub); border-right: 1px solid var(--border);
+  font-size: calc(0.8rem + var(--ui-font-size-offset)); color: var(--text-sub); border-right: 1px solid var(--border);
 }
 .tab:hover { background: var(--bg-surface1); }
 .tab.active { background: var(--bg-base); color: var(--text); }
 .tab-close {
   background: none; border: none; color: inherit; cursor: pointer;
-  font-size: 1rem; padding: 0; line-height: 1;
+  font-size: calc(1rem + var(--ui-font-size-offset)); padding: 0; line-height: 1;
 }
 .tab-close:hover { color: var(--red); }
 
@@ -361,7 +361,7 @@ function sendQuickCommand(command: string) {
   padding: 0 8px;
 }
 .panel-toggle button {
-  padding: 4px 12px; font-size: 0.75rem; cursor: pointer;
+  padding: 4px 12px; font-size: calc(0.75rem + var(--ui-font-size-offset)); cursor: pointer;
   background: transparent; border: none; border-bottom: 2px solid transparent;
   color: var(--text-dim);
 }
@@ -373,15 +373,15 @@ function sendQuickCommand(command: string) {
 .sftp-area { width: 100%; height: 100%; position: absolute; inset: 0; }
 .sftp-loading {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  color: var(--text-dim); font-size: 0.85rem;
+  color: var(--text-dim); font-size: calc(0.85rem + var(--ui-font-size-offset));
 }
-.loading, .empty { color: var(--text-dim); font-size: 0.8rem; padding: 1rem; text-align: center; }
+.loading, .empty { color: var(--text-dim); font-size: calc(0.8rem + var(--ui-font-size-offset)); padding: 1rem; text-align: center; }
 
 .search-bar { padding: 6px 8px; border-bottom: 1px solid var(--border); }
-.search-input { width: 100%; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-base); color: var(--text); font-size: 0.8rem; outline: none; box-sizing: border-box; }
+.search-input { width: 100%; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-base); color: var(--text); font-size: calc(0.8rem + var(--ui-font-size-offset)); outline: none; box-sizing: border-box; }
 .search-input:focus { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
 .tag-filter { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 8px; border-bottom: 1px solid var(--border); }
-.tag-btn { padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border); background: transparent; color: var(--text-sub); cursor: pointer; font-size: 0.65rem; }
+.tag-btn { padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border); background: transparent; color: var(--text-sub); cursor: pointer; font-size: calc(0.65rem + var(--ui-font-size-offset)); }
 .tag-btn:hover { background: var(--bg-surface1); }
 .tag-btn.active { background: var(--blue); color: var(--button-text-color); border-color: var(--blue); }
 
@@ -393,7 +393,7 @@ function sendQuickCommand(command: string) {
 }
 .ctx-item {
   padding: 0.4rem 0.75rem; border-radius: 4px; cursor: pointer;
-  font-size: 0.8rem; color: var(--text);
+  font-size: calc(0.8rem + var(--ui-font-size-offset)); color: var(--text);
 }
 .ctx-item:hover { background: var(--ui-menu-hover); }
 .ctx-item.danger { color: var(--red); }

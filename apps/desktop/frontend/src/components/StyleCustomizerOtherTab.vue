@@ -13,7 +13,7 @@ const {
   currentEditorFontFamily,
 } = storeToRefs(appearanceStore);
 
-const editableEditorFontSize = ref(14);
+const editableEditorFontSize = ref(16);
 const editableEditorFontFamily = ref('');
 
 const initializeEditableState = () => {
@@ -30,7 +30,7 @@ watch(
     const fontFamilyChanged = newSettings?.editorFontFamily !== oldSettings?.editorFontFamily;
 
     if (fontSizeChanged) {
-      editableEditorFontSize.value = newSettings?.editorFontSize || 14;
+      editableEditorFontSize.value = newSettings?.editorFontSize || 16;
     }
     if (fontFamilyChanged) {
       editableEditorFontFamily.value = newSettings?.editorFontFamily || `Consolas, 'Noto Sans SC', 'Microsoft YaHei'`;
@@ -103,7 +103,7 @@ const handleSaveEditorFontFamily = async () => {
   margin: 0;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
-  font-size: 19px;
+  font-size: calc(19px + var(--ui-font-size-offset));
   line-height: 1.2;
   color: var(--text);
   font-weight: 600;
@@ -118,7 +118,7 @@ const handleSaveEditorFontFamily = async () => {
 
 .field-label {
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 500;
 }
 
@@ -129,7 +129,7 @@ const handleSaveEditorFontFamily = async () => {
   background: var(--app-bg-color);
   color: var(--text);
   padding: 0 10px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .field-input:focus {
@@ -148,7 +148,7 @@ const handleSaveEditorFontFamily = async () => {
   background: var(--header-bg-color);
   color: var(--text);
   padding: 0 14px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 

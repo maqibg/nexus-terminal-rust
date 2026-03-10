@@ -65,17 +65,17 @@ async function toggle(conn: Connection) {
 <style scoped>
 .dialog-backdrop { position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
 .modal-card { background: var(--bg-surface0); border-radius: 8px; width: 560px; max-height: 70vh; display: flex; flex-direction: column; border: 1px solid var(--border); overflow: hidden; }
-.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; font-size: 16px; font-weight: 600; border-bottom: 1px solid var(--border); }
-.close-btn { cursor: pointer; font-size: 20px; color: var(--text-dim); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; font-size: calc(16px + var(--ui-font-size-offset)); font-weight: 600; border-bottom: 1px solid var(--border); }
+.close-btn { cursor: pointer; font-size: calc(20px + var(--ui-font-size-offset)); color: var(--text-dim); }
 .close-btn:hover { color: var(--red); }
 .body { display: flex; flex: 1; overflow: hidden; }
 .tag-list { width: 160px; border-right: 1px solid var(--border); overflow-y: auto; padding: 4px; }
-.tag-item { padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 13px; color: var(--text); }
+.tag-item { padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: calc(13px + var(--ui-font-size-offset)); color: var(--text); }
 .tag-item:hover { background: var(--bg-mantle); }
 .tag-item.active { background: var(--blue); color: var(--bg-base); }
 .conn-panel { flex: 1; padding: 12px; overflow-y: auto; }
-.panel-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.panel-title { font-size: calc(13px + var(--ui-font-size-offset)); font-weight: 600; margin-bottom: 8px; }
 .conn-row { padding: 4px 0; }
-.conn-row label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; color: var(--text); }
-.empty { text-align: center; color: var(--text-dim); font-size: 13px; padding: 16px; }
+.conn-row label { display: flex; align-items: center; gap: 6px; font-size: calc(13px + var(--ui-font-size-offset)); cursor: pointer; color: var(--text); }
+.empty { text-align: center; color: var(--text-dim); font-size: calc(13px + var(--ui-font-size-offset)); padding: 16px; }
 </style>

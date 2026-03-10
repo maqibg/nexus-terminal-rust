@@ -323,13 +323,13 @@ onBeforeUnmount(() => {
 .vnc-status-dot.error { background: var(--red); }
 
 .vnc-toolbar-title {
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text);
 }
 
 .vnc-toolbar-subtitle {
-  font-size: 11px;
+  font-size: calc(11px + var(--ui-font-size-offset));
   color: var(--text-sub);
 }
 
@@ -347,7 +347,7 @@ onBeforeUnmount(() => {
   border-radius: 6px;
   background: var(--bg-surface1);
   color: var(--text-sub);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 
@@ -382,7 +382,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   background: rgba(0, 0, 0, 0.45);
 }
 
@@ -400,7 +400,7 @@ onBeforeUnmount(() => {
 }
 
 .clipboard-title {
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-sub);
 }
 

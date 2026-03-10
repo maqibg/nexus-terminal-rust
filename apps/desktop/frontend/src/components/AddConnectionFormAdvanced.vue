@@ -512,7 +512,7 @@ const expiryPreviewText = computed(() => {
   margin: 0;
   padding-bottom: 8px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  font-size: 16px;
+  font-size: calc(16px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text);
 }
@@ -524,7 +524,7 @@ const expiryPreviewText = computed(() => {
 }
 
 .field-label {
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   font-weight: 500;
   color: var(--text-sub);
 }
@@ -543,7 +543,7 @@ const expiryPreviewText = computed(() => {
   border-right: 1px solid var(--border);
   background: var(--bg-base);
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 
@@ -564,7 +564,7 @@ const expiryPreviewText = computed(() => {
   border-radius: 6px;
   background: var(--bg-base);
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .field-input:focus,
@@ -614,7 +614,7 @@ const expiryPreviewText = computed(() => {
   border-radius: 999px;
   background: transparent;
   color: var(--text-sub);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   cursor: pointer;
 }
 
@@ -630,7 +630,7 @@ const expiryPreviewText = computed(() => {
 }
 
 .expiry-preview-text {
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-dim);
   line-height: 1.3;
 }
@@ -643,7 +643,7 @@ const expiryPreviewText = computed(() => {
   border-radius: 6px;
   background: var(--bg-base);
   color: var(--text);
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
 }
 
 .field-select :deep(.app-select-trigger:focus-visible) {
@@ -670,7 +670,7 @@ const expiryPreviewText = computed(() => {
 }
 
 .jump-label {
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-sub);
   white-space: nowrap;
 }
@@ -713,12 +713,12 @@ const expiryPreviewText = computed(() => {
 }
 
 .hint-text {
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--text-sub);
 }
 
 .error-text {
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
   color: var(--red);
 }
 
@@ -773,7 +773,7 @@ const expiryPreviewText = computed(() => {
   align-items: center;
   gap: 8px;
   min-height: 22px;
-  font-size: 13px;
+  font-size: calc(13px + var(--ui-font-size-offset));
   color: var(--text-sub);
 }
 
@@ -798,6 +798,6 @@ const expiryPreviewText = computed(() => {
   border-radius: 6px;
   background: color-mix(in srgb, var(--yellow) 20%, transparent);
   color: var(--text);
-  font-size: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 </style>
