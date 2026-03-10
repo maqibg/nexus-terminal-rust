@@ -31,6 +31,7 @@ export interface CompletionItem {
     restPart?: string;      // Remaining part (for highlighting)
     usageCount?: number;    // For frequency sorting
     usage?: string;         // Usage example
+    repeatable?: boolean;   // Whether the same suggestion can be completed multiple times
 }
 
 export interface CommandDefinition {

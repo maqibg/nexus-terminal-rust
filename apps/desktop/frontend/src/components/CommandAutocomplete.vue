@@ -5,6 +5,7 @@
       <div
         v-for="(suggestion, index) in suggestions"
         :key="`${suggestion.type}-${suggestion.text}-${index}`"
+        :ref="(element) => setSuggestionItemRef(element, index)"
         :class="['suggestion-item', { active: index === selectedIndex }]"
         @click="selectSuggestion(suggestion)"
         @mouseenter="selectedIndex = index"
@@ -30,7 +31,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, type ComponentPublicInstance } from 'vue';
 import { historyApi, quickCommandApi, sshApi, type QuickCommand } from '@/lib/api';
 import { registry } from '@/utils/registry';
 import type { CompletionItem, CompletionType } from '@/utils/types';
@@ -64,6 +65,7 @@ const emit = defineEmits<{ select: [text: string]; close: [] }>();
 
 const suggestions = ref<Suggestion[]>([]);
 const selectedIndex = ref(0);
+const suggestionItemRefs = ref<Array<HTMLElement | null>>([]);
 const hasUserSelected = ref(false);
 const commandHistory = ref<string[]>([]);
 const quickCommands = ref<QuickCommand[]>([]);
@@ -190,10 +192,14 @@ async function buildRegistrySuggestions(input: string, words: string[], requestI
     : [];
 
   if (requestId !== currentRequestId) return null;
+  const previousArgs = words.slice(1, currentArgIndex);
   const staticMatches = (def.options ?? []).filter((opt) => {
     if (opt.type === 'subcommand') {
       if (currentArgIndex > depth + 1) return false;
-      if (words.slice(1, currentArgIndex).includes(opt.text)) return false;
+      if (previousArgs.includes(opt.text)) return false;
+    }
+    if (opt.type === 'option' && !opt.repeatable && previousArgs.includes(opt.text)) {
+      return false;
     }
     return opt.text.startsWith(currentArg) || (opt.displayText?.startsWith(currentArg) ?? false);
   });
@@ -298,7 +304,7 @@ async function generateSuggestions() {
   hasUserSelected.value = false;
 }
 
-async function selectSuggestion(suggestion: Suggestion) {
+function buildSuggestionInsertText(suggestion: Suggestion): string {
   let text = suggestion.text;
   if (suggestion.type === 'snippet' || suggestion.type === 'history') {
     const words = props.input.split(/\s+/);
@@ -310,18 +316,62 @@ async function selectSuggestion(suggestion: Suggestion) {
   }
   if (['command', 'subcommand', 'option'].includes(suggestion.type)) text += ' ';
   if (suggestion.type === 'path' && !text.endsWith('/')) text += ' ';
-  emit('select', text);
+  return text;
+}
+
+function consumeSuggestionSelection(suggestion: Suggestion): string {
+  const text = buildSuggestionInsertText(suggestion);
   if (suggestion.quickCommandId) {
     void quickCommandApi.use(suggestion.quickCommandId).catch(() => undefined);
   }
   suggestions.value = [];
+  selectedIndex.value = 0;
   hasUserSelected.value = false;
+  return text;
 }
+
+function setSuggestionItemRef(element: Element | ComponentPublicInstance | null, index: number): void {
+  const domElement = element instanceof HTMLElement
+    ? element
+    : (element && '$el' in element && element.$el instanceof HTMLElement ? element.$el : null);
+  suggestionItemRefs.value[index] = domElement;
+}
+
+function scrollActiveSuggestionIntoView(): void {
+  suggestionItemRefs.value[selectedIndex.value]?.scrollIntoView({
+    block: 'nearest',
+  });
+}
+
+function selectSuggestion(suggestion: Suggestion) {
+  const text = consumeSuggestionSelection(suggestion);
+  emit('select', text);
+}
+
+watch(suggestions, () => {
+  suggestionItemRefs.value = [];
+  if (!props.visible || suggestions.value.length === 0) {
+    return;
+  }
+  void nextTick(() => {
+    scrollActiveSuggestionIntoView();
+  });
+});
+
+watch(selectedIndex, () => {
+  if (!props.visible || suggestions.value.length === 0) {
+    return;
+  }
+  void nextTick(() => {
+    scrollActiveSuggestionIntoView();
+  });
+});
 
 watch(() => props.input, (newInput, oldInput) => {
   if (debounceTimer) clearTimeout(debounceTimer);
   if (!newInput || !props.visible) {
     suggestions.value = [];
+    suggestionItemRefs.value = [];
     selectedIndex.value = 0;
     hasUserSelected.value = false;
     lastProcessedInput = '';
@@ -350,6 +400,7 @@ watch(() => props.visible, (newVisible) => {
   }
   if (debounceTimer) clearTimeout(debounceTimer);
   suggestions.value = [];
+  suggestionItemRefs.value = [];
   selectedIndex.value = 0;
   hasUserSelected.value = false;
   lastProcessedInput = '';
@@ -364,6 +415,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (debounceTimer) clearTimeout(debounceTimer);
   suggestions.value = [];
+  suggestionItemRefs.value = [];
   currentRequestId++;
 });
 
@@ -380,7 +432,7 @@ defineExpose({
   },
   selectCurrent: () => {
     const target = suggestions.value[selectedIndex.value];
-    if (target) void selectSuggestion(target);
+    return target ? consumeSuggestionSelection(target) : null;
   },
   hasSuggestions: () => suggestions.value.length > 0,
   hasActiveSelection: () => hasUserSelected.value,
@@ -391,6 +443,7 @@ defineExpose({
   forceReset: () => {
     if (debounceTimer) clearTimeout(debounceTimer);
     suggestions.value = [];
+    suggestionItemRefs.value = [];
     selectedIndex.value = 0;
     hasUserSelected.value = false;
     lastProcessedInput = '';

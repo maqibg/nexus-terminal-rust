@@ -103,7 +103,7 @@ const termRef = ref<HTMLElement>();
 interface CommandAutocompleteExpose {
   selectNext: () => void;
   selectPrevious: () => void;
-  selectCurrent: () => void;
+  selectCurrent: () => string | null;
   hasSuggestions: () => boolean;
   hasActiveSelection: () => boolean;
   resetSelection: () => void;
@@ -274,6 +274,15 @@ async function handleAutocompleteSelect(text: string): Promise<void> {
   term?.focus();
 }
 
+function triggerAutocompleteSelection(): boolean {
+  const selectedText = autocompleteRef.value?.selectCurrent?.();
+  if (!selectedText) {
+    return false;
+  }
+  void handleAutocompleteSelect(selectedText);
+  return true;
+}
+
 function shouldConsumeChunk(chunk?: SshOutputChunk): boolean {
   if (!chunk || chunk.seq < 0) {
     return true;
@@ -289,6 +298,9 @@ function handleAutocompleteKeydown(event: KeyboardEvent): boolean {
   if (!showAutocomplete.value) {
     return true;
   }
+  if (event.type !== 'keydown') {
+    return true;
+  }
   if (event.ctrlKey || event.altKey || event.metaKey) {
     return true;
   }
@@ -296,8 +308,7 @@ function handleAutocompleteKeydown(event: KeyboardEvent): boolean {
   const hasActiveSelection = autocompleteRef.value?.hasActiveSelection?.() ?? false;
   switch (event.key) {
     case 'Enter':
-      if (hasSuggestions && hasActiveSelection) {
-        autocompleteRef.value?.selectCurrent?.();
+      if (hasSuggestions && hasActiveSelection && triggerAutocompleteSelection()) {
         return false;
       }
       resetAutocompleteState();
@@ -306,8 +317,10 @@ function handleAutocompleteKeydown(event: KeyboardEvent): boolean {
       if (!hasSuggestions) {
         return true;
       }
-      autocompleteRef.value?.selectCurrent?.();
-      return false;
+      if (triggerAutocompleteSelection()) {
+        return false;
+      }
+      return true;
     case 'ArrowDown':
       if (!hasSuggestions) {
         return true;
