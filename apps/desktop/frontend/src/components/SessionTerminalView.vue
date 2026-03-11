@@ -72,6 +72,21 @@
         </button>
       </div>
     </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="selectionAiToolbar.visible"
+        class="terminal-selection-ai-toolbar"
+        :style="selectionAiToolbarStyle"
+        @mousedown.stop
+        @click.stop
+      >
+        <div class="terminal-selection-ai-toolbar-title">{{ selectionAiToolbarTitle }}</div>
+        <button class="terminal-selection-ai-toolbar-btn" @click="handleSelectionAiAction('ai-write')">AI 撰写代码</button>
+        <button class="terminal-selection-ai-toolbar-btn" @click="handleSelectionAiAction('ai-explain')">AI 解释代码</button>
+        <button class="terminal-selection-ai-toolbar-btn" @click="handleSelectionAiAction('ai-optimize')">AI 优化代码</button>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -149,6 +164,15 @@ const terminalContextMenu = ref({
   hasSelection: false,
   aiEnabled: false,
 });
+const selectionAiToolbar = ref({
+  visible: false,
+  x: 0,
+  y: 0,
+  selection: '',
+  aiEnabled: false,
+});
+const lastSelectionPointer = ref({ x: 0, y: 0 });
+let selectionAiToolbarSerial = 0;
 
 const FALLBACK_PROMPT_EXPLAIN =
   '请作为一名资深开发人员，详细分析并解释以下代码片段的主要功能和目的。\n\n```{language}\n{content}\n```';
@@ -478,6 +502,28 @@ const terminalContextMenuStyle = computed<Record<string, string>>(() => {
   };
 });
 
+const selectionAiToolbarStyle = computed<Record<string, string>>(() => {
+  const toolbarWidth = 320;
+  const toolbarHeight = 40;
+  const viewportWidth = typeof window === 'undefined' ? toolbarWidth : window.innerWidth;
+  const viewportHeight = typeof window === 'undefined' ? toolbarHeight : window.innerHeight;
+  const offsetY = 14;
+  const margin = 8;
+
+  let left = selectionAiToolbar.value.x - toolbarWidth / 2;
+  let top = selectionAiToolbar.value.y - toolbarHeight - offsetY;
+  if (top < margin) {
+    top = selectionAiToolbar.value.y + offsetY;
+  }
+  left = Math.max(margin, Math.min(left, viewportWidth - toolbarWidth - margin));
+  top = Math.max(margin, Math.min(top, viewportHeight - toolbarHeight - margin));
+
+  return {
+    left: `${left}px`,
+    top: `${top}px`,
+  };
+});
+
 const aiMenuTitle = computed(() => (terminalContextMenu.value.aiEnabled ? 'AI 助手' : 'AI 助手 (未配置)'));
 const aiExplainLabel = computed(() =>
   terminalContextMenu.value.hasSelection ? 'AI 解释代码' : 'AI 解释代码 (需要选中代码)',
@@ -485,6 +531,7 @@ const aiExplainLabel = computed(() =>
 const aiOptimizeLabel = computed(() =>
   terminalContextMenu.value.hasSelection ? 'AI 优化代码' : 'AI 优化代码 (需要选中代码)',
 );
+const selectionAiToolbarTitle = computed(() => (selectionAiToolbar.value.aiEnabled ? 'AI 助手' : 'AI 助手 (未配置)'));
 
 function getAppearanceValue(keys: string[], fallback: string): string {
   for (const key of keys) {
@@ -751,6 +798,10 @@ function closeTerminalContextMenu(): void {
   terminalContextMenu.value.visible = false;
 }
 
+function closeSelectionAiToolbar(): void {
+  selectionAiToolbar.value.visible = false;
+}
+
 async function ensureAiConfigLoaded(): Promise<void> {
   if (aiStore.channels.length === 0 && aiStore.models.length === 0) {
     await aiStore.loadAll().catch(() => undefined);
@@ -789,6 +840,75 @@ function openWorkspaceAiAssistant(prompt: string): void {
   window.dispatchEvent(new CustomEvent<WorkspaceAiActionDetail>('nexus:workspace:open-ai-assistant', { detail }));
 }
 
+function resolveSelectionToolbarAnchor(): { x: number; y: number } {
+  if (lastSelectionPointer.value.x > 0 && lastSelectionPointer.value.y > 0) {
+    return lastSelectionPointer.value;
+  }
+
+  const rect = termRef.value?.getBoundingClientRect();
+  if (!rect) {
+    return { x: 0, y: 0 };
+  }
+
+  return {
+    x: Math.round(rect.left + rect.width / 2),
+    y: Math.round(rect.top + rect.height / 2),
+  };
+}
+
+async function refreshSelectionAiToolbar(): Promise<void> {
+  const selection = getSelectedText();
+  if (!selection.trim()) {
+    closeSelectionAiToolbar();
+    return;
+  }
+
+  const serial = ++selectionAiToolbarSerial;
+  await ensureAiConfigLoaded();
+  if (serial !== selectionAiToolbarSerial) {
+    return;
+  }
+
+  const anchor = resolveSelectionToolbarAnchor();
+  selectionAiToolbar.value = {
+    visible: true,
+    x: anchor.x,
+    y: anchor.y,
+    selection,
+    aiEnabled: Boolean(aiStore.hasDefaultModel),
+  };
+}
+
+async function handleSelectionAiAction(action: Extract<TerminalContextMenuAction, 'ai-write' | 'ai-explain' | 'ai-optimize'>): Promise<void> {
+  const storedSelection = selectionAiToolbar.value.selection;
+  closeSelectionAiToolbar();
+
+  await ensureAiConfigLoaded();
+  if (!aiStore.hasDefaultModel) {
+    notifications.addNotification('warning', '请先在设置中配置 AI 默认模型');
+    return;
+  }
+
+  const selection = getSelectedText() || storedSelection;
+  const trimmed = selection.trim();
+
+  if (action === 'ai-write') {
+    if (!trimmed) {
+      notifications.addNotification('warning', '请输入描述');
+      return;
+    }
+    openWorkspaceAiAssistant(buildAiPrompt('write', trimmed));
+    return;
+  }
+
+  if (!trimmed) {
+    notifications.addNotification('warning', action === 'ai-explain' ? '请先选中要解释的代码' : '请先选中要优化的代码');
+    return;
+  }
+
+  openWorkspaceAiAssistant(buildAiPrompt(action === 'ai-explain' ? 'explain' : 'optimize', trimmed));
+}
+
 async function pasteClipboardToTerminal(): Promise<void> {
   if (!currentSessionId.value) {
     return;
@@ -801,6 +921,7 @@ async function pasteClipboardToTerminal(): Promise<void> {
 }
 
 async function openTerminalContextMenu(event: MouseEvent): Promise<void> {
+  closeSelectionAiToolbar();
   await ensureAiConfigLoaded();
   terminalContextMenu.value = {
     visible: true,
@@ -844,26 +965,30 @@ async function handleContextMenuAction(action: TerminalContextMenuAction): Promi
 
   await ensureAiConfigLoaded();
   if (!aiStore.hasDefaultModel) {
-    notifications.addNotification('warning', '请先在设置- AI 助手中配置默认模型');
+    notifications.addNotification('warning', '请先在设置中配置 AI 默认模型');
     return;
   }
 
   if (action === 'ai-write') {
     if (!selection.trim()) {
-      notifications.addNotification('warning', '请先选中需求描述后再使用 AI 撰写代码');
+      notifications.addNotification('warning', '请输入描述');
       return;
     }
     openWorkspaceAiAssistant(buildAiPrompt('write', selection));
     return;
   }
 
-  if (!selection.trim()) {
-    notifications.addNotification('warning', '请先选中代码后再执行该 AI 操作');
+  if (action === 'ai-explain') {
+    if (!selection.trim()) {
+      notifications.addNotification('warning', '请先选中要解释的代码');
+      return;
+    }
+    openWorkspaceAiAssistant(buildAiPrompt('explain', selection));
     return;
   }
 
-  if (action === 'ai-explain') {
-    openWorkspaceAiAssistant(buildAiPrompt('explain', selection));
+  if (!selection.trim()) {
+    notifications.addNotification('warning', '请先选中要优化的代码');
     return;
   }
 
@@ -903,18 +1028,21 @@ function initTerminal(sid: string): void {
   term.attachCustomKeyEventHandler(handleAutocompleteKeydown);
   syncAutocompleteCursorPosition();
   selectionDisposable = term.onSelectionChange(() => {
+    const selectedText = term?.getSelection();
+    if (!selectedText?.trim()) {
+      closeSelectionAiToolbar();
+    }
+
     if (!isTerminalAutoCopyOnSelectEnabled()) {
       return;
     }
 
-    const selectedText = term?.getSelection();
-    if (!selectedText) {
-      return;
+    if (selectedText) {
+      void navigator.clipboard.writeText(selectedText).catch(() => undefined);
     }
-
-    void navigator.clipboard.writeText(selectedText).catch(() => undefined);
   });
   termRef.value?.addEventListener('contextmenu', handleTerminalContextMenu);
+  termRef.value?.addEventListener('mouseup', handleTerminalMouseUp);
   applyTerminalAppearance();
 
   term.onData((data) => {
@@ -967,7 +1095,10 @@ async function handleTerminalContextMenu(event: MouseEvent): Promise<void> {
     return;
   }
 
-  if (event.ctrlKey) {
+  const rightClickPasteEnabled = isTerminalRightClickPasteEnabled();
+  const shouldOpenMenu = event.ctrlKey || !rightClickPasteEnabled;
+
+  if (shouldOpenMenu) {
     event.preventDefault();
     event.stopPropagation();
     await openTerminalContextMenu(event);
@@ -975,22 +1106,38 @@ async function handleTerminalContextMenu(event: MouseEvent): Promise<void> {
   }
 
   closeTerminalContextMenu();
-  if (!isTerminalRightClickPasteEnabled()) {
-    return;
-  }
-
   try {
     event.preventDefault();
     event.stopPropagation();
     await pasteClipboardToTerminal();
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    notifications.addNotification('error', `右键粘贴失败：${message}`);
+    await openTerminalContextMenu(event);
   }
+}
+
+function handleTerminalMouseUp(event: MouseEvent): void {
+  lastSelectionPointer.value = { x: event.clientX, y: event.clientY };
+  void refreshSelectionAiToolbar();
+}
+
+function handleGlobalPointerUp(event: MouseEvent): void {
+  const target = event.target as Node | null;
+  if (target && termRef.value?.contains(target)) {
+    return;
+  }
+  lastSelectionPointer.value = { x: event.clientX, y: event.clientY };
+  void refreshSelectionAiToolbar();
 }
 
 function handleGlobalPointerDown(event: MouseEvent): void {
   const target = event.target as HTMLElement | null;
   if (terminalContextMenu.value.visible && !target?.closest('.terminal-context-menu')) {
     closeTerminalContextMenu();
+  }
+  if (selectionAiToolbar.value.visible && !target?.closest('.terminal-selection-ai-toolbar')) {
+    closeSelectionAiToolbar();
   }
   if (showAutocomplete.value && !target?.closest('.autocomplete-popup')) {
     resetAutocompleteState(false);
@@ -1000,6 +1147,7 @@ function handleGlobalPointerDown(event: MouseEvent): void {
 function handleGlobalKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
     closeTerminalContextMenu();
+    closeSelectionAiToolbar();
     resetAutocompleteState(false);
   }
 }
@@ -1042,6 +1190,7 @@ function attachGlobalListeners(): void {
   window.addEventListener('nexus:terminal-search:previous', handleSearchPrevious as EventListener);
   window.addEventListener('nexus:terminal-search:clear', handleSearchClear as EventListener);
   window.addEventListener('mousedown', handleGlobalPointerDown);
+  window.addEventListener('mouseup', handleGlobalPointerUp);
   window.addEventListener('keydown', handleGlobalKeydown);
   globalListenersAttached = true;
 }
@@ -1055,6 +1204,7 @@ function detachGlobalListeners(): void {
   window.removeEventListener('nexus:terminal-search:previous', handleSearchPrevious as EventListener);
   window.removeEventListener('nexus:terminal-search:clear', handleSearchClear as EventListener);
   window.removeEventListener('mousedown', handleGlobalPointerDown);
+  window.removeEventListener('mouseup', handleGlobalPointerUp);
   window.removeEventListener('keydown', handleGlobalKeydown);
   globalListenersAttached = false;
 }
@@ -1068,7 +1218,9 @@ function cleanup(): void {
   selectionDisposable?.dispose();
   selectionDisposable = null;
   termRef.value?.removeEventListener('contextmenu', handleTerminalContextMenu);
+  termRef.value?.removeEventListener('mouseup', handleTerminalMouseUp);
   closeTerminalContextMenu();
+  closeSelectionAiToolbar();
   resetAutocompleteState();
   terminalInputBuffer = '';
   terminalInputValue.value = '';
@@ -1263,6 +1415,46 @@ onBeforeUnmount(() => {
   font-size: calc(11px + var(--ui-font-size-offset));
   font-weight: 600;
   color: var(--text-sub);
+}
+
+.terminal-selection-ai-toolbar {
+  position: fixed;
+  z-index: 11900;
+  padding: 6px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-surface0) 92%, var(--bg-mantle) 8%);
+  box-shadow: 0 16px 32px color-mix(in srgb, var(--bg-base) 74%, transparent);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.terminal-selection-ai-toolbar-title {
+  padding: 0 6px;
+  font-size: calc(11px + var(--ui-font-size-offset));
+  font-weight: 600;
+  color: var(--text-sub);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.terminal-selection-ai-toolbar-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--text);
+  font-size: calc(12px + var(--ui-font-size-offset));
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.terminal-selection-ai-toolbar-btn:hover {
+  background: var(--link-active-bg-color);
+  color: var(--link-active-color);
 }
 
 .terminal-inline-suggestion {

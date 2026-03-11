@@ -169,6 +169,7 @@ const showGlobalAiPanel = ref(false);
 interface GlobalAiPanelExpose {
   setInput: (value: string) => void;
   sendMessage: (override?: string) => Promise<void>;
+  performAction: (text: string) => Promise<void>;
 }
 interface GlobalAiOpenDetail {
   prompt?: string;
@@ -332,7 +333,7 @@ async function openGlobalAiPanel(detail?: GlobalAiOpenDetail) {
   }
 
   if (detail?.autoSend) {
-    await panel.sendMessage(prompt);
+    await panel.performAction(prompt);
     return;
   }
 

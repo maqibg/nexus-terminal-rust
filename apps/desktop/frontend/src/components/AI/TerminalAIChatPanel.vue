@@ -212,6 +212,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { UnlistenFn } from '@tauri-apps/api/event';
+import { marked, type Tokens } from 'marked';
 import { aiApi, sftpApi, sshApi } from '@/lib/api';
 import { useAIStore } from '@/stores/ai';
 import { useSessionStore } from '@/stores/session';
@@ -344,31 +345,53 @@ const renderTextBlock = (raw: string): string => {
   return paragraphs.join('');
 };
 
-const renderAssistantMarkdown = (content: string): string => {
-  const codeRegex = /```([\w+-]*)\n([\s\S]*?)```/g;
-  let cursor = 0;
-  let html = '';
-  let match: RegExpExecArray | null;
+const isUnsafeUrl = (href: string): boolean => {
+  const trimmed = href.trim();
+  return /^(?:javascript:|data:|vbscript:)/i.test(trimmed);
+};
 
-  while ((match = codeRegex.exec(content)) !== null) {
-    html += renderTextBlock(content.slice(cursor, match.index));
-    const language = escapeHtml(match[1] || 'text');
-    const code = match[2].replace(/\n$/, '');
-    const escapedCode = escapeHtml(code);
-    const encodedCode = encodeURIComponent(code);
-    html += `<div class="code-block-wrapper">
-      <div class="code-toolbar">
-        <button class="code-btn" data-action="copy" data-code="${encodedCode}">复制</button>
-        <button class="code-btn" data-action="insert" data-code="${encodedCode}">插入终端</button>
-        <button class="code-btn run-btn" data-action="run" data-code="${encodedCode}">执行</button>
-      </div>
-      <pre><code class="language-${language}">${escapedCode}</code></pre>
-    </div>`;
-    cursor = codeRegex.lastIndex;
+const markdownRenderer = new marked.Renderer();
+markdownRenderer.code = ({ text, lang }: Tokens.Code) => {
+  const languageToken = (lang || 'text').trim().split(/\s+/)[0] || 'text';
+  const language = escapeHtml(languageToken);
+  const normalizedCode = text.replace(/\n$/, '');
+  const escapedCode = escapeHtml(normalizedCode);
+  const encodedCode = encodeURIComponent(normalizedCode);
+  return `<div class="code-block-wrapper">
+    <div class="code-toolbar">
+      <button class="code-btn" data-action="copy" data-code="${encodedCode}">复制</button>
+      <button class="code-btn" data-action="insert" data-code="${encodedCode}">插入终端</button>
+      <button class="code-btn run-btn" data-action="run" data-code="${encodedCode}">执行</button>
+    </div>
+    <pre><code class="language-${language}">${escapedCode}</code></pre>
+  </div>`;
+};
+markdownRenderer.html = ({ text }: Tokens.HTML | Tokens.Tag) => escapeHtml(text);
+markdownRenderer.link = function ({ href, title, tokens }: Tokens.Link) {
+  const text = this.parser.parseInline(tokens);
+  if (!href || isUnsafeUrl(href)) {
+    return text;
   }
+  const safeHref = escapeHtml(href);
+  const safeTitle = title ? ` title="${escapeHtml(title)}"` : '';
+  return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer"${safeTitle}>${text}</a>`;
+};
+markdownRenderer.image = ({ text }: Tokens.Image) => {
+  const label = text?.trim() || '图片';
+  return `<span>[${escapeHtml(label)}]</span>`;
+};
 
-  html += renderTextBlock(content.slice(cursor));
-  return html || '<p></p>';
+const renderAssistantMarkdown = (content: string): string => {
+  try {
+    const html = marked.parse(content, {
+      renderer: markdownRenderer,
+      gfm: true,
+      breaks: true,
+    }) as string;
+    return html?.trim() ? html : '<p></p>';
+  } catch {
+    return renderTextBlock(content) || '<p></p>';
+  }
 };
 
 const renderMessageHtml = (message: AIChatMessage): string => {
@@ -452,13 +475,37 @@ const scrollToBottom = async () => {
   scrollContainer.value.scrollTop = scrollContainer.value.scrollHeight;
 };
 
+const isHistoryReady = ref(false);
+let historyLoadSerial = 0;
+let historyLoadingPromise: Promise<void> | null = null;
+
 const saveHistory = async () => {
   await aiStore.saveTerminalChatHistory(storageId.value, messages.value);
 };
 
 const loadHistory = async () => {
-  messages.value = await aiStore.getTerminalChatHistory(storageId.value);
-  await scrollToBottom();
+  const serial = ++historyLoadSerial;
+  isHistoryReady.value = false;
+  const promise = (async () => {
+    const history = await aiStore.getTerminalChatHistory(storageId.value);
+    if (serial !== historyLoadSerial) {
+      return;
+    }
+    messages.value = history;
+    await scrollToBottom();
+  })();
+  historyLoadingPromise = promise;
+
+  try {
+    await promise;
+  } finally {
+    if (serial === historyLoadSerial) {
+      isHistoryReady.value = true;
+    }
+    if (historyLoadingPromise === promise) {
+      historyLoadingPromise = null;
+    }
+  }
 };
 
 const loadSavedModel = () => {
@@ -888,6 +935,27 @@ const setInput = (value: string) => {
   inputRef.value?.focus();
 };
 
+const performAction = async (text: string) => {
+  if (!text.trim()) {
+    return;
+  }
+
+  if (!isHistoryReady.value) {
+    let checks = 0;
+    while (!isHistoryReady.value && checks < 50) {
+      if (historyLoadingPromise) {
+        await historyLoadingPromise.catch(() => undefined);
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      checks += 1;
+    }
+  }
+
+  inputValue.value = text;
+  await sendMessageInternal();
+};
+
 watch(storageId, async () => {
   attachedFiles.value = [];
   showFileSelector.value = false;
@@ -923,6 +991,7 @@ onUnmounted(() => {
 defineExpose({
   sendMessage: sendMessageInternal,
   setInput,
+  performAction,
 });
 </script>
 
@@ -1068,6 +1137,52 @@ defineExpose({
 
 .markdown-body :deep(p:last-child) {
   margin-bottom: 0;
+}
+
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+
+.markdown-body :deep(li) {
+  margin: 2px 0;
+}
+
+.markdown-body :deep(blockquote) {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-left: 3px solid color-mix(in srgb, var(--blue) 55%, var(--border));
+  background: color-mix(in srgb, var(--bg-mantle) 82%, transparent);
+  color: var(--text-sub);
+}
+
+.markdown-body :deep(a) {
+  color: var(--blue);
+  text-decoration: underline;
+}
+
+.markdown-body :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 10px 0;
+}
+
+.markdown-body :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+
+.markdown-body :deep(th),
+.markdown-body :deep(td) {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+}
+
+.markdown-body :deep(th) {
+  background: color-mix(in srgb, var(--bg-mantle) 88%, transparent);
+  color: var(--text-sub);
 }
 
 .markdown-body :deep(code) {

@@ -81,7 +81,9 @@
         </Pane>
 
         <Pane :size="mainSize" :min-size="40">
-          <LayoutRenderer :node="layoutConfig.root" />
+          <div ref="layoutRootRef" class="workspace-main-layout">
+            <LayoutRenderer :node="layoutRootNode" />
+          </div>
         </Pane>
 
         <Pane v-if="rightSidebarVisible" :size="rightSidebarSize" :min-size="15" :max-size="40">
@@ -98,7 +100,7 @@
           :session-name="activeSession?.connectionName"
           :storage-id="activeSession?.id ?? undefined"
           :closable="true"
-          @close="showTerminalAiPanel = false"
+          @close="closeTerminalAiPanel"
         />
       </div>
     </div>
@@ -154,7 +156,7 @@ import { storeToRefs } from 'pinia';
 import { Splitpanes, Pane } from 'splitpanes';
 import 'splitpanes/dist/splitpanes.css';
 import { useSessionStore } from '@/stores/session';
-import { notifyGlobalLayoutResized, useLayoutStore } from '@/stores/layout';
+import { notifyGlobalLayoutResized, useLayoutStore, type LayoutNode, type PaneName } from '@/stores/layout';
 import { useSettingsStore } from '@/stores/settings';
 import { useFileEditorStore } from '@/stores/fileEditor';
 import { type Connection } from '@/lib/api';
@@ -190,6 +192,12 @@ const showFileManagerPopup = ref(false);
 type LeftToolPane = 'connections' | 'docker';
 const activeLeftToolPane = ref<LeftToolPane | null>(null);
 const showTerminalAiPanel = ref(false);
+const layoutRootRef = ref<HTMLElement | null>(null);
+const layoutRootWidthPx = ref(0);
+const statusColumnWidthPx = ref(0);
+const statusColumnLockedWidthPx = ref<number | null>(null);
+let layoutResizeObserver: ResizeObserver | null = null;
+
 interface TerminalAiActionDetail {
   prompt?: string;
   autoSend?: boolean;
@@ -197,6 +205,7 @@ interface TerminalAiActionDetail {
 interface TerminalAiPanelExpose {
   setInput: (value: string) => void;
   sendMessage: (override?: string) => Promise<void>;
+  performAction: (text: string) => Promise<void>;
 }
 const terminalAiPanelRef = ref<TerminalAiPanelExpose | null>(null);
 const { taskList, startListening, cancelTask, pauseAll, resumeAll, cancelAll, clearCompleted, cleanup } = useTransferProgress();
@@ -274,17 +283,50 @@ function closeLeftToolPane() {
   activeLeftToolPane.value = null;
 }
 
+function updateLayoutMeasurements(): void {
+  const root = layoutRootRef.value;
+  if (!root) {
+    return;
+  }
+
+  layoutRootWidthPx.value = root.getBoundingClientRect().width;
+  const statusColumn = root.querySelector<HTMLElement>('.layout-pane-status-column');
+  if (statusColumn) {
+    statusColumnWidthPx.value = statusColumn.getBoundingClientRect().width;
+  }
+}
+
+function captureStatusColumnWidthForAi(): void {
+  if (statusColumnWidthPx.value > 0) {
+    statusColumnLockedWidthPx.value = statusColumnWidthPx.value;
+  }
+}
+
+function closeTerminalAiPanel(): void {
+  showTerminalAiPanel.value = false;
+  statusColumnLockedWidthPx.value = null;
+}
+
 function toggleTerminalAiPanel() {
-  showTerminalAiPanel.value = !showTerminalAiPanel.value;
+  if (!showTerminalAiPanel.value) {
+    captureStatusColumnWidthForAi();
+    showTerminalAiPanel.value = true;
+    return;
+  }
+
+  closeTerminalAiPanel();
 }
 
 async function openAiAssistant(detail?: TerminalAiActionDetail) {
   const prompt = detail?.prompt?.trim();
   if (!prompt) {
-    showTerminalAiPanel.value = !showTerminalAiPanel.value;
+    toggleTerminalAiPanel();
     return;
   }
 
+  if (!showTerminalAiPanel.value) {
+    captureStatusColumnWidthForAi();
+  }
   showTerminalAiPanel.value = true;
   await nextTick();
   const panel = terminalAiPanelRef.value;
@@ -293,12 +335,88 @@ async function openAiAssistant(detail?: TerminalAiActionDetail) {
   }
 
   if (detail?.autoSend) {
-    await panel.sendMessage(prompt);
+    await panel.performAction(prompt);
     return;
   }
 
   panel.setInput(prompt);
 }
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function nodeContainsPane(node: LayoutNode, pane: PaneName): boolean {
+  if (node.type === 'pane') {
+    return node.pane === pane;
+  }
+  if (!Array.isArray(node.children)) {
+    return false;
+  }
+  return node.children.some((child) => nodeContainsPane(child, pane));
+}
+
+function cloneLayoutNode(node: LayoutNode): LayoutNode {
+  return {
+    ...node,
+    children: Array.isArray(node.children) ? node.children.map((child) => cloneLayoutNode(child)) : undefined,
+  };
+}
+
+function buildAiAdjustedLayoutRoot(root: LayoutNode): LayoutNode {
+  const lockedWidth = statusColumnLockedWidthPx.value ?? 0;
+  if (lockedWidth <= 0) {
+    return root;
+  }
+
+  const containerWidth = layoutRootWidthPx.value;
+  if (!Number.isFinite(containerWidth) || containerWidth <= 1) {
+    return root;
+  }
+
+  if (root.type !== 'split' || root.direction !== 'horizontal' || !Array.isArray(root.children) || root.children.length < 2) {
+    return root;
+  }
+
+  const children = root.children;
+  const statusIndex = children.findIndex((child) => nodeContainsPane(child, 'statusMonitor'));
+  if (statusIndex === -1) {
+    return root;
+  }
+
+  const clonedRoot = cloneLayoutNode(root);
+  const clonedChildren = clonedRoot.children ?? [];
+  const count = children.length;
+  const fallbackSize = 100 / count;
+  const sizes = children.map((child) => (Number.isFinite(child.size) ? (child.size as number) : fallbackSize));
+
+  const minPaneSize = 5;
+  const maxStatusSize = 100 - (count - 1) * minPaneSize;
+  const desiredStatusSize = clamp((lockedWidth / containerWidth) * 100, minPaneSize, maxStatusSize);
+
+  const remaining = 100 - desiredStatusSize;
+  const otherSum = sizes.reduce((sum, size, index) => (index === statusIndex ? sum : sum + size), 0);
+  const scale = otherSum > 0 ? remaining / otherSum : remaining / (count - 1);
+
+  for (let index = 0; index < count; index += 1) {
+    if (index === statusIndex) {
+      clonedChildren[index].size = desiredStatusSize;
+      continue;
+    }
+    clonedChildren[index].size = sizes[index] * scale;
+  }
+
+  return clonedRoot;
+}
+
+const layoutRootNode = computed<LayoutNode>(() => {
+  const root = layoutConfig.value.root;
+  if (!showTerminalAiPanel.value) {
+    return root;
+  }
+
+  return buildAiAdjustedLayoutRoot(root);
+});
 
 function handleOpenAiAssistantEvent(event: Event) {
   const detail = (event as CustomEvent<TerminalAiActionDetail>).detail;
@@ -458,6 +576,14 @@ onMounted(() => {
   window.addEventListener('nexus:workspace:file-manager-popup:open', handleOpenFileManagerPopup as EventListener);
   window.addEventListener('nexus:workspace:file-editor-popup:open', handleOpenFileEditorPopup as EventListener);
   window.addEventListener('nexus:workspace:open-ai-assistant', handleOpenAiAssistantEvent as EventListener);
+
+  void nextTick().then(() => {
+    updateLayoutMeasurements();
+    layoutResizeObserver = new ResizeObserver(() => updateLayoutMeasurements());
+    if (layoutRootRef.value) {
+      layoutResizeObserver.observe(layoutRootRef.value);
+    }
+  });
 });
 
 onUnmounted(() => {
@@ -465,6 +591,8 @@ onUnmounted(() => {
   window.removeEventListener('nexus:workspace:file-manager-popup:open', handleOpenFileManagerPopup as EventListener);
   window.removeEventListener('nexus:workspace:file-editor-popup:open', handleOpenFileEditorPopup as EventListener);
   window.removeEventListener('nexus:workspace:open-ai-assistant', handleOpenAiAssistantEvent as EventListener);
+  layoutResizeObserver?.disconnect();
+  layoutResizeObserver = null;
   if (workspaceResizeDispatchRaf) {
     window.cancelAnimationFrame(workspaceResizeDispatchRaf);
     workspaceResizeDispatchRaf = 0;
@@ -580,6 +708,12 @@ onUnmounted(() => {
 .workspace-layout {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+}
+
+.workspace-main-layout {
+  width: 100%;
+  height: 100%;
 }
 
 .workspace-right-ai-panel {

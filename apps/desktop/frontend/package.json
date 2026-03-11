@@ -22,6 +22,7 @@
     "@xterm/xterm": "^6.0.0",
     "buffer": "^6.0.3",
     "chart.js": "^4.5.1",
+    "marked": "^17.0.4",
     "monaco-editor": "^0.55.1",
     "pinia": "^2.3.0",
     "splitpanes": "^4.0.4",

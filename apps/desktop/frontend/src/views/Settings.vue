@@ -234,6 +234,7 @@
                   <input id="workspace-right-click-paste" v-model="workspaceForm.terminalEnableRightClickPaste" class="checkbox-input" type="checkbox">
                   <label for="workspace-right-click-paste">启用终端右键粘贴</label>
                 </div>
+                <small class="section-desc">开启后：右键=粘贴，Ctrl+右键=菜单；关闭后：右键=菜单。</small>
                 <div class="form-actions">
                   <button type="submit" class="btn btn-primary">保存</button>
                   <p v-if="feedback.rightClickPaste?.message" :class="['feedback-msg', feedback.rightClickPaste.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.rightClickPaste.message }}</p>
