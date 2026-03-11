@@ -53,6 +53,7 @@
       </div>
 
       <div v-if="isLoading" class="loading-row">
+        <span class="loading-label">{{ loadingLabel }}</span>
         <span class="dot"></span><span class="dot"></span><span class="dot"></span>
       </div>
     </div>
@@ -257,6 +258,45 @@ const dialogSelectedModelId = ref('');
 const selectedModelId = ref('');
 const currentRequestId = ref<string | null>(null);
 
+const loadingStartedAt = ref<number | null>(null);
+const loadingSeconds = ref(0);
+let loadingInterval: number | null = null;
+
+const syncLoadingSeconds = () => {
+  const startedAt = loadingStartedAt.value;
+  if (!startedAt) {
+    loadingSeconds.value = 0;
+    return;
+  }
+  loadingSeconds.value = Math.max(0, (Date.now() - startedAt) / 1000);
+};
+
+const startLoadingTimer = (startedAt = Date.now()) => {
+  loadingStartedAt.value = startedAt;
+  loadingSeconds.value = 0;
+  if (loadingInterval) {
+    window.clearInterval(loadingInterval);
+  }
+  loadingInterval = window.setInterval(syncLoadingSeconds, 200);
+};
+
+const stopLoadingTimer = () => {
+  if (loadingInterval) {
+    window.clearInterval(loadingInterval);
+    loadingInterval = null;
+  }
+  loadingStartedAt.value = null;
+  loadingSeconds.value = 0;
+};
+
+const loadingLabel = computed(() => {
+  const seconds = loadingSeconds.value;
+  if (seconds >= 1) {
+    return `生成中… ${seconds.toFixed(1)}s（可点停止）`;
+  }
+  return '生成中…（可点停止）';
+});
+
 const showFileSelector = ref(false);
 const loadingFiles = ref(false);
 const remoteFiles = ref<RemoteFileEntry[]>([]);
@@ -298,6 +338,14 @@ const canRegenerate = computed(() => {
     }
   }
   return false;
+});
+
+watch(isLoading, (value) => {
+  if (value) {
+    startLoadingTimer(loadingStartedAt.value ?? Date.now());
+    return;
+  }
+  stopLoadingTimer();
 });
 
 const activeSession = computed(() => {
@@ -394,9 +442,50 @@ const renderAssistantMarkdown = (content: string): string => {
   }
 };
 
+const formatThinkingSummary = (message: AIChatMessage): string => {
+  if (message.status === 'streaming') {
+    const seconds = loadingSeconds.value;
+    if (seconds > 0) {
+      return `正在思考（已用时 ${seconds.toFixed(1)} 秒）`;
+    }
+    return '正在思考';
+  }
+  const seconds = message.thinkingSeconds;
+  if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0) {
+    return `已深度思考（用时 ${seconds.toFixed(1)} 秒）`;
+  }
+  return '已深度思考';
+};
+
 const renderMessageHtml = (message: AIChatMessage): string => {
   if (message.role === 'assistant') {
-    return renderAssistantMarkdown(message.content);
+    const blocks: string[] = [];
+    const reasoning = message.reasoningContent?.trim() ?? '';
+    if (reasoning) {
+      const shouldOpen = message.status === 'streaming' && !message.content.trim();
+      const openAttr = shouldOpen ? ' open' : '';
+      blocks.push(
+        `<details class="thinking-details"${openAttr}><summary>${escapeHtml(
+          formatThinkingSummary(message),
+        )}</summary><div class="thinking-body">${renderAssistantMarkdown(
+          reasoning,
+        )}</div></details>`,
+      );
+    }
+
+    const content = message.content?.trim() ?? '';
+    if (content) {
+      blocks.push(renderAssistantMarkdown(message.content));
+      return blocks.join('');
+    }
+
+    if (reasoning) {
+      const label = message.status === 'streaming' ? '正在生成中~' : '（模型未返回最终答案）';
+      blocks.push(`<p class="thinking-empty">${label}</p>`);
+      return blocks.join('');
+    }
+
+    return '<p></p>';
   }
   return renderTextBlock(message.content);
 };
@@ -760,6 +849,8 @@ const sendMessageInternal = async (override?: string, options?: { skipUserMessag
   const runId = ++requestSerial;
   const requestId = createRequestId();
   currentRequestId.value = requestId;
+  const requestStartedAt = Date.now();
+  loadingStartedAt.value = requestStartedAt;
   isLoading.value = true;
 
   if (!override) {
@@ -791,6 +882,9 @@ const sendMessageInternal = async (override?: string, options?: { skipUserMessag
   let streamReceived = false;
   let streamError = '';
   let streamCancelled = false;
+  let streamCompleted = false;
+  let sawReasoning = false;
+  let thinkingSecondsSet = false;
   const unlisteners: UnlistenFn[] = [];
 
   const cleanupListeners = () => {
@@ -808,17 +902,81 @@ const sendMessageInternal = async (override?: string, options?: { skipUserMessag
         }
 
         streamReceived = true;
+        const kind = payload.kind ?? 'content';
+        const chunk = payload.chunk ?? '';
+
+        if (kind === 'reasoning') {
+          sawReasoning = true;
+          if (streamMsgIndex === -1) {
+            messages.value.push(
+              createMessage('assistant', '', {
+                modelId: model.displayName,
+                status: 'streaming',
+                reasoningContent: chunk,
+              }),
+            );
+            streamMsgIndex = messages.value.length - 1;
+          } else {
+            messages.value[streamMsgIndex].reasoningContent =
+              (messages.value[streamMsgIndex].reasoningContent ?? '') + chunk;
+          }
+          void scrollToBottom();
+          return;
+        }
+
+        if (sawReasoning && !thinkingSecondsSet && streamMsgIndex >= 0) {
+          messages.value[streamMsgIndex].thinkingSeconds = (Date.now() - requestStartedAt) / 1000;
+          thinkingSecondsSet = true;
+        }
+
         if (streamMsgIndex === -1) {
           messages.value.push(
-            createMessage('assistant', payload.chunk, {
+            createMessage('assistant', chunk, {
+              modelId: model.displayName,
+              status: 'streaming',
+            }),
+          );
+          streamMsgIndex = messages.value.length - 1;
+        } else {
+          messages.value[streamMsgIndex].content += chunk;
+        }
+        void scrollToBottom();
+      }),
+    );
+
+    unlisteners.push(
+      await aiApi.onComplete((payload) => {
+        if (payload.requestId !== requestId) {
+          return;
+        }
+
+        streamCompleted = true;
+        const responseText = payload.response ?? '';
+
+        if (streamMsgIndex >= 0) {
+          const currentText = messages.value[streamMsgIndex].content ?? '';
+          if (responseText.trim() && responseText.trim().length > currentText.trim().length) {
+            messages.value[streamMsgIndex].content = responseText;
+          }
+
+          if (messages.value[streamMsgIndex].status === 'streaming') {
+            messages.value[streamMsgIndex].status = 'success';
+          }
+
+          if (sawReasoning && !thinkingSecondsSet) {
+            messages.value[streamMsgIndex].thinkingSeconds = (Date.now() - requestStartedAt) / 1000;
+            thinkingSecondsSet = true;
+          }
+        } else if (responseText.trim()) {
+          messages.value.push(
+            createMessage('assistant', responseText, {
               modelId: model.displayName,
               status: 'success',
             }),
           );
           streamMsgIndex = messages.value.length - 1;
-        } else {
-          messages.value[streamMsgIndex].content += payload.chunk;
         }
+
         void scrollToBottom();
       }),
     );
@@ -851,6 +1009,11 @@ const sendMessageInternal = async (override?: string, options?: { skipUserMessag
       return;
     }
 
+    if (sawReasoning && !thinkingSecondsSet && streamMsgIndex >= 0) {
+      messages.value[streamMsgIndex].thinkingSeconds = (Date.now() - requestStartedAt) / 1000;
+      thinkingSecondsSet = true;
+    }
+
     if (streamError) {
       throw new Error(streamError);
     }
@@ -862,8 +1025,17 @@ const sendMessageInternal = async (override?: string, options?: { skipUserMessag
           status: 'success',
         }),
       );
-    } else if (streamMsgIndex >= 0 && !messages.value[streamMsgIndex].content.trim() && response.trim()) {
-      messages.value[streamMsgIndex].content = response;
+    } else if (streamMsgIndex >= 0) {
+      if (!streamCompleted) {
+        const currentText = messages.value[streamMsgIndex].content ?? '';
+        if (response.trim() && response.trim().length > currentText.trim().length) {
+          messages.value[streamMsgIndex].content = response;
+        }
+      }
+
+      if (messages.value[streamMsgIndex].status === 'streaming') {
+        messages.value[streamMsgIndex].status = 'success';
+      }
     }
   } catch (error) {
     if (cancelledRequestSerial >= runId || streamCancelled) {
@@ -982,6 +1154,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  stopLoadingTimer();
   if (clickOutsideHandler) {
     document.removeEventListener('mousedown', clickOutsideHandler);
     clickOutsideHandler = null;
@@ -1129,6 +1302,43 @@ defineExpose({
 .message-item.user .message-text {
   background: color-mix(in srgb, var(--blue) 25%, var(--bg-base));
   border-color: color-mix(in srgb, var(--blue) 45%, var(--border));
+}
+
+.markdown-body :deep(.thinking-details) {
+  margin: 0 0 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-mantle) 92%, transparent);
+  overflow: hidden;
+}
+
+.markdown-body :deep(.thinking-details summary) {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-sub);
+  font-size: calc(12px + var(--ui-font-size-offset));
+}
+
+.markdown-body :deep(.thinking-details summary::-webkit-details-marker) {
+  display: none;
+}
+
+.markdown-body :deep(.thinking-body) {
+  padding: 0 10px 10px;
+  border-top: 1px dashed color-mix(in srgb, var(--border) 65%, transparent);
+  color: var(--text-sub);
+  font-size: calc(12px + var(--ui-font-size-offset));
+}
+
+.markdown-body :deep(.thinking-empty) {
+  margin: 0 0 8px;
+  color: var(--text-sub);
+  font-size: calc(12px + var(--ui-font-size-offset));
 }
 
 .markdown-body :deep(p) {
@@ -1314,6 +1524,11 @@ defineExpose({
   justify-content: center;
   gap: 5px;
   margin-top: 4px;
+}
+
+.loading-label {
+  font-size: calc(12px + var(--ui-font-size-offset));
+  color: var(--text-sub);
 }
 
 .dot {

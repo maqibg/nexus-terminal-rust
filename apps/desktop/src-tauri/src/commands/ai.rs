@@ -10,7 +10,8 @@ use std::{
 };
 
 use api_contract::error::{AppError, CmdResult};
-use reqwest::{Client, StatusCode};
+use futures_util::StreamExt;
+use reqwest::{header::CONTENT_TYPE, Client, StatusCode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
 use settings_core::repository::SettingsRepository;
@@ -173,6 +174,8 @@ pub struct AiChatMessage {
     pub id: String,
     pub role: String,
     pub content: String,
+    pub reasoning_content: Option<String>,
+    pub thinking_seconds: Option<f64>,
     pub timestamp: i64,
     pub model_id: Option<String>,
     pub status: Option<String>,
@@ -180,10 +183,18 @@ pub struct AiChatMessage {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum AiStreamChunkKind {
+    Content,
+    Reasoning,
+}
+
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AiStreamChunkPayload {
     request_id: String,
     chunk: String,
+    kind: AiStreamChunkKind,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -479,6 +490,22 @@ fn emit_ai_cancelled(app_handle: &tauri::AppHandle, request_id: &str) {
     );
 }
 
+fn emit_ai_chunk(
+    app_handle: &tauri::AppHandle,
+    request_id: &str,
+    chunk: String,
+    kind: AiStreamChunkKind,
+) {
+    let _ = app_handle.emit(
+        "ai:stream-chunk",
+        AiStreamChunkPayload {
+            request_id: request_id.to_string(),
+            chunk,
+            kind,
+        },
+    );
+}
+
 async fn stream_response_chunks(
     app_handle: &tauri::AppHandle,
     request_id: &str,
@@ -496,6 +523,7 @@ async fn stream_response_chunks(
             AiStreamChunkPayload {
                 request_id: request_id.to_string(),
                 chunk,
+                kind: AiStreamChunkKind::Content,
             },
         );
         sleep(Duration::from_millis(10)).await;
@@ -985,6 +1013,575 @@ async fn request_openai_family(
         .ok_or_else(|| AppError::Internal("AI 返回了空响应".into()))
 }
 
+fn is_event_stream_response(response: &reqwest::Response) -> bool {
+    response
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.to_ascii_lowercase().contains("text/event-stream"))
+}
+
+fn looks_like_json_line(source: &str) -> bool {
+    let trimmed = source.trim();
+    (trimmed.starts_with('{') && trimmed.ends_with('}'))
+        || (trimmed.starts_with('[') && trimmed.ends_with(']'))
+}
+
+fn extract_text_from_openai_content_array(parts: &[Value]) -> Option<String> {
+    let mut output = String::new();
+    for item in parts {
+        let text = item
+            .get("text")
+            .or_else(|| item.get("content"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .or_else(|| item.as_str().map(str::trim).filter(|text| !text.is_empty()));
+
+        if let Some(text) = text {
+            if !output.is_empty() {
+                output.push('\n');
+            }
+            output.push_str(text);
+        }
+    }
+
+    if output.trim().is_empty() {
+        None
+    } else {
+        Some(output)
+    }
+}
+
+fn extract_openai_stream_reasoning(value: &Value) -> Option<String> {
+    value
+        .pointer("/choices/0/delta/reasoning_content")
+        .or_else(|| value.pointer("/choices/0/delta/reasoning"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+}
+
+fn extract_openai_stream_content(value: &Value) -> Option<String> {
+    if let Some(text) = value
+        .pointer("/choices/0/delta/content")
+        .and_then(Value::as_str)
+    {
+        return Some(text.to_string());
+    }
+
+    if let Some(parts) = value
+        .pointer("/choices/0/delta/content")
+        .and_then(Value::as_array)
+    {
+        if let Some(text) = extract_text_from_openai_content_array(parts) {
+            return Some(text);
+        }
+    }
+
+    if let Some(text) = value
+        .pointer("/choices/0/delta/text")
+        .and_then(Value::as_str)
+    {
+        return Some(text.to_string());
+    }
+
+    if let Some(text) = value.pointer("/choices/0/text").and_then(Value::as_str) {
+        return Some(text.to_string());
+    }
+
+    extract_text_from_response(value)
+}
+
+fn openai_stream_has_finish_reason(value: &Value) -> bool {
+    let finish = value
+        .pointer("/choices/0/finish_reason")
+        .or_else(|| value.pointer("/choices/0/finishReason"))
+        .or_else(|| value.pointer("/choices/0/delta/finish_reason"))
+        .or_else(|| value.pointer("/choices/0/delta/finishReason"));
+
+    match finish {
+        Some(Value::String(reason)) => {
+            let trimmed = reason.trim();
+            !trimmed.is_empty() && trimmed != "null"
+        }
+        _ => false,
+    }
+}
+
+const HIDDEN_THOUGHT_START_TAGS: [&str; 2] = ["<think>", "<analysis>"];
+const HIDDEN_THOUGHT_END_TAGS: [&str; 2] = ["</think>", "</analysis>"];
+const HIDDEN_THOUGHT_MAX_TAG_BYTES: usize = 10;
+
+fn find_first_tag(source: &str, tags: &[&'static str]) -> Option<(usize, &'static str)> {
+    tags.iter()
+        .filter_map(|tag| source.find(*tag).map(|pos| (pos, *tag)))
+        .min_by_key(|(pos, _)| *pos)
+}
+
+fn find_next_hidden_thought_tag(source: &str) -> Option<(usize, &'static str, bool)> {
+    let start = find_first_tag(source, &HIDDEN_THOUGHT_START_TAGS).map(|(pos, tag)| (pos, tag, true));
+    let end = find_first_tag(source, &HIDDEN_THOUGHT_END_TAGS).map(|(pos, tag)| (pos, tag, false));
+
+    match (start, end) {
+        (Some(start), Some(end)) => {
+            if start.0 <= end.0 {
+                Some(start)
+            } else {
+                Some(end)
+            }
+        }
+        (Some(start), None) => Some(start),
+        (None, Some(end)) => Some(end),
+        (None, None) => None,
+    }
+}
+
+fn split_hidden_thought_blocks_with_state(source: &str, in_block: &mut bool) -> (String, String) {
+    let mut remaining = source;
+    let mut visible = String::new();
+    let mut hidden = String::new();
+
+    loop {
+        let Some((pos, tag, is_start)) = find_next_hidden_thought_tag(remaining) else {
+            if *in_block {
+                hidden.push_str(remaining);
+            } else {
+                visible.push_str(remaining);
+            }
+            break;
+        };
+
+        if *in_block {
+            hidden.push_str(&remaining[..pos]);
+            remaining = &remaining[pos + tag.len()..];
+            if !is_start {
+                *in_block = false;
+            }
+            continue;
+        }
+
+        if is_start {
+            visible.push_str(&remaining[..pos]);
+            remaining = &remaining[pos + tag.len()..];
+            *in_block = true;
+            continue;
+        }
+
+        hidden.push_str(&remaining[..pos]);
+        remaining = &remaining[pos + tag.len()..];
+    }
+
+    (visible, hidden)
+}
+
+fn strip_hidden_thought_blocks_with_state(source: &str, in_block: &mut bool) -> String {
+    split_hidden_thought_blocks_with_state(source, in_block).0
+}
+
+fn strip_hidden_thought_blocks(source: &str) -> String {
+    let mut in_block = false;
+    strip_hidden_thought_blocks_with_state(source, &mut in_block)
+}
+
+#[derive(Debug, Default)]
+struct HiddenThoughtStreamFilter {
+    in_block: bool,
+    carry: String,
+}
+
+impl HiddenThoughtStreamFilter {
+    fn split_index_with_guard(&self, source: &str, min_tail: usize) -> usize {
+        let Some(mut split_index) = source.len().checked_sub(min_tail) else {
+            return 0;
+        };
+
+        while split_index > 0 && !source.is_char_boundary(split_index) {
+            split_index -= 1;
+        }
+
+        if split_index == 0 {
+            return 0;
+        }
+
+        let bytes = source.as_bytes();
+        let window_start = split_index.saturating_sub(HIDDEN_THOUGHT_MAX_TAG_BYTES);
+        let mut adjust_to: Option<usize> = None;
+
+        for pos in (window_start..split_index).rev() {
+            if bytes[pos] != b'<' {
+                continue;
+            }
+
+            let prefix = &bytes[pos..split_index];
+            let matches = HIDDEN_THOUGHT_START_TAGS
+                .iter()
+                .any(|tag| tag.as_bytes().starts_with(prefix))
+                || HIDDEN_THOUGHT_END_TAGS
+                    .iter()
+                    .any(|tag| tag.as_bytes().starts_with(prefix));
+
+            if matches {
+                adjust_to = Some(pos);
+                break;
+            }
+        }
+
+        if let Some(pos) = adjust_to {
+            split_index = pos;
+        }
+
+        split_index
+    }
+
+    fn push(&mut self, input: &str) -> (String, String) {
+        let combined = if self.carry.is_empty() {
+            input.to_string()
+        } else {
+            let mut merged = std::mem::take(&mut self.carry);
+            merged.push_str(input);
+            merged
+        };
+
+        if combined.is_empty() {
+            return (String::new(), String::new());
+        }
+
+        if combined.len() <= HIDDEN_THOUGHT_MAX_TAG_BYTES {
+            self.carry = combined;
+            return (String::new(), String::new());
+        }
+
+        let split_index = self.split_index_with_guard(&combined, HIDDEN_THOUGHT_MAX_TAG_BYTES);
+
+        let (processable, tail) = combined.split_at(split_index);
+        self.carry = tail.to_string();
+        split_hidden_thought_blocks_with_state(processable, &mut self.in_block)
+    }
+
+    fn finish(&mut self) -> (String, String) {
+        if self.carry.is_empty() {
+            return (String::new(), String::new());
+        }
+        let remaining = std::mem::take(&mut self.carry);
+        split_hidden_thought_blocks_with_state(&remaining, &mut self.in_block)
+    }
+}
+
+fn handle_openai_stream_payload(
+    app_handle: &tauri::AppHandle,
+    request_id: &str,
+    payload: &str,
+    thought_filter: &mut HiddenThoughtStreamFilter,
+    reasoning_filter: &mut HiddenThoughtStreamFilter,
+    output: &mut String,
+    reasoning_output: &mut String,
+) -> CmdResult<bool> {
+    let trimmed = payload.trim();
+    if trimmed.is_empty() {
+        return Ok(false);
+    }
+
+    if trimmed == "[DONE]" {
+        return Ok(true);
+    }
+
+    let value: Value = serde_json::from_str(trimmed)
+        .map_err(|error| AppError::Internal(format!("解析 AI 流失败: {error}")))?;
+
+    if let Some(error) = value.get("error") {
+        return Err(AppError::Internal(format!(
+            "AI 请求失败: {}",
+            extract_error_message(error, "请求失败")
+        )));
+    }
+
+    if let Some(reasoning) = extract_openai_stream_reasoning(&value).filter(|text| !text.is_empty())
+    {
+        let (visible, hidden) = reasoning_filter.push(&reasoning);
+        if !hidden.is_empty() {
+            reasoning_output.push_str(&hidden);
+            emit_ai_chunk(app_handle, request_id, hidden, AiStreamChunkKind::Reasoning);
+        }
+        if !visible.is_empty() {
+            output.push_str(&visible);
+            emit_ai_chunk(app_handle, request_id, visible, AiStreamChunkKind::Content);
+        }
+    }
+
+    if let Some(content) = extract_openai_stream_content(&value).filter(|text| !text.is_empty()) {
+        let (visible, hidden) = thought_filter.push(&content);
+        if !hidden.is_empty() {
+            reasoning_output.push_str(&hidden);
+            emit_ai_chunk(app_handle, request_id, hidden, AiStreamChunkKind::Reasoning);
+        }
+        if !visible.is_empty() {
+            output.push_str(&visible);
+            emit_ai_chunk(app_handle, request_id, visible, AiStreamChunkKind::Content);
+        }
+    }
+
+    if openai_stream_has_finish_reason(&value) {
+        return Ok(true);
+    }
+
+    Ok(false)
+}
+
+async fn stream_openai_sse_response(
+    app_handle: &tauri::AppHandle,
+    request_id: &str,
+    response: reqwest::Response,
+    cancel_flag: &Arc<AtomicBool>,
+) -> CmdResult<String> {
+    let mut output = String::new();
+    let mut reasoning_output = String::new();
+    let mut buffer: Vec<u8> = Vec::new();
+    let mut pending_data: Vec<String> = Vec::new();
+    let mut done = false;
+    let mut thought_filter = HiddenThoughtStreamFilter::default();
+    let mut reasoning_filter = HiddenThoughtStreamFilter {
+        in_block: true,
+        carry: String::new(),
+    };
+
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        if cancel_flag.load(Ordering::Relaxed) {
+            emit_ai_cancelled(app_handle, request_id);
+            return Err(AppError::Validation("请求已取消".into()));
+        }
+
+        let bytes =
+            chunk.map_err(|error| AppError::Internal(format!("读取 AI 流失败: {error}")))?;
+        buffer.extend_from_slice(&bytes);
+
+        while let Some(newline) = buffer.iter().position(|item| *item == b'\n') {
+            let mut line_bytes: Vec<u8> = buffer.drain(..=newline).collect();
+            if line_bytes.last() == Some(&b'\n') {
+                line_bytes.pop();
+            }
+            if line_bytes.last() == Some(&b'\r') {
+                line_bytes.pop();
+            }
+
+            let line = match String::from_utf8(line_bytes) {
+                Ok(value) => value,
+                Err(error) => String::from_utf8_lossy(&error.into_bytes()).into_owned(),
+            };
+
+            if line.is_empty() {
+                if pending_data.is_empty() {
+                    continue;
+                }
+
+                let payload = pending_data.join("\n");
+                pending_data.clear();
+                if handle_openai_stream_payload(
+                    app_handle,
+                    request_id,
+                    &payload,
+                    &mut thought_filter,
+                    &mut reasoning_filter,
+                    &mut output,
+                    &mut reasoning_output,
+                )? {
+                    done = true;
+                    break;
+                }
+                continue;
+            }
+
+            if line.starts_with(':') {
+                continue;
+            }
+
+            if let Some(data) = line.strip_prefix("data:") {
+                let trimmed = data.trim_start();
+                pending_data.push(trimmed.to_string());
+                if trimmed.trim() == "[DONE]"
+                    || (pending_data.len() == 1 && looks_like_json_line(trimmed))
+                {
+                    let payload = pending_data.join("\n");
+                    pending_data.clear();
+                    if handle_openai_stream_payload(
+                        app_handle,
+                        request_id,
+                        &payload,
+                        &mut thought_filter,
+                        &mut reasoning_filter,
+                        &mut output,
+                        &mut reasoning_output,
+                    )? {
+                        done = true;
+                        break;
+                    }
+                }
+                continue;
+            }
+
+            if pending_data.is_empty() && looks_like_json_line(&line) {
+                if handle_openai_stream_payload(
+                    app_handle,
+                    request_id,
+                    &line,
+                    &mut thought_filter,
+                    &mut reasoning_filter,
+                    &mut output,
+                    &mut reasoning_output,
+                )? {
+                    done = true;
+                    break;
+                }
+            }
+        }
+
+        if done {
+            break;
+        }
+    }
+
+    if cancel_flag.load(Ordering::Relaxed) {
+        emit_ai_cancelled(app_handle, request_id);
+        return Err(AppError::Validation("请求已取消".into()));
+    }
+
+    if !pending_data.is_empty() && !done {
+        let payload = pending_data.join("\n");
+        pending_data.clear();
+        if let Err(error) = handle_openai_stream_payload(
+            app_handle,
+            request_id,
+            &payload,
+            &mut thought_filter,
+            &mut reasoning_filter,
+            &mut output,
+            &mut reasoning_output,
+        ) {
+            if output.trim().is_empty() && reasoning_output.trim().is_empty() {
+                return Err(error);
+            }
+        }
+    }
+
+    let (reason_tail_visible, reason_tail_hidden) = reasoning_filter.finish();
+    if !reason_tail_hidden.is_empty() {
+        reasoning_output.push_str(&reason_tail_hidden);
+        emit_ai_chunk(
+            app_handle,
+            request_id,
+            reason_tail_hidden,
+            AiStreamChunkKind::Reasoning,
+        );
+    }
+    if !reason_tail_visible.is_empty() {
+        output.push_str(&reason_tail_visible);
+        emit_ai_chunk(
+            app_handle,
+            request_id,
+            reason_tail_visible,
+            AiStreamChunkKind::Content,
+        );
+    }
+
+    let (tail_visible, tail_hidden) = thought_filter.finish();
+    if !tail_hidden.is_empty() {
+        reasoning_output.push_str(&tail_hidden);
+        emit_ai_chunk(
+            app_handle,
+            request_id,
+            tail_hidden,
+            AiStreamChunkKind::Reasoning,
+        );
+    }
+    if !tail_visible.is_empty() {
+        output.push_str(&tail_visible);
+        emit_ai_chunk(
+            app_handle,
+            request_id,
+            tail_visible,
+            AiStreamChunkKind::Content,
+        );
+    }
+
+    if output.trim().is_empty() && reasoning_output.trim().is_empty() {
+        return Err(AppError::Internal("AI 返回了空响应".into()));
+    }
+
+    let _ = app_handle.emit(
+        "ai:complete",
+        AiStreamCompletePayload {
+            request_id: request_id.to_string(),
+            response: output.clone(),
+        },
+    );
+
+    Ok(output)
+}
+
+async fn request_openai_family_streaming(
+    app_handle: &tauri::AppHandle,
+    request_id: &str,
+    cancel_flag: &Arc<AtomicBool>,
+    channel: &AiChannel,
+    model: &AiModel,
+    config: &AiConfig,
+    prompt: &str,
+) -> CmdResult<String> {
+    let endpoint = normalize_endpoint(channel.api_endpoint.as_deref(), channel.provider_type);
+    let url = build_openai_chat_url(&endpoint);
+    let client = build_http_client(config.timeout)?;
+
+    let mut body = json!({
+        "model": model.model_id,
+        "stream": true,
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        ],
+    });
+
+    if model.model_id.starts_with("o1") || model.model_id.starts_with("o3") {
+        body["max_completion_tokens"] = json!(config.max_tokens);
+        body["temperature"] = json!(1.0);
+    } else {
+        body["max_tokens"] = json!(config.max_tokens);
+        body["temperature"] = json!(config.temperature);
+    }
+
+    let response = client
+        .post(url)
+        .bearer_auth(&channel.api_key)
+        .header("content-type", "application/json")
+        .header("accept", "text/event-stream")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|error| AppError::Internal(format!("AI 请求失败: {error}")))?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let (status, value) = parse_json_response(response).await?;
+        return Err(AppError::Internal(format!(
+            "AI 请求失败({status}): {}",
+            extract_error_message(&value, "请求失败")
+        )));
+    }
+
+    if !is_event_stream_response(&response) {
+        let (_status, value) = parse_json_response(response).await?;
+        let text = extract_text_from_response(&value)
+            .filter(|text| !text.trim().is_empty())
+            .ok_or_else(|| AppError::Internal("AI 返回了空响应".into()))?;
+        let cleaned = strip_hidden_thought_blocks(&text);
+        stream_response_chunks(app_handle, request_id, &cleaned, cancel_flag).await?;
+        return Ok(cleaned);
+    }
+
+    stream_openai_sse_response(app_handle, request_id, response, cancel_flag).await
+}
+
 async fn request_anthropic(
     channel: &AiChannel,
     model: &AiModel,
@@ -1132,33 +1729,65 @@ async fn perform_request_with_model(
     }
 
     let prompt = build_prompt(action, &content, language.as_deref(), &config);
-    let mut response = match request_model_response(channel, model, &config, &prompt).await {
-        Ok(value) => value,
-        Err(error) => {
-            emit_ai_error(app_handle, &request_id, &error.to_string());
-            remove_cancel_flag(state, &request_id).await;
-            return Err(error);
+    let mut response = if matches!(
+        channel.provider_type,
+        AiProviderType::Openai | AiProviderType::OpenaiCompatible
+    ) {
+        match request_openai_family_streaming(
+            app_handle,
+            &request_id,
+            &cancel_flag,
+            channel,
+            model,
+            &config,
+            &prompt,
+        )
+        .await
+        {
+            Ok(value) => value,
+            Err(error) => {
+                if !matches!(&error, AppError::Validation(message) if message == "请求已取消")
+                {
+                    emit_ai_error(app_handle, &request_id, &error.to_string());
+                }
+                remove_cancel_flag(state, &request_id).await;
+                return Err(error);
+            }
+        }
+    } else {
+        match request_model_response(channel, model, &config, &prompt).await {
+            Ok(value) => value,
+            Err(error) => {
+                emit_ai_error(app_handle, &request_id, &error.to_string());
+                remove_cancel_flag(state, &request_id).await;
+                return Err(error);
+            }
         }
     };
 
-    if cancel_flag.load(Ordering::Relaxed) {
-        emit_ai_cancelled(app_handle, &request_id);
-        remove_cancel_flag(state, &request_id).await;
-        return Err(AppError::Validation("请求已取消".into()));
-    }
-
-    if matches!(action, AiAction::Write | AiAction::Optimize) {
-        response = strip_markdown_code_fences(&response);
-    }
-
-    if let Err(error) =
-        stream_response_chunks(app_handle, &request_id, &response, &cancel_flag).await
-    {
-        if !matches!(&error, AppError::Validation(message) if message == "请求已取消") {
-            emit_ai_error(app_handle, &request_id, &error.to_string());
+    if matches!(
+        channel.provider_type,
+        AiProviderType::Anthropic | AiProviderType::Gemini
+    ) {
+        if cancel_flag.load(Ordering::Relaxed) {
+            emit_ai_cancelled(app_handle, &request_id);
+            remove_cancel_flag(state, &request_id).await;
+            return Err(AppError::Validation("请求已取消".into()));
         }
-        remove_cancel_flag(state, &request_id).await;
-        return Err(error);
+
+        if matches!(action, AiAction::Write | AiAction::Optimize) {
+            response = strip_markdown_code_fences(&response);
+        }
+
+        if let Err(error) =
+            stream_response_chunks(app_handle, &request_id, &response, &cancel_flag).await
+        {
+            if !matches!(&error, AppError::Validation(message) if message == "请求已取消") {
+                emit_ai_error(app_handle, &request_id, &error.to_string());
+            }
+            remove_cancel_flag(state, &request_id).await;
+            return Err(error);
+        }
     }
 
     remove_cancel_flag(state, &request_id).await;

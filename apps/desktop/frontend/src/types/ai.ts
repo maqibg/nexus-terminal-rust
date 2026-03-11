@@ -43,8 +43,10 @@ export interface AIChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  reasoningContent?: string;
+  thinkingSeconds?: number;
   timestamp: number;
   modelId?: string;
-  status?: 'sending' | 'success' | 'error';
+  status?: 'sending' | 'streaming' | 'success' | 'error';
   error?: string;
 }

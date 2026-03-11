@@ -44,6 +44,7 @@ interface AIConfigUpdate {
 export interface AIStreamChunkEvent {
   requestId: string;
   chunk: string;
+  kind?: 'content' | 'reasoning';
 }
 
 export interface AIStreamCompleteEvent {

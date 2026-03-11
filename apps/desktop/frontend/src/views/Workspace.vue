@@ -81,7 +81,11 @@
         </Pane>
 
         <Pane :size="mainSize" :min-size="40">
-          <div ref="layoutRootRef" class="workspace-main-layout">
+          <div
+            ref="layoutRootRef"
+            :class="['workspace-main-layout', { 'workspace-main-layout-status-locked': isStatusColumnWidthLocked }]"
+            :style="layoutRootStyle"
+          >
             <LayoutRenderer :node="layoutRootNode" />
           </div>
         </Pane>
@@ -297,30 +301,39 @@ function updateLayoutMeasurements(): void {
 }
 
 function captureStatusColumnWidthForAi(): void {
+  updateLayoutMeasurements();
   if (statusColumnWidthPx.value > 0) {
     statusColumnLockedWidthPx.value = statusColumnWidthPx.value;
   }
 }
 
-function closeTerminalAiPanel(): void {
+const syncWorkspaceAfterAiToggle = async () => {
+  await nextTick();
+  updateLayoutMeasurements();
+  notifyWorkspaceLayoutResized();
+};
+
+async function closeTerminalAiPanel(): Promise<void> {
   showTerminalAiPanel.value = false;
   statusColumnLockedWidthPx.value = null;
+  await syncWorkspaceAfterAiToggle();
 }
 
-function toggleTerminalAiPanel() {
+async function toggleTerminalAiPanel() {
   if (!showTerminalAiPanel.value) {
     captureStatusColumnWidthForAi();
     showTerminalAiPanel.value = true;
+    await syncWorkspaceAfterAiToggle();
     return;
   }
 
-  closeTerminalAiPanel();
+  await closeTerminalAiPanel();
 }
 
 async function openAiAssistant(detail?: TerminalAiActionDetail) {
   const prompt = detail?.prompt?.trim();
   if (!prompt) {
-    toggleTerminalAiPanel();
+    void toggleTerminalAiPanel();
     return;
   }
 
@@ -329,6 +342,8 @@ async function openAiAssistant(detail?: TerminalAiActionDetail) {
   }
   showTerminalAiPanel.value = true;
   await nextTick();
+  updateLayoutMeasurements();
+  notifyWorkspaceLayoutResized();
   const panel = terminalAiPanelRef.value;
   if (!panel) {
     return;
@@ -416,6 +431,24 @@ const layoutRootNode = computed<LayoutNode>(() => {
   }
 
   return buildAiAdjustedLayoutRoot(root);
+});
+
+const isStatusColumnWidthLocked = computed(() => {
+  const locked = statusColumnLockedWidthPx.value ?? 0;
+  return showTerminalAiPanel.value && locked > 0;
+});
+
+const layoutRootStyle = computed(() => {
+  if (!isStatusColumnWidthLocked.value) {
+    return undefined;
+  }
+  const locked = Math.round(statusColumnLockedWidthPx.value ?? 0);
+  if (locked <= 0) {
+    return undefined;
+  }
+  return {
+    '--status-column-locked-width': `${locked}px`,
+  } as Record<string, string>;
 });
 
 function handleOpenAiAssistantEvent(event: Event) {
@@ -614,6 +647,7 @@ onUnmounted(() => {
   min-height: 0;
   display: flex;
   overflow: hidden;
+  position: relative;
 }
 
 .workspace-left-tools {
@@ -716,8 +750,15 @@ onUnmounted(() => {
   height: 100%;
 }
 
+.workspace-main-layout-status-locked :deep(.layout-pane-status-column) {
+  flex: 0 0 var(--status-column-locked-width) !important;
+  width: var(--status-column-locked-width) !important;
+  max-width: var(--status-column-locked-width) !important;
+  min-width: var(--status-column-locked-width) !important;
+}
+
 .workspace-right-ai-panel {
-  width: 420px;
+  width: clamp(340px, 28vw, 520px);
   min-width: 340px;
   max-width: 560px;
   flex-shrink: 0;
@@ -730,6 +771,18 @@ onUnmounted(() => {
 .workspace-right-ai-panel-content {
   flex: 1;
   min-height: 0;
+}
+
+@media (max-width: 1200px) {
+  .workspace-right-ai-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    height: 100%;
+    z-index: 20;
+    box-shadow: -10px 0 24px rgba(0, 0, 0, 0.35);
+  }
 }
 
 .workspace-layout :deep(.splitpanes__pane) {

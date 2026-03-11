@@ -3,6 +3,19 @@ import { defineStore } from 'pinia';
 import { aiApi } from '@/lib/api-ai';
 import type { AIAction, AIChannel, AIChatMessage, AIConfig, AIModel } from '@/types/ai';
 
+const compareModelName = (a: AIModel, b: AIModel): number => {
+  const options: Intl.CollatorOptions = { numeric: true, sensitivity: 'base' };
+  const nameCompare = a.displayName.localeCompare(b.displayName, undefined, options);
+  if (nameCompare !== 0) return nameCompare;
+
+  const idCompare = a.modelId.localeCompare(b.modelId, undefined, options);
+  if (idCompare !== 0) return idCompare;
+
+  return a.id.localeCompare(b.id, undefined, options);
+};
+
+const sortModelsByName = (items: AIModel[]): AIModel[] => [...items].sort(compareModelName);
+
 const DEFAULT_PROMPT_EXPLAIN =
   '请作为一名资深开发人员，详细分析并解释以下代码片段的主要功能和目的。\n\n```{language}\n{content}\n```';
 const DEFAULT_PROMPT_OPTIMIZE =
@@ -97,7 +110,7 @@ export const useAIStore = defineStore('ai', () => {
     beginLoading();
     error.value = null;
     try {
-      models.value = await aiApi.getAllModels();
+      models.value = sortModelsByName(await aiApi.getAllModels());
     } catch (err) {
       setError(err, '加载 AI 模型失败');
       throw err;
@@ -214,7 +227,7 @@ export const useAIStore = defineStore('ai', () => {
     try {
       const fetched = await aiApi.fetchModels(channelId);
       const keep = models.value.filter((item) => !(item.channelId === channelId && item.type === 'auto'));
-      models.value = [...keep, ...fetched];
+      models.value = sortModelsByName([...keep, ...fetched]);
       return fetched;
     } catch (err) {
       setError(err, '获取 AI 模型失败');
@@ -235,7 +248,7 @@ export const useAIStore = defineStore('ai', () => {
         contextWindow: data.contextWindow,
         type: data.type,
       });
-      models.value.push(model);
+      models.value = sortModelsByName([...models.value, model]);
       return model;
     } catch (err) {
       setError(err, '添加 AI 模型失败');
