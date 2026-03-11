@@ -98,6 +98,11 @@ const tagDropdownRef = ref<HTMLElement | null>(null);
 const sortDropdownRef = ref<HTMLElement | null>(null);
 const isTagDropdownOpen = ref(false);
 const isSortDropdownOpen = ref(false);
+const tagCreateInput = ref('');
+const isCreatingTag = ref(false);
+const deletingTagId = ref<number | null>(null);
+
+const sortedTags = computed<Tag[]>(() => [...(tags.value as Tag[])].sort((a, b) => a.name.localeCompare(b.name)));
 
 const selectedTagLabel = computed(() => {
   if (selectedTagId.value === null) {
@@ -318,27 +323,45 @@ const filteredAndSortedConnections = computed<ExtendedConnection[]>(() => {
   }
 
   return searchedConnections.sort((a, b) => {
+    let result = 0;
     switch (sortBy) {
       case 'name':
-        return getConnectionName(a).localeCompare(getConnectionName(b)) * factor;
+        result = getConnectionName(a).localeCompare(getConnectionName(b)) * factor;
+        break;
       case 'type':
-        return getConnectionType(a).localeCompare(getConnectionType(b)) * factor;
+        result = getConnectionType(a).localeCompare(getConnectionType(b)) * factor;
+        break;
       case 'created_at':
-        return (Number(a.created_at ?? 0) - Number(b.created_at ?? 0)) * factor;
+        result = (Number(a.created_at ?? 0) - Number(b.created_at ?? 0)) * factor;
+        break;
       case 'updated_at':
-        return (Number(a.updated_at ?? 0) - Number(b.updated_at ?? 0)) * factor;
+        result = (Number(a.updated_at ?? 0) - Number(b.updated_at ?? 0)) * factor;
+        break;
       case 'last_connected_at': {
         const emptyFallback = localSortOrder.value === 'desc' ? -Infinity : Infinity;
         const valA = normalizeTimestampSeconds(a.last_connected_at) ?? emptyFallback;
         const valB = normalizeTimestampSeconds(b.last_connected_at) ?? emptyFallback;
         if (valA === valB) {
-          return 0;
+          result = 0;
+          break;
         }
-        return (valA < valB ? -1 : 1) * factor;
+        result = (valA < valB ? -1 : 1) * factor;
+        break;
       }
       default:
-        return 0;
+        result = 0;
     }
+
+    if (result !== 0) {
+      return result;
+    }
+
+    const fallbackByName = getConnectionName(a).localeCompare(getConnectionName(b));
+    if (fallbackByName !== 0) {
+      return fallbackByName * factor;
+    }
+
+    return (Number(a.id) - Number(b.id)) * factor;
   });
 });
 
@@ -350,6 +373,60 @@ const getErrorMessage = (error: unknown): string => {
     return error;
   }
   return '未知错误';
+};
+
+const handleCreateTagFromFilter = async () => {
+  if (isCreatingTag.value || isLoadingTags.value) {
+    return;
+  }
+
+  const name = tagCreateInput.value.trim();
+  if (!name) {
+    return;
+  }
+
+  isCreatingTag.value = true;
+  try {
+    const existing = (tags.value as Tag[]).find(tag => tag.name === name);
+    const tagId = existing ? existing.id : await connectionsApi.tagCreate(name);
+    await store.fetch();
+    selectedTagId.value = tagId;
+    tagCreateInput.value = '';
+    isTagDropdownOpen.value = false;
+  } catch (error: unknown) {
+    await alert('创建标签失败', getErrorMessage(error));
+  } finally {
+    isCreatingTag.value = false;
+  }
+};
+
+const handleDeleteTagFromFilter = async (tag: Tag) => {
+  if (deletingTagId.value !== null || isLoadingTags.value) {
+    return;
+  }
+
+  const confirmed = await confirm('删除标签', `确定删除标签“${tag.name}”吗？`);
+  if (!confirmed) {
+    return;
+  }
+
+  deletingTagId.value = tag.id;
+  try {
+    const deleted = await connectionsApi.tagDelete(tag.id);
+    if (!deleted) {
+      await alert('删除标签失败', '后端返回删除失败');
+      return;
+    }
+
+    if (selectedTagId.value === tag.id) {
+      selectedTagId.value = null;
+    }
+    await store.fetch();
+  } catch (error: unknown) {
+    await alert('删除标签失败', getErrorMessage(error));
+  } finally {
+    deletingTagId.value = null;
+  }
 };
 
 const toggleSortOrder = () => {
@@ -741,6 +818,27 @@ onUnmounted(() => {
                   <i class="fas fa-chevron-down custom-select-trigger-icon"></i>
                 </button>
                 <div v-if="isTagDropdownOpen" class="custom-select-menu" role="listbox" aria-label="按标签过滤连接">
+                  <div class="custom-select-menu-toolbar" @click.stop>
+                    <input
+                      v-model="tagCreateInput"
+                      class="custom-select-menu-input"
+                      type="text"
+                      placeholder="新建标签..."
+                      :disabled="isLoadingTags || isCreatingTag"
+                      @keydown.enter.prevent="handleCreateTagFromFilter"
+                    />
+                    <button
+                      type="button"
+                      class="custom-select-menu-btn"
+                      title="新建标签"
+                      :disabled="isLoadingTags || isCreatingTag || !tagCreateInput.trim()"
+                      @click="handleCreateTagFromFilter"
+                    >
+                      <i v-if="isCreatingTag" class="fas fa-spinner fa-spin"></i>
+                      <i v-else class="fas fa-plus"></i>
+                    </button>
+                  </div>
+                  <div class="custom-select-menu-divider"></div>
                   <button
                     type="button"
                     class="custom-select-option"
@@ -752,16 +850,30 @@ onUnmounted(() => {
                   <button v-if="isLoadingTags" type="button" class="custom-select-option" disabled>
                     加载中...
                   </button>
-                  <button
-                    v-for="tag in (tags as Tag[])"
+                  <div
+                    v-for="tag in sortedTags"
                     :key="tag.id"
-                    type="button"
-                    class="custom-select-option"
-                    :class="{ 'is-active': selectedTagId === tag.id }"
-                    @click="selectTag(tag.id)"
+                    class="custom-select-option-row"
                   >
-                    {{ tag.name }}
-                  </button>
+                    <button
+                      type="button"
+                      class="custom-select-option custom-select-option-main"
+                      :class="{ 'is-active': selectedTagId === tag.id }"
+                      @click="selectTag(tag.id)"
+                    >
+                      {{ tag.name }}
+                    </button>
+                    <button
+                      type="button"
+                      class="custom-select-option-delete"
+                      title="删除标签"
+                      :disabled="isLoadingTags || deletingTagId === tag.id"
+                      @click.stop="handleDeleteTagFromFilter(tag)"
+                    >
+                      <i v-if="deletingTagId === tag.id" class="fas fa-spinner fa-spin"></i>
+                      <i v-else class="fas fa-trash-alt"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1203,6 +1315,85 @@ onUnmounted(() => {
 }
 
 .custom-select-option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.custom-select-menu-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+}
+
+.custom-select-menu-input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-base);
+  color: var(--text);
+  font-size: calc(13px + var(--ui-font-size-offset));
+  outline: none;
+}
+
+.custom-select-menu-input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue);
+}
+
+.custom-select-menu-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.custom-select-menu-btn:hover {
+  background: var(--bg-surface1);
+}
+
+.custom-select-menu-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.custom-select-menu-divider {
+  height: 1px;
+  background: var(--border);
+}
+
+.custom-select-option-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.custom-select-option-main {
+  flex: 1;
+}
+
+.custom-select-option-delete {
+  width: 34px;
+  border: none;
+  background: transparent;
+  color: var(--text-sub);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-select-option-delete:hover {
+  background: color-mix(in srgb, var(--red) 14%, transparent);
+  color: var(--red);
+}
+
+.custom-select-option-delete:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
