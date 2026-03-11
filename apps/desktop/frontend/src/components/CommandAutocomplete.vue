@@ -77,6 +77,8 @@ const commonCommands = ref<string[]>([
   'ps', 'top', 'kill', 'df', 'du', 'free', 'netstat', 'ping',
   'git', 'docker', 'npm', 'yarn', 'python', 'node', 'java', 'gcc',
   'code', 'vim', 'nano', 'gcloud', 'aws', 'kubectl',
+  'sudo', 'env', 'time', 'nohup', 'tmux', 'screen', 'rsync', 'sftp',
+  'ssh-keygen', 'ssh-copy-id', 'openssl', 'jq',
 ]);
 
 const CACHE_TTL = 5000;
@@ -84,6 +86,8 @@ const DEBOUNCE_DELAY = 150;
 let lastProcessedInput = '';
 let currentRequestId = 0;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+const WRAPPER_COMMANDS = new Set(['sudo', 'env', 'time', 'nohup', 'command']);
 
 const compatApi: CompatApi = {
   ssh: {
@@ -203,34 +207,149 @@ function currentWordOf(input: string): string {
   return words[words.length - 1] ?? '';
 }
 
+function isEnvAssignment(token: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*=/.test(token);
+}
+
+const SUDO_VALUE_OPTIONS = new Set(['-u', '-g', '-h', '-p', '-C', '--user', '--group', '--host', '--prompt']);
+const ENV_VALUE_OPTIONS = new Set(['-u', '--unset', '-C', '--chdir']);
+
+function lastNonEmptyToken(tokens: string[]): string {
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const token = tokens[i];
+    if (token !== '') return token;
+  }
+  return '';
+}
+
+function wrapperPrefixExpectsValue(wrapperPrefix: string[]): boolean {
+  const last = lastNonEmptyToken(wrapperPrefix);
+  return SUDO_VALUE_OPTIONS.has(last) || ENV_VALUE_OPTIONS.has(last);
+}
+
+function findActiveWrapperCommand(wrapperPrefix: string[]): string | null {
+  for (let i = wrapperPrefix.length - 1; i >= 0; i--) {
+    const token = wrapperPrefix[i];
+    if (WRAPPER_COMMANDS.has(token)) return token;
+  }
+  return null;
+}
+
+function findWrappedCommandStartIndex(words: string[]): number {
+  const currentArgIndex = Math.max(0, words.length - 1);
+  let i = 0;
+
+  const skipEmpty = () => {
+    while (i < currentArgIndex && words[i] === '') {
+      i++;
+    }
+  };
+
+  skipEmpty();
+  while (i < currentArgIndex) {
+    const token = words[i];
+
+    if (token === 'sudo') {
+      i++;
+      skipEmpty();
+      while (i < currentArgIndex) {
+        const opt = words[i];
+        if (!opt.startsWith('-')) break;
+        i++;
+        skipEmpty();
+        if (opt === '--') break;
+        if (SUDO_VALUE_OPTIONS.has(opt) && i < currentArgIndex) {
+          i++;
+          skipEmpty();
+        }
+      }
+      continue;
+    }
+
+    if (token === 'env') {
+      i++;
+      skipEmpty();
+      while (i < currentArgIndex) {
+        const arg = words[i];
+        if (arg === '--') {
+          i++;
+          skipEmpty();
+          break;
+        }
+        if (isEnvAssignment(arg)) {
+          i++;
+          skipEmpty();
+          continue;
+        }
+        if (!arg.startsWith('-')) break;
+        i++;
+        skipEmpty();
+        if (ENV_VALUE_OPTIONS.has(arg) && i < currentArgIndex) {
+          i++;
+          skipEmpty();
+        }
+      }
+      continue;
+    }
+
+    if (WRAPPER_COMMANDS.has(token)) {
+      i++;
+      skipEmpty();
+      while (i < currentArgIndex) {
+        const opt = words[i];
+        if (!opt.startsWith('-')) break;
+        i++;
+        skipEmpty();
+        if (opt === '--') break;
+      }
+      continue;
+    }
+
+    break;
+  }
+
+  return i;
+}
+
 async function buildRegistrySuggestions(input: string, words: string[], requestId: number): Promise<Suggestion[] | null> {
   if (words.length < 2) return null;
   const cmdName = words[0];
   const currentArgIndex = words.length - 1;
   const currentArg = words[currentArgIndex] ?? '';
-  let def = registry.getCommand(cmdName);
+  const rootDef = registry.getCommand(cmdName);
+  let def = rootDef;
   let depth = 0;
+  const inheritedOptions: CompletionItem[] = [];
   for (let i = 1; i < currentArgIndex; i++) {
-    if (!def?.subcommands?.[words[i]]) break;
-    def = def.subcommands[words[i]];
+    const next = def?.subcommands?.[words[i]];
+    if (!def || !next) break;
+    inheritedOptions.push(...(def.options ?? []).filter((opt) => opt.type === 'option'));
+    def = next;
     depth++;
   }
   if (!def) return null;
 
-  const generated = def.generate
-    ? (await def.generate({
-        input,
-        args: words,
-        currentArgIndex,
-        currentArg,
-        sessionId: props.sessionId,
-        electronAPI: compatApi,
-      }).catch(() => [])) ?? []
-    : [];
+  const ctx = {
+    input,
+    args: words,
+    currentArgIndex,
+    currentArg,
+    sessionId: props.sessionId,
+    electronAPI: compatApi,
+  };
+
+  let generated: CompletionItem[] = [];
+  if (def.generate) {
+    generated = (await def.generate(ctx).catch(() => [])) ?? [];
+  }
+  if (generated.length === 0 && rootDef && rootDef !== def && rootDef.generate) {
+    generated = (await rootDef.generate(ctx).catch(() => [])) ?? [];
+  }
 
   if (requestId !== currentRequestId) return null;
   const previousArgs = words.slice(1, currentArgIndex);
-  const staticMatches = (def.options ?? []).filter((opt) => {
+  const staticCandidates = [...inheritedOptions, ...(def.options ?? [])];
+  const staticMatches = staticCandidates.filter((opt) => {
     if (opt.type === 'subcommand') {
       if (currentArgIndex > depth + 1) return false;
       if (previousArgs.includes(opt.text)) return false;
@@ -241,8 +360,9 @@ async function buildRegistrySuggestions(input: string, words: string[], requestI
     return opt.text.startsWith(currentArg) || (opt.displayText?.startsWith(currentArg) ?? false);
   });
   const merged = [...staticMatches, ...generated];
-  if (merged.length === 0) return null;
-  return merged.map((item: CompletionItem) => ({
+  const uniqueMerged = Array.from(new Map(merged.map((item) => [`${item.type}:${item.text}`, item])).values());
+  if (uniqueMerged.length === 0) return null;
+  return uniqueMerged.map((item: CompletionItem) => ({
     text: item.text,
     type: item.type,
     matchPart: item.matchPart || currentArg,
@@ -286,7 +406,49 @@ async function generateSuggestions() {
   const words = rawInput.split(' ');
   const currentWord = currentWordOf(rawInput);
 
-  const registrySuggestions = await buildRegistrySuggestions(rawInput, words, requestId);
+  const commandStartIndex = findWrappedCommandStartIndex(words);
+  if (commandStartIndex > 0 && commandStartIndex === words.length - 1) {
+    const wrapperPrefix = words.slice(0, commandStartIndex);
+    const all: Suggestion[] = [];
+    const activeWrapper = findActiveWrapperCommand(wrapperPrefix);
+    const wrapperSuggestions = activeWrapper
+      ? await buildRegistrySuggestions(`${activeWrapper} ${currentWord}`, [activeWrapper, currentWord], requestId)
+      : null;
+    if (wrapperSuggestions && wrapperSuggestions.length > 0) {
+      all.push(...wrapperSuggestions);
+    }
+
+    const shouldSuggestCommands = !(wrapperPrefix.includes('env') && isEnvAssignment(currentWord)) && !wrapperPrefixExpectsValue(wrapperPrefix);
+    if (shouldSuggestCommands) {
+      all.push(...commonCommands.value.filter((v) => v.startsWith(currentWord) && v !== currentWord).map((v) => ({
+        text: v, type: 'command' as const, matchPart: currentWord, restPart: v.slice(currentWord.length), priority: 80,
+      })));
+      all.push(...registry.getAllCommandNames().filter((v) => v.startsWith(currentWord) && v !== currentWord).map((v) => ({
+        text: v, type: 'command' as const, matchPart: currentWord, restPart: v.slice(currentWord.length), priority: 86,
+      })));
+    }
+
+    all.sort(compareSuggestions);
+    const nextSuggestions = Array.from(new Map(all.map((item) => [`${item.type}:${item.text}`, item])).values()).slice(0, 20);
+    suggestions.value = nextSuggestions;
+    if (previousSelection) {
+      const preservedIndex = nextSuggestions.findIndex(
+        (item) => item.type === previousSelection.type && item.text === previousSelection.text,
+      );
+      if (preservedIndex >= 0) {
+        selectedIndex.value = preservedIndex;
+        hasUserSelected.value = true;
+        return;
+      }
+    }
+    selectedIndex.value = 0;
+    hasUserSelected.value = false;
+    return;
+  }
+
+  const effectiveWords = words.slice(commandStartIndex);
+  const effectiveInput = effectiveWords.join(' ');
+  const registrySuggestions = await buildRegistrySuggestions(effectiveInput, effectiveWords, requestId);
   if (registrySuggestions && registrySuggestions.length > 0) {
     suggestions.value = registrySuggestions;
     if (previousSelection) {

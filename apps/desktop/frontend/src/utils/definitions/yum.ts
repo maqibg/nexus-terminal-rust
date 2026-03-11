@@ -24,7 +24,17 @@ const yumCommand: CommandDefinition = {
         { text: '--nogpgcheck', type: 'option', description: '跳过 GPG 校验', priority: 70 },
         { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
     ],
+    subcommands: {
+        install: { name: 'install', description: '安装包', options: [] },
+        remove: { name: 'remove', description: '删除包', options: [] },
+        update: { name: 'update', description: '更新包', options: [] },
+        upgrade: { name: 'upgrade', description: '升级包', options: [] },
+        search: { name: 'search', description: '搜索包', options: [] },
+        info: { name: 'info', description: '包信息', options: [] },
+        list: { name: 'list', description: '列出包', options: [] },
+        repolist: { name: 'repolist', description: '列出仓库', options: [] },
+        clean: { name: 'clean', description: '清理缓存', options: [] },
+    },
 };
 
 export default yumCommand;
-

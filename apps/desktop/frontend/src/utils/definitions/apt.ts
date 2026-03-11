@@ -26,7 +26,19 @@ const aptCommand: CommandDefinition = {
         { text: '--reinstall', type: 'option', description: '重新安装', priority: 70 },
         { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
     ],
+    subcommands: {
+        update: { name: 'update', description: '更新索引', options: [] },
+        upgrade: { name: 'upgrade', description: '升级包', options: [] },
+        'full-upgrade': { name: 'full-upgrade', description: '完整升级', options: [] },
+        install: { name: 'install', description: '安装包', options: [] },
+        remove: { name: 'remove', description: '删除包', options: [] },
+        purge: { name: 'purge', description: '删除包(含配置)', options: [] },
+        autoremove: { name: 'autoremove', description: '移除无用依赖', options: [] },
+        search: { name: 'search', description: '搜索包', options: [] },
+        show: { name: 'show', description: '显示包信息', options: [] },
+        list: { name: 'list', description: '列出包', options: [] },
+        policy: { name: 'policy', description: '策略/候选版本', options: [] },
+    },
 };
 
 export default aptCommand;
-

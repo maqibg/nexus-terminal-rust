@@ -1,6 +1,6 @@
 
 import type { CommandDefinition, CompletionContext, CompletionItem } from '../types';
-import { getRemoteDirectories, getDockerContainers, getDockerImages } from '../providers/file-system';
+import { getDockerContainers, getDockerImages, getDockerNetworks, getDockerVolumes, getRemoteDirectories, getRemoteFiles } from '../providers/file-system';
 
 /**
  * Docker 命令定义
@@ -183,6 +183,134 @@ const dockerPull: CommandDefinition = {
     ]
 };
 
+// docker images 子命令
+const dockerImages: CommandDefinition = {
+    name: 'images',
+    description: '列出镜像',
+    options: [
+        { text: '-a', type: 'option', description: '显示所有镜像（包括中间层）', priority: 95 },
+        { text: '--digests', type: 'option', description: '显示摘要', priority: 90 },
+        { text: '--no-trunc', type: 'option', description: '不截断输出', priority: 85 },
+        { text: '-q', type: 'option', description: '只显示 ID', priority: 80 },
+        { text: '--filter', type: 'option', description: '过滤条件', priority: 75, usage: '--filter dangling=true' },
+        { text: '--format', type: 'option', description: '自定义输出格式', priority: 70, usage: '--format "{{.Repository}}:{{.Tag}}"' },
+    ],
+    generate: async (ctx: CompletionContext): Promise<CompletionItem[]> => {
+        if (!ctx.sessionId || !ctx.electronAPI) return [];
+        if (!ctx.currentArg.startsWith('-')) {
+            return getDockerImages(ctx.sessionId, ctx.electronAPI);
+        }
+        return [];
+    }
+};
+
+// docker push 子命令
+const dockerPush: CommandDefinition = {
+    name: 'push',
+    description: '推送镜像',
+    options: [
+        { text: '--all-tags', type: 'option', description: '推送所有 tag', priority: 90 },
+        { text: '--disable-content-trust', type: 'option', description: '禁用内容信任', priority: 80 },
+        { text: '--quiet', type: 'option', description: '静默输出', priority: 70 },
+    ],
+    generate: async (ctx: CompletionContext): Promise<CompletionItem[]> => {
+        if (!ctx.sessionId || !ctx.electronAPI) return [];
+        if (ctx.currentArg.startsWith('-')) return [];
+        const images = await getDockerImages(ctx.sessionId, ctx.electronAPI);
+        if (!ctx.currentArg) return images;
+        return images.filter((img) => img.text.includes(ctx.currentArg));
+    }
+};
+
+const dockerNetwork: CommandDefinition = {
+    name: 'network',
+    description: '管理网络',
+    options: [
+        { text: 'ls', type: 'subcommand', description: '列出网络', priority: 95 },
+        { text: 'inspect', type: 'subcommand', description: '查看网络详情', priority: 90 },
+        { text: 'create', type: 'subcommand', description: '创建网络', priority: 85 },
+        { text: 'rm', type: 'subcommand', description: '删除网络', priority: 80 },
+        { text: 'prune', type: 'subcommand', description: '清理未使用网络', priority: 75 },
+        { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
+    ],
+    generate: async (ctx: CompletionContext): Promise<CompletionItem[]> => {
+        if (!ctx.sessionId || !ctx.electronAPI) return [];
+        if (ctx.currentArg.startsWith('-')) return [];
+
+        const action = ctx.args[2] ?? '';
+        if (action !== 'inspect' && action !== 'rm') {
+            return [];
+        }
+
+        const networks = await getDockerNetworks(ctx.sessionId, ctx.electronAPI);
+        if (!ctx.currentArg) return networks;
+        return networks.filter((net) => net.text.includes(ctx.currentArg));
+    },
+};
+
+const dockerVolume: CommandDefinition = {
+    name: 'volume',
+    description: '管理卷',
+    options: [
+        { text: 'ls', type: 'subcommand', description: '列出卷', priority: 95 },
+        { text: 'inspect', type: 'subcommand', description: '查看卷详情', priority: 90 },
+        { text: 'create', type: 'subcommand', description: '创建卷', priority: 85 },
+        { text: 'rm', type: 'subcommand', description: '删除卷', priority: 80 },
+        { text: 'prune', type: 'subcommand', description: '清理未使用卷', priority: 75 },
+        { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
+    ],
+    generate: async (ctx: CompletionContext): Promise<CompletionItem[]> => {
+        if (!ctx.sessionId || !ctx.electronAPI) return [];
+        if (ctx.currentArg.startsWith('-')) return [];
+
+        const action = ctx.args[2] ?? '';
+        if (action !== 'inspect' && action !== 'rm') {
+            return [];
+        }
+
+        const volumes = await getDockerVolumes(ctx.sessionId, ctx.electronAPI);
+        if (!ctx.currentArg) return volumes;
+        return volumes.filter((vol) => vol.text.includes(ctx.currentArg));
+    },
+};
+
+// docker compose 子命令
+const dockerCompose: CommandDefinition = {
+    name: 'compose',
+    description: 'Compose 命令',
+    options: [
+        { text: '-f', type: 'option', description: '指定 compose 文件', priority: 95, usage: '-f docker-compose.yml', repeatable: true },
+        { text: '--file', type: 'option', description: '同 -f', priority: 95, repeatable: true },
+        { text: '-p', type: 'option', description: '项目名', priority: 90, usage: '-p my-project' },
+        { text: '--project-name', type: 'option', description: '项目名', priority: 90 },
+        { text: '--profile', type: 'option', description: '指定 profile', priority: 85, usage: '--profile dev' },
+        { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
+
+        { text: 'up', type: 'subcommand', description: '创建并启动', priority: 100, usage: 'docker compose up -d' },
+        { text: 'down', type: 'subcommand', description: '停止并移除', priority: 95 },
+        { text: 'ps', type: 'subcommand', description: '查看服务状态', priority: 92 },
+        { text: 'logs', type: 'subcommand', description: '查看日志', priority: 90 },
+        { text: 'exec', type: 'subcommand', description: '进入服务执行命令', priority: 88 },
+        { text: 'build', type: 'subcommand', description: '构建镜像', priority: 86 },
+        { text: 'pull', type: 'subcommand', description: '拉取镜像', priority: 84 },
+        { text: 'push', type: 'subcommand', description: '推送镜像', priority: 82 },
+        { text: 'restart', type: 'subcommand', description: '重启服务', priority: 80 },
+        { text: 'stop', type: 'subcommand', description: '停止服务', priority: 78 },
+        { text: 'start', type: 'subcommand', description: '启动服务', priority: 76 },
+        { text: 'rm', type: 'subcommand', description: '移除已停止容器', priority: 74 },
+        { text: 'run', type: 'subcommand', description: '运行一次性命令', priority: 72 },
+        { text: 'config', type: 'subcommand', description: '输出配置', priority: 70 },
+    ],
+    generate: async (ctx: CompletionContext): Promise<CompletionItem[]> => {
+        const prev = ctx.args[ctx.currentArgIndex - 1] ?? '';
+        if (!ctx.sessionId || !ctx.electronAPI) return [];
+        if (prev === '-f' || prev === '--file') {
+            return getRemoteFiles(ctx.sessionId, ctx.currentArg || './', ctx.electronAPI);
+        }
+        return [];
+    },
+};
+
 // 主 docker 命令
 const dockerCommand: CommandDefinition = {
     name: 'docker',
@@ -216,7 +344,12 @@ const dockerCommand: CommandDefinition = {
         'build': dockerBuild,
         'rm': dockerRm,
         'rmi': dockerRmi,
-        'pull': dockerPull
+        'pull': dockerPull,
+        'images': dockerImages,
+        'push': dockerPush,
+        'network': dockerNetwork,
+        'volume': dockerVolume,
+        'compose': dockerCompose,
     }
 };
 

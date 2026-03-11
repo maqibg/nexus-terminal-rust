@@ -108,6 +108,95 @@ const npmExec: CommandDefinition = {
     ]
 };
 
+const npmStart: CommandDefinition = {
+    name: 'start',
+    description: '启动应用',
+    options: [
+        { text: '--silent', type: 'option', description: '静默输出', priority: 70 },
+        { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
+    ],
+};
+
+const npmTest: CommandDefinition = {
+    name: 'test',
+    description: '运行测试',
+    options: [
+        { text: '--silent', type: 'option', description: '静默输出', priority: 70 },
+        { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
+    ],
+};
+
+const npmBuild: CommandDefinition = {
+    name: 'build',
+    description: '构建项目',
+    options: [
+        { text: '--silent', type: 'option', description: '静默输出', priority: 70 },
+        { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
+    ],
+};
+
+const npmUpdate: CommandDefinition = {
+    name: 'update',
+    description: '更新包',
+    options: [
+        { text: '-g', type: 'option', description: '全局更新', priority: 90, usage: 'npm update -g' },
+        { text: '--global', type: 'option', description: '全局更新', priority: 90 },
+        { text: '--depth', type: 'option', description: '依赖深度', priority: 70, usage: '--depth 0' },
+    ],
+};
+
+const npmList: CommandDefinition = {
+    name: 'list',
+    description: '列出已安装包',
+    options: [
+        { text: '-g', type: 'option', description: '全局列表', priority: 90, usage: 'npm list -g --depth 0' },
+        { text: '--global', type: 'option', description: '全局列表', priority: 90 },
+        { text: '--depth', type: 'option', description: '依赖深度', priority: 85, usage: '--depth 0' },
+        { text: '--json', type: 'option', description: 'JSON 输出', priority: 70 },
+    ],
+};
+
+const npmOutdated: CommandDefinition = {
+    name: 'outdated',
+    description: '检查过期包',
+    options: [
+        { text: '-g', type: 'option', description: '全局检查', priority: 85 },
+        { text: '--global', type: 'option', description: '全局检查', priority: 85 },
+        { text: '--json', type: 'option', description: 'JSON 输出', priority: 70 },
+    ],
+};
+
+const npmPublish: CommandDefinition = {
+    name: 'publish',
+    description: '发布包',
+    options: [
+        { text: '--access', type: 'option', description: '访问级别', priority: 90, usage: '--access public' },
+        { text: '--tag', type: 'option', description: '发布 tag', priority: 85, usage: '--tag latest' },
+        { text: '--dry-run', type: 'option', description: '演练，不实际发布', priority: 75 },
+        { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
+    ],
+};
+
+const npmCache: CommandDefinition = {
+    name: 'cache',
+    description: '管理缓存',
+    options: [
+        { text: 'clean', type: 'subcommand', description: '清理缓存', priority: 100, usage: 'npm cache clean --force' },
+        { text: 'verify', type: 'subcommand', description: '校验缓存', priority: 80, usage: 'npm cache verify' },
+        { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
+    ],
+    subcommands: {
+        clean: {
+            name: 'clean',
+            description: '清理缓存',
+            options: [
+                { text: '--force', type: 'option', description: '强制执行', priority: 95 },
+            ],
+        },
+        verify: { name: 'verify', description: '校验缓存', options: [] },
+    },
+};
+
 // 主 npm 命令
 const npmCommand: CommandDefinition = {
     name: 'npm',
@@ -132,9 +221,17 @@ const npmCommand: CommandDefinition = {
         'install': npmInstall,
         'i': npmInstall,
         'run': npmRun,
+        'start': npmStart,
+        'test': npmTest,
+        'build': npmBuild,
         'uninstall': npmUninstall,
+        'update': npmUpdate,
+        'list': npmList,
+        'outdated': npmOutdated,
+        'publish': npmPublish,
         'init': npmInit,
-        'exec': npmExec
+        'exec': npmExec,
+        'cache': npmCache,
     }
 };
 

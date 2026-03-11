@@ -21,7 +21,16 @@ const aptGetCommand: CommandDefinition = {
         { text: '--no-install-recommends', type: 'option', description: '不装推荐包', priority: 75 },
         { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
     ],
+    subcommands: {
+        update: { name: 'update', description: '更新索引', options: [] },
+        upgrade: { name: 'upgrade', description: '升级包', options: [] },
+        'dist-upgrade': { name: 'dist-upgrade', description: '发行版升级', options: [] },
+        install: { name: 'install', description: '安装包', options: [] },
+        remove: { name: 'remove', description: '删除包', options: [] },
+        purge: { name: 'purge', description: '删除包(含配置)', options: [] },
+        autoremove: { name: 'autoremove', description: '移除无用依赖', options: [] },
+        clean: { name: 'clean', description: '清理缓存', options: [] },
+    },
 };
 
 export default aptGetCommand;
-

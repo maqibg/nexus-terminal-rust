@@ -89,6 +89,39 @@ const yarnRun: CommandDefinition = {
     generate: getPackageScripts,
 };
 
+const yarnInit: CommandDefinition = {
+    name: 'init',
+    description: '初始化项目',
+    options: [
+        { text: '-y', type: 'option', description: '使用默认值', priority: 100, usage: 'yarn init -y' },
+        { text: '--yes', type: 'option', description: '使用默认值', priority: 100 },
+        { text: '--private', type: 'option', description: '设置 private=true', priority: 90 },
+    ],
+};
+
+const yarnWhy: CommandDefinition = {
+    name: 'why',
+    description: '查看依赖原因',
+    options: [
+        { text: '--recursive', type: 'option', description: '递归分析', priority: 80 },
+    ],
+};
+
+const yarnCache: CommandDefinition = {
+    name: 'cache',
+    description: '管理缓存',
+    options: [
+        { text: 'clean', type: 'subcommand', description: '清理缓存', priority: 100, usage: 'yarn cache clean' },
+        { text: 'dir', type: 'subcommand', description: '显示缓存目录', priority: 80, usage: 'yarn cache dir' },
+        { text: 'list', type: 'subcommand', description: '列出缓存条目', priority: 75, usage: 'yarn cache list' },
+    ],
+    subcommands: {
+        clean: { name: 'clean', description: '清理缓存', options: [] },
+        dir: { name: 'dir', description: '显示缓存目录', options: [] },
+        list: { name: 'list', description: '列出缓存条目', options: [] },
+    },
+};
+
 const yarnCommand: CommandDefinition = {
     name: 'yarn',
     description: 'Yarn 包管理器',
@@ -108,6 +141,9 @@ const yarnCommand: CommandDefinition = {
         'add': yarnAdd,
         'remove': yarnRemove,
         'run': yarnRun,
+        'init': yarnInit,
+        'why': yarnWhy,
+        'cache': yarnCache,
     },
     generate: async (ctx: CompletionContext): Promise<CompletionItem[]> => {
         // yarn <script> 形式运行 scripts
@@ -120,4 +156,3 @@ const yarnCommand: CommandDefinition = {
 };
 
 export default yarnCommand;
-

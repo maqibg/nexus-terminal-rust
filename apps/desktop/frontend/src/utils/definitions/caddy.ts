@@ -76,7 +76,49 @@ const caddyCommand: CommandDefinition = {
                 { text: '--browse', type: 'option', description: '启用目录浏览', priority: 90 },
                 { text: '--templates', type: 'option', description: '启用模板', priority: 85 }
             ]
-        }
+        },
+        'stop': {
+            name: 'stop',
+            description: '停止服务器',
+            options: [],
+        },
+        'adapt': {
+            name: 'adapt',
+            description: '转换配置格式',
+            options: [
+                { text: '--config', type: 'option', description: '指定配置文件', priority: 100, usage: '--config Caddyfile' },
+                { text: '--adapter', type: 'option', description: '配置适配器', priority: 95, usage: '--adapter caddyfile' },
+                { text: '--pretty', type: 'option', description: '美化输出', priority: 85 },
+                { text: '--validate', type: 'option', description: '校验配置', priority: 80 },
+            ],
+        },
+        'environ': {
+            name: 'environ',
+            description: '打印环境变量',
+            options: [],
+        },
+        'fmt': {
+            name: 'fmt',
+            description: '格式化 Caddyfile',
+            options: [
+                { text: '--overwrite', type: 'option', description: '覆盖原文件', priority: 95 },
+                { text: '--diff', type: 'option', description: '显示差异', priority: 80 },
+            ],
+        },
+        'list-modules': {
+            name: 'list-modules',
+            description: '列出模块',
+            options: [
+                { text: '--packages', type: 'option', description: '按包分组', priority: 80 },
+            ],
+        },
+        'version': {
+            name: 'version',
+            description: '显示版本',
+            options: [
+                { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
+            ],
+        },
     }
 };
 

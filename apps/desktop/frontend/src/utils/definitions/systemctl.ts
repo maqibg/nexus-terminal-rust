@@ -79,6 +79,26 @@ const systemctlDisable: CommandDefinition = {
     generate: getSystemServices
 };
 
+const systemctlDaemonReload: CommandDefinition = {
+    name: 'daemon-reload',
+    description: '重载 daemon',
+    options: [
+        { text: '--user', type: 'option', description: '用户模式', priority: 70 },
+        { text: '--system', type: 'option', description: '系统模式', priority: 70 },
+    ],
+};
+
+const systemctlListUnits: CommandDefinition = {
+    name: 'list-units',
+    description: '列出 units',
+    options: [
+        { text: '--type=service', type: 'option', description: '仅 service', priority: 90 },
+        { text: '--all', type: 'option', description: '包含未加载', priority: 85 },
+        { text: '--state', type: 'option', description: '按状态过滤', priority: 80, usage: '--state running' },
+        { text: '--no-pager', type: 'option', description: '不分页', priority: 70 },
+    ],
+};
+
 /**
  * systemctl 命令 - 系统服务管理
  */
@@ -106,6 +126,8 @@ const systemctlCommand: CommandDefinition = {
         'status': systemctlStatus,
         'enable': systemctlEnable,
         'disable': systemctlDisable,
+        'list-units': systemctlListUnits,
+        'daemon-reload': systemctlDaemonReload,
         'is-active': systemctlStatus,
         'is-enabled': systemctlStatus
     }

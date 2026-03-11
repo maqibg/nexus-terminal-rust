@@ -43,6 +43,30 @@ async function getInterfaces(ctx: CompletionContext): Promise<CompletionItem[]> 
     return value;
 }
 
+const ipAddr: CommandDefinition = {
+    name: 'addr',
+    description: '地址',
+    options: [],
+};
+
+const ipLink: CommandDefinition = {
+    name: 'link',
+    description: '链路',
+    options: [],
+};
+
+const ipRoute: CommandDefinition = {
+    name: 'route',
+    description: '路由',
+    options: [],
+};
+
+const ipNeigh: CommandDefinition = {
+    name: 'neigh',
+    description: '邻居',
+    options: [],
+};
+
 const ipCommand: CommandDefinition = {
     name: 'ip',
     description: '网络配置工具',
@@ -63,6 +87,16 @@ const ipCommand: CommandDefinition = {
         { text: 'n', type: 'subcommand', description: 'neigh (简写)', priority: 80 },
         { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
     ],
+    subcommands: {
+        addr: ipAddr,
+        a: ipAddr,
+        link: ipLink,
+        l: ipLink,
+        route: ipRoute,
+        r: ipRoute,
+        neigh: ipNeigh,
+        n: ipNeigh,
+    },
     generate: async (ctx: CompletionContext): Promise<CompletionItem[]> => {
         const prev = ctx.args[ctx.currentArgIndex - 1] ?? '';
         if (prev === 'dev') {
@@ -81,4 +115,3 @@ const ipCommand: CommandDefinition = {
 };
 
 export default ipCommand;
-

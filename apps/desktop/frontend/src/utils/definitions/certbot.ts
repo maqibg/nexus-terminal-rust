@@ -24,7 +24,15 @@ const certbotCommand: CommandDefinition = {
         { text: '--email', type: 'option', description: '邮箱地址', priority: 35, usage: '--email admin@example.com' },
         { text: '--agree-tos', type: 'option', description: '同意服务条款', priority: 30 },
         { text: '-n', type: 'option', description: '非交互模式', priority: 25 }
-    ]
+    ],
+    subcommands: {
+        certonly: { name: 'certonly', description: '仅获取证书', options: [] },
+        install: { name: 'install', description: '安装证书', options: [] },
+        renew: { name: 'renew', description: '续期证书', options: [] },
+        certificates: { name: 'certificates', description: '列出证书', options: [] },
+        delete: { name: 'delete', description: '删除证书', options: [] },
+        revoke: { name: 'revoke', description: '吊销证书', options: [] },
+    },
 };
 
 export default certbotCommand;

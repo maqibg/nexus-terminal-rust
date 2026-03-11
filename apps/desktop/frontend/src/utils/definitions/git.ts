@@ -38,6 +38,37 @@ const gitCommit: CommandDefinition = {
     ]
 };
 
+// git status 子命令
+const gitStatus: CommandDefinition = {
+    name: 'status',
+    description: '查看状态',
+    options: [
+        { text: '-s', type: 'option', description: '短格式', priority: 95 },
+        { text: '--short', type: 'option', description: '短格式', priority: 95 },
+        { text: '-b', type: 'option', description: '显示分支信息', priority: 90 },
+        { text: '--branch', type: 'option', description: '显示分支信息', priority: 90 },
+        { text: '--porcelain', type: 'option', description: '机器可读输出', priority: 85 },
+        { text: '--ignored', type: 'option', description: '显示忽略文件', priority: 80 },
+        { text: '-uno', type: 'option', description: '不显示未跟踪文件', priority: 75 },
+    ],
+};
+
+// git clone 子命令
+const gitClone: CommandDefinition = {
+    name: 'clone',
+    description: '克隆仓库',
+    options: [
+        { text: '--depth', type: 'option', description: '浅克隆深度', priority: 95, usage: '--depth 1' },
+        { text: '-b', type: 'option', description: '指定分支', priority: 90, usage: '-b main' },
+        { text: '--branch', type: 'option', description: '指定分支', priority: 90 },
+        { text: '--single-branch', type: 'option', description: '仅克隆单分支', priority: 85 },
+        { text: '--recursive', type: 'option', description: '递归子模块', priority: 80 },
+        { text: '--recurse-submodules', type: 'option', description: '递归子模块', priority: 80 },
+        { text: '--shallow-submodules', type: 'option', description: '浅克隆子模块', priority: 70 },
+        { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
+    ]
+};
+
 // git push 子命令
 const gitPush: CommandDefinition = {
     name: 'push',
@@ -61,6 +92,31 @@ const gitPush: CommandDefinition = {
     }
 };
 
+// git fetch 子命令
+const gitFetch: CommandDefinition = {
+    name: 'fetch',
+    description: '获取远程更新',
+    options: [
+        { text: '--all', type: 'option', description: '获取所有远程', priority: 95 },
+        { text: '--prune', type: 'option', description: '清理已删除远程分支', priority: 90 },
+        { text: '--tags', type: 'option', description: '获取 tags', priority: 85 },
+        { text: '--dry-run', type: 'option', description: '演练模式', priority: 80 },
+        { text: '--force', type: 'option', description: '强制更新', priority: 75 },
+        { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
+    ],
+    generate: async (ctx: CompletionContext): Promise<CompletionItem[]> => {
+        if (ctx.currentArg.startsWith('-')) return [];
+        const argIndex = ctx.currentArgIndex;
+        if (argIndex === 2) {
+            return getGitRemotes(ctx.sessionId!, ctx.electronAPI);
+        }
+        if (argIndex >= 3) {
+            return getGitBranches(ctx.sessionId!, ctx.electronAPI);
+        }
+        return [];
+    },
+};
+
 // git pull 子命令
 const gitPull: CommandDefinition = {
     name: 'pull',
@@ -77,6 +133,42 @@ const gitPull: CommandDefinition = {
         }
         return [];
     }
+};
+
+// git reset 子命令
+const gitReset: CommandDefinition = {
+    name: 'reset',
+    description: '重置工作区/暂存区',
+    options: [
+        { text: '--soft', type: 'option', description: '保留暂存区与工作区', priority: 95 },
+        { text: '--mixed', type: 'option', description: '仅重置暂存区（默认）', priority: 90 },
+        { text: '--hard', type: 'option', description: '重置暂存区与工作区', priority: 85 },
+        { text: '--keep', type: 'option', description: '保留本地修改（尽量）', priority: 80 },
+        { text: '--merge', type: 'option', description: '保留合并相关修改', priority: 75 },
+        { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
+    ],
+    generate: async (ctx: CompletionContext): Promise<CompletionItem[]> => {
+        if (ctx.currentArg.startsWith('-')) return [];
+        return getGitBranches(ctx.sessionId!, ctx.electronAPI);
+    },
+};
+
+// git rebase 子命令
+const gitRebase: CommandDefinition = {
+    name: 'rebase',
+    description: '变基',
+    options: [
+        { text: '-i', type: 'option', description: '交互式变基', priority: 95 },
+        { text: '--continue', type: 'option', description: '继续', priority: 90 },
+        { text: '--abort', type: 'option', description: '中止', priority: 85 },
+        { text: '--skip', type: 'option', description: '跳过当前提交', priority: 80 },
+        { text: '--onto', type: 'option', description: '指定 newbase', priority: 75, usage: '--onto main' },
+        { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
+    ],
+    generate: async (ctx: CompletionContext): Promise<CompletionItem[]> => {
+        if (ctx.currentArg.startsWith('-')) return [];
+        return getGitBranches(ctx.sessionId!, ctx.electronAPI);
+    },
 };
 
 // git checkout 子命令
@@ -198,7 +290,9 @@ const gitCommand: CommandDefinition = {
         { text: 'fetch', type: 'subcommand', description: '获取更新', priority: 60, usage: 'git fetch origin' }
     ],
     subcommands: {
+        'status': gitStatus,
         'add': gitAdd,
+        'clone': gitClone,
         'commit': gitCommit,
         'push': gitPush,
         'pull': gitPull,
@@ -207,7 +301,10 @@ const gitCommand: CommandDefinition = {
         'merge': gitMerge,
         'stash': gitStash,
         'log': gitLog,
-        'diff': gitDiff
+        'diff': gitDiff,
+        'fetch': gitFetch,
+        'reset': gitReset,
+        'rebase': gitRebase,
     }
 };
 

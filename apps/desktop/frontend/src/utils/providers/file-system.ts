@@ -167,6 +167,58 @@ export async function getDockerImages(
 }
 
 /**
+ * 获取 Docker 网络列表
+ */
+export async function getDockerNetworks(
+    sessionId: string,
+    electronAPI: any
+): Promise<CompletionItem[]> {
+    if (!sessionId || !electronAPI) return [];
+
+    const cmd = `docker network ls --format "{{.Name}}" 2>/dev/null`;
+    const output = await executeRemote(sessionId, cmd, electronAPI, 5000);
+    if (!output) return [];
+
+    return output.split('\n')
+        .map(line => line.trim())
+        .filter(name => name && name !== 'NAME')
+        .slice(0, 60)
+        .map(name => ({
+            text: name,
+            displayText: name,
+            type: 'hint' as const,
+            description: 'Docker network',
+            priority: 85,
+        }));
+}
+
+/**
+ * 获取 Docker 卷列表
+ */
+export async function getDockerVolumes(
+    sessionId: string,
+    electronAPI: any
+): Promise<CompletionItem[]> {
+    if (!sessionId || !electronAPI) return [];
+
+    const cmd = `docker volume ls --format "{{.Name}}" 2>/dev/null`;
+    const output = await executeRemote(sessionId, cmd, electronAPI, 5000);
+    if (!output) return [];
+
+    return output.split('\n')
+        .map(line => line.trim())
+        .filter(name => name && name !== 'NAME')
+        .slice(0, 60)
+        .map(name => ({
+            text: name,
+            displayText: name,
+            type: 'hint' as const,
+            description: 'Docker volume',
+            priority: 85,
+        }));
+}
+
+/**
  * 获取 PM2 进程列表
  */
 export async function getPM2Processes(

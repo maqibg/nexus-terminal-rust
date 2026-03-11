@@ -20,6 +20,13 @@ const pacmanCommand: CommandDefinition = {
         { text: '--overwrite', type: 'option', description: '覆盖文件', priority: 65, usage: '--overwrite "*"' },
         { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
     ],
+    subcommands: {
+        '-S': { name: '-S', description: '安装包', options: [] },
+        '-R': { name: '-R', description: '删除包', options: [] },
+        '-Q': { name: '-Q', description: '查询已安装包', options: [] },
+        '-Ss': { name: '-Ss', description: '搜索包', options: [] },
+        '-Syu': { name: '-Syu', description: '更新系统', options: [] },
+    },
     generate: async (ctx: CompletionContext): Promise<CompletionItem[]> => {
         const prev = ctx.args[ctx.currentArgIndex - 1] ?? '';
         if (prev === '-U') {
@@ -30,4 +37,3 @@ const pacmanCommand: CommandDefinition = {
 };
 
 export default pacmanCommand;
-

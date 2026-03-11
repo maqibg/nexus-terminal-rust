@@ -95,6 +95,24 @@ const pm2Startup: CommandDefinition = {
     ]
 };
 
+const pm2List: CommandDefinition = {
+    name: 'list',
+    description: '列出所有进程',
+    options: [],
+};
+
+const pm2Resurrect: CommandDefinition = {
+    name: 'resurrect',
+    description: '恢复进程',
+    options: [],
+};
+
+const pm2Update: CommandDefinition = {
+    name: 'update',
+    description: '更新 PM2',
+    options: [],
+};
+
 // 主 pm2 命令
 const pm2Command: CommandDefinition = {
     name: 'pm2',
@@ -115,6 +133,7 @@ const pm2Command: CommandDefinition = {
         { text: 'update', type: 'subcommand', description: '更新 PM2', priority: 60, usage: 'pm2 update' }
     ],
     subcommands: {
+        'list': pm2List,
         'start': pm2Start,
         'stop': createProcessSelector('stop', '停止进程'),
         'restart': createProcessSelector('restart', '重启进程'),
@@ -123,7 +142,10 @@ const pm2Command: CommandDefinition = {
         'logs': pm2Logs,
         'monit': pm2Monit,
         'save': pm2Save,
-        'startup': pm2Startup
+        'resurrect': pm2Resurrect,
+        'startup': pm2Startup,
+        'flush': createProcessSelector('flush', '清空日志'),
+        'update': pm2Update,
     }
 };
 

@@ -41,6 +41,84 @@ const pipUninstall: CommandDefinition = {
     ],
 };
 
+const pipList: CommandDefinition = {
+    name: 'list',
+    description: '列出已安装包',
+    options: [
+        { text: '--outdated', type: 'option', description: '仅显示过期包', priority: 90 },
+        { text: '--format', type: 'option', description: '输出格式', priority: 80, usage: '--format json' },
+        { text: '--user', type: 'option', description: '仅用户安装', priority: 70 },
+        { text: '--local', type: 'option', description: '仅本地包', priority: 65 },
+    ],
+};
+
+const pipShow: CommandDefinition = {
+    name: 'show',
+    description: '显示包信息',
+    options: [
+        { text: '-f', type: 'option', description: '显示文件列表', priority: 80 },
+        { text: '--files', type: 'option', description: '显示文件列表', priority: 80 },
+        { text: '-v', type: 'option', description: '详细输出', priority: 70 },
+        { text: '--verbose', type: 'option', description: '详细输出', priority: 70 },
+    ],
+};
+
+const pipFreeze: CommandDefinition = {
+    name: 'freeze',
+    description: '导出依赖',
+    options: [
+        { text: '--all', type: 'option', description: '包含 pip/setuptools/wheel', priority: 80 },
+        { text: '--local', type: 'option', description: '仅本地包', priority: 70 },
+        { text: '--user', type: 'option', description: '仅用户安装', priority: 65 },
+    ],
+};
+
+const pipCheck: CommandDefinition = {
+    name: 'check',
+    description: '检查依赖冲突',
+    options: [],
+};
+
+const pipDownload: CommandDefinition = {
+    name: 'download',
+    description: '下载包',
+    options: [
+        { text: '-d', type: 'option', description: '下载目录', priority: 90, usage: '-d ./dist' },
+        { text: '--dest', type: 'option', description: '下载目录', priority: 90 },
+        { text: '-r', type: 'option', description: 'requirements 文件', priority: 85, usage: '-r requirements.txt' },
+        { text: '--requirement', type: 'option', description: 'requirements 文件', priority: 85 },
+        { text: '--no-deps', type: 'option', description: '不下载依赖', priority: 75 },
+        { text: '--platform', type: 'option', description: '指定平台', priority: 60 },
+        { text: '--python-version', type: 'option', description: '指定 Python 版本', priority: 60, usage: '--python-version 3.12' },
+    ],
+    generate: async (ctx: CompletionContext): Promise<CompletionItem[]> => {
+        const prev = ctx.args[ctx.currentArgIndex - 1] ?? '';
+        if (prev === '-r' || prev === '--requirement') {
+            return getRemoteFiles(ctx.sessionId!, ctx.currentArg || './', ctx.electronAPI);
+        }
+        return [];
+    },
+};
+
+const pipCache: CommandDefinition = {
+    name: 'cache',
+    description: '缓存管理',
+    options: [
+        { text: 'dir', type: 'subcommand', description: '缓存目录', priority: 95, usage: 'pip cache dir' },
+        { text: 'info', type: 'subcommand', description: '缓存信息', priority: 90, usage: 'pip cache info' },
+        { text: 'list', type: 'subcommand', description: '列出缓存', priority: 85, usage: 'pip cache list' },
+        { text: 'remove', type: 'subcommand', description: '删除缓存', priority: 80, usage: 'pip cache remove pkg' },
+        { text: 'purge', type: 'subcommand', description: '清空缓存', priority: 75, usage: 'pip cache purge' },
+    ],
+    subcommands: {
+        dir: { name: 'dir', description: '缓存目录', options: [] },
+        info: { name: 'info', description: '缓存信息', options: [] },
+        list: { name: 'list', description: '列出缓存', options: [] },
+        remove: { name: 'remove', description: '删除缓存', options: [] },
+        purge: { name: 'purge', description: '清空缓存', options: [] },
+    },
+};
+
 const pipCommand: CommandDefinition = {
     name: 'pip',
     description: 'Python 包管理器',
@@ -59,8 +137,13 @@ const pipCommand: CommandDefinition = {
     subcommands: {
         install: pipInstall,
         uninstall: pipUninstall,
+        list: pipList,
+        show: pipShow,
+        freeze: pipFreeze,
+        check: pipCheck,
+        download: pipDownload,
+        cache: pipCache,
     },
 };
 
 export default pipCommand;
-

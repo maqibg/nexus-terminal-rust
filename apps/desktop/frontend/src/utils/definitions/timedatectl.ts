@@ -55,6 +55,13 @@ const timedatectlCommand: CommandDefinition = {
         { text: '--no-pager', type: 'option', description: '不分页', priority: 70 },
         { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
     ],
+    subcommands: {
+        status: { name: 'status', description: '查看状态', options: [] },
+        'set-time': { name: 'set-time', description: '设置时间', options: [] },
+        'set-timezone': { name: 'set-timezone', description: '设置时区', options: [] },
+        'list-timezones': { name: 'list-timezones', description: '列出时区', options: [] },
+        'set-ntp': { name: 'set-ntp', description: '设置 NTP', options: [] },
+    },
     generate: async (ctx: CompletionContext): Promise<CompletionItem[]> => {
         const sub = ctx.args[1] ?? '';
         if (sub === 'set-timezone' && ctx.currentArgIndex >= 2) {
@@ -75,4 +82,3 @@ const timedatectlCommand: CommandDefinition = {
 };
 
 export default timedatectlCommand;
-

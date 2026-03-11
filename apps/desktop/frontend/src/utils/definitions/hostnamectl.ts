@@ -15,7 +15,10 @@ const hostnamectlCommand: CommandDefinition = {
         { text: '--pretty', type: 'option', description: '美化主机名', priority: 70 },
         { text: '--help', type: 'option', description: '显示帮助', priority: 50 },
     ],
+    subcommands: {
+        status: { name: 'status', description: '查看状态', options: [] },
+        'set-hostname': { name: 'set-hostname', description: '设置主机名', options: [] },
+    },
 };
 
 export default hostnamectlCommand;
-

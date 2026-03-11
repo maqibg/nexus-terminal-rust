@@ -115,6 +115,17 @@ const kubectlCommand: CommandDefinition = {
         { text: 'config', type: 'subcommand', description: '配置', priority: 78 },
         { text: 'version', type: 'subcommand', description: '版本', priority: 70 },
     ],
+    subcommands: {
+        get: { name: 'get', description: '获取资源', options: [] },
+        describe: { name: 'describe', description: '查看详情', options: [] },
+        logs: { name: 'logs', description: '查看日志', options: [] },
+        exec: { name: 'exec', description: '进入容器执行命令', options: [] },
+        apply: { name: 'apply', description: '应用配置', options: [] },
+        delete: { name: 'delete', description: '删除资源', options: [] },
+        edit: { name: 'edit', description: '编辑资源', options: [] },
+        config: { name: 'config', description: '配置', options: [] },
+        version: { name: 'version', description: '版本', options: [] },
+    },
     generate: async (ctx: CompletionContext): Promise<CompletionItem[]> => {
         if (!ctx.sessionId || !ctx.electronAPI) return [];
 
@@ -149,4 +160,3 @@ const kubectlCommand: CommandDefinition = {
 };
 
 export default kubectlCommand;
-
