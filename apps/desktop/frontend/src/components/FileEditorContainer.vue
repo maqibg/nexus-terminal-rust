@@ -44,23 +44,29 @@
       <div v-if="activeFile?.isLoading" class="editor-loading">文件加载中...</div>
       <div v-else-if="activeFile?.loadingError" class="editor-error">{{ activeFile.loadingError }}</div>
 
-      <MonacoEditor
-        v-else-if="activeFile"
-        ref="monacoEditorRef"
-        :key="activeFile.id"
-        :model-value="activeFile.content"
-        :language="activeFile.language"
-        :font-family="editorFontFamily"
-        :font-size="editorFontSize"
-        theme="vs-dark"
-        class="editor-instance"
-        :initial-scroll-top="activeFile.scrollTop ?? 0"
-        :initial-scroll-left="activeFile.scrollLeft ?? 0"
-        @update:modelValue="onContentChange"
-        @request-save="save"
-        @update:scrollPosition="handleEditorScroll"
-        @update:fontSize="handleEditorFontSizeUpdate"
-      />
+      <Suspense v-else-if="activeFile">
+        <template #default>
+          <MonacoEditor
+            ref="monacoEditorRef"
+            :key="activeFile.id"
+            :model-value="activeFile.content"
+            :language="activeFile.language"
+            :font-family="editorFontFamily"
+            :font-size="editorFontSize"
+            theme="vs-dark"
+            class="editor-instance"
+            :initial-scroll-top="activeFile.scrollTop ?? 0"
+            :initial-scroll-left="activeFile.scrollLeft ?? 0"
+            @update:modelValue="onContentChange"
+            @request-save="save"
+            @update:scrollPosition="handleEditorScroll"
+            @update:fontSize="handleEditorFontSizeUpdate"
+          />
+        </template>
+        <template #fallback>
+          <div class="editor-loading">编辑器加载中...</div>
+        </template>
+      </Suspense>
 
       <div v-else class="editor-placeholder">请从文件管理器中选择文件以开始编辑</div>
     </div>
@@ -68,12 +74,9 @@
 </template>
 
 <script setup lang="ts">
-import { Buffer } from 'buffer';
-import * as iconv from '@vscode/iconv-lite-umd';
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { sftpApi } from '@/lib/api';
-import MonacoEditor from './MonacoEditor.vue';
 import FileEditorTabs from './FileEditorTabs.vue';
 import AppSelect from './AppSelect.vue';
 import { useAppearanceStore } from '@/stores/appearance';
@@ -81,6 +84,8 @@ import { useFileEditorStore } from '@/stores/fileEditor';
 import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 import { useSessionStore } from '@/stores/session';
 import { useUINotificationStore } from '@/stores/uiNotifications';
+
+const MonacoEditor = defineAsyncComponent(() => import('./MonacoEditor.vue'));
 
 const store = useFileEditorStore();
 const notify = useUINotificationStore();
@@ -94,6 +99,23 @@ const encodingSelectWidth = ref('90px');
 
 let unregisterFocusAction: (() => void) | null = null;
 let clearSaveStatusTimer: number | null = null;
+let encodingChangeToken = 0;
+
+type BufferModule = typeof import('buffer');
+type IconvModule = typeof import('@vscode/iconv-lite-umd');
+
+let bufferModulePromise: Promise<BufferModule> | null = null;
+let iconvModulePromise: Promise<IconvModule> | null = null;
+
+function loadBufferModule(): Promise<BufferModule> {
+  bufferModulePromise ??= import('buffer');
+  return bufferModulePromise;
+}
+
+function loadIconvModule(): Promise<IconvModule> {
+  iconvModulePromise ??= import('@vscode/iconv-lite-umd');
+  return iconvModulePromise;
+}
 
 const encodingOptions = [
   { value: 'utf-8', label: 'UTF-8' },
@@ -131,7 +153,7 @@ const encodingOptions = [
 const selectedEncodingValue = computed({
   get: () => activeFile.value?.selectedEncoding || 'utf-8',
   set: (value: string | number | null | undefined) => {
-    handleEncodingChange(value);
+    void handleEncodingChange(value);
   },
 });
 
@@ -161,8 +183,9 @@ function normalizeEncoding(encoding: string): string {
   return encoding.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-function decodeBase64Content(rawContentBase64: string, encoding: string): string {
+async function decodeBase64Content(rawContentBase64: string, encoding: string): Promise<string> {
   const normalized = normalizeEncoding(encoding);
+  const { Buffer } = await loadBufferModule();
   const binary = Buffer.from(rawContentBase64, 'base64');
 
   try {
@@ -178,6 +201,7 @@ function decodeBase64Content(rawContentBase64: string, encoding: string): string
       return new TextDecoder('utf-16be').decode(binary);
     }
 
+    const iconv = await loadIconvModule();
     if (iconv.encodingExists(normalized)) {
       return iconv.decode(binary, normalized);
     }
@@ -188,10 +212,17 @@ function decodeBase64Content(rawContentBase64: string, encoding: string): string
   return new TextDecoder('utf-8').decode(binary);
 }
 
-function encodeContentToBase64(content: string, encoding: string): string {
+async function encodeContentToBase64(content: string, encoding: string): Promise<string> {
   const normalized = normalizeEncoding(encoding);
 
   try {
+    const { Buffer } = await loadBufferModule();
+
+    if (normalized === 'utf8') {
+      return Buffer.from(content, 'utf-8').toString('base64');
+    }
+
+    const iconv = await loadIconvModule();
     if (iconv.encodingExists(normalized)) {
       const encoded = iconv.encode(content, normalized);
       return Buffer.from(encoded).toString('base64');
@@ -200,6 +231,7 @@ function encodeContentToBase64(content: string, encoding: string): string {
     console.warn('[FileEditor] Encode failed with selected encoding, fallback to UTF-8.', error);
   }
 
+  const { Buffer } = await loadBufferModule();
   return Buffer.from(content, 'utf-8').toString('base64');
 }
 
@@ -262,7 +294,7 @@ async function handleEditorFontSizeUpdate(size: number) {
   }
 }
 
-function handleEncodingChange(value: string | number | null | undefined) {
+async function handleEncodingChange(value: string | number | null | undefined) {
   const file = activeFile.value;
   if (!file) {
     return;
@@ -282,8 +314,12 @@ function handleEncodingChange(value: string | number | null | undefined) {
     return;
   }
 
+  const token = (encodingChangeToken += 1);
   try {
-    const decoded = decodeBase64Content(file.rawContentBase64, nextEncoding);
+    const decoded = await decodeBase64Content(file.rawContentBase64, nextEncoding);
+    if (token !== encodingChangeToken) {
+      return;
+    }
     store.setDecodedContent(file.id, decoded, nextEncoding);
     updateEncodingSelectWidth();
   } catch (error: any) {
@@ -327,7 +363,7 @@ async function save() {
   store.setSaveStatus(file.id, 'saving');
 
   try {
-    const encoded = encodeContentToBase64(file.content, file.selectedEncoding || 'utf-8');
+    const encoded = await encodeContentToBase64(file.content, file.selectedEncoding || 'utf-8');
     await sftpApi.writeFile(file.sessionId, file.path, encoded);
     store.setRawContentBase64(file.id, encoded);
     store.markSaved(file.id);

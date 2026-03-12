@@ -49,8 +49,8 @@ struct ActiveSftpSession {
 #[derive(Debug, Clone, Serialize)]
 pub struct SshOutputChunk {
     pub seq: u64,
-    pub stream: String,
-    pub data: String,
+    pub stream: &'static str,
+    pub data: Arc<String>,
 }
 
 #[derive(Default)]
@@ -299,15 +299,15 @@ impl SshSessionManager {
     async fn append_output_chunk(
         output_backlogs: &Arc<Mutex<HashMap<String, OutputBacklogState>>>,
         session_id: &str,
-        stream: &str,
+        stream: &'static str,
         data: String,
     ) -> SshOutputChunk {
         let mut map = output_backlogs.lock().await;
         let state = map.entry(session_id.to_string()).or_default();
         let chunk = SshOutputChunk {
             seq: state.next_seq,
-            stream: stream.to_string(),
-            data,
+            stream,
+            data: Arc::new(data),
         };
         state.next_seq = state.next_seq.saturating_add(1);
         state.chunks.push_back(chunk.clone());

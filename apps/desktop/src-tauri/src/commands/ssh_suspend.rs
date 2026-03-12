@@ -1,5 +1,6 @@
 use api_contract::error::{AppError, CmdResult};
 use settings_core::repository::SettingsRepository;
+use std::sync::Arc;
 use tauri::State;
 
 use crate::state::AppState;
@@ -106,8 +107,8 @@ pub async fn ssh_resume(
 
         let chunk = ssh_core::manager::SshOutputChunk {
             seq: 0,
-            stream: "stdout".to_string(),
-            data: B64.encode(buffered),
+            stream: "stdout",
+            data: Arc::new(B64.encode(buffered)),
         };
         app_handle
             .emit(&format!("ssh:output:{session_id}"), &chunk)

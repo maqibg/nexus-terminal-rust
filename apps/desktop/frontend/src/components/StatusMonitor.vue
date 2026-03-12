@@ -1,6 +1,17 @@
 <template>
   <div class="status-monitor" :class="{ 'status-monitor-empty': !activeSessionId }">
-    <h4 v-if="activeSessionId" class="panel-title">服务器状态</h4>
+    <div v-if="activeSessionId" class="panel-title-row">
+      <h4 class="panel-title">服务器状态</h4>
+      <button
+        v-if="currentStatus"
+        class="panel-title-action"
+        type="button"
+        :title="chartsEnabled ? '隐藏图表' : '显示图表'"
+        @click="toggleCharts"
+      >
+        <i class="fas fa-chart-line"></i>
+      </button>
+    </div>
 
     <div v-if="!activeSessionId" class="placeholder-state">
       <i class="fas fa-plug"></i>
@@ -121,28 +132,38 @@
         </div>
       </div>
 
-      <StatusCharts
-        v-if="activeSessionId && currentStatus"
-        :cpu-history="cpuHistory"
-        :net-rx-history="netRxHistory"
-        :net-tx-history="netTxHistory"
-        :current-cpu-percent="cpuPercent"
-        :current-net-rx-rate="currentStatus.netRxRate ?? 0"
-        :current-net-tx-rate="currentStatus.netTxRate ?? 0"
-      />
+      <Suspense v-if="chartsEnabled && activeSessionId && currentStatus">
+        <template #default>
+          <StatusCharts
+            :cpu-history="cpuHistory"
+            :net-rx-history="netRxHistory"
+            :net-tx-history="netTxHistory"
+            :current-cpu-percent="cpuPercent"
+            :current-net-rx-rate="currentStatus.netRxRate ?? 0"
+            :current-net-tx-rate="currentStatus.netTxRate ?? 0"
+          />
+        </template>
+        <template #fallback>
+          <div class="placeholder-state">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>图表加载中...</span>
+          </div>
+        </template>
+      </Suspense>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 
-import StatusCharts from '@/components/StatusCharts.vue';
 import { useStatusMonitor } from '@/composables/useStatusMonitor';
 import { useSessionStore } from '@/stores/session';
 import { useUINotificationStore } from '@/stores/uiNotifications';
 import { useSettingsStore } from '@/stores/settings';
+
+const StatusCharts = defineAsyncComponent(() => import('@/components/StatusCharts.vue'));
 
 const sessionStore = useSessionStore();
 const uiNotificationStore = useUINotificationStore();
@@ -159,6 +180,18 @@ const {
 } = useStatusMonitor();
 
 void settingsStore.loadAll().catch(() => undefined);
+
+const chartsEnabled = computed(() => settingsStore.getBoolean('statusMonitorShowCharts', true));
+
+async function toggleCharts(): Promise<void> {
+  const nextValue = chartsEnabled.value ? 'false' : 'true';
+  try {
+    await settingsStore.set('statusMonitorShowCharts', nextValue);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    uiNotificationStore.addNotification('error', `更新图表开关失败：${message}`);
+  }
+}
 
 const cachedCpuModel = ref<string>('');
 const cachedOsName = ref<string>('');
@@ -315,6 +348,34 @@ async function copyIpToClipboard() {
   font-size: calc(16px + var(--ui-font-size-offset));
   font-weight: 600;
   letter-spacing: 0.2px;
+}
+
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.panel-title-action {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim, #6c7086);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.panel-title-action:hover {
+  color: var(--text, #cdd6f4);
+  background: color-mix(in srgb, var(--bg-surface0, #313244) 70%, transparent);
 }
 
 .placeholder-state {

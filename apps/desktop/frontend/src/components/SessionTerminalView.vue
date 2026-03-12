@@ -4,7 +4,16 @@
       <span class="placeholder-text">无活动会话</span>
     </div>
     <div v-else-if="isVncSession" class="terminal-container terminal-container-vnc">
-      <VncSessionView :session-id="currentSessionId" />
+      <Suspense>
+        <template #default>
+          <VncSessionView :session-id="currentSessionId" />
+        </template>
+        <template #fallback>
+          <div class="terminal-placeholder">
+            <span class="placeholder-text">VNC 视图加载中...</span>
+          </div>
+        </template>
+      </Suspense>
     </div>
     <div v-else class="terminal-container" :style="terminalContainerStyle">
       <iframe
@@ -91,7 +100,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -100,7 +109,6 @@ import '@xterm/xterm/css/xterm.css';
 import { storeToRefs } from 'pinia';
 import { onSshOutput, sshApi } from '@/lib/api';
 import type { SshOutputChunk } from '@/lib/api';
-import VncSessionView from '@/components/VncSessionView.vue';
 import CommandAutocomplete from '@/components/CommandAutocomplete.vue';
 import { getInlineSuggestion, shouldShowInlineSuggestion, type InlineSuggestion } from '@/utils/inline-suggest';
 import { useSessionStore } from '@/stores/session';
@@ -108,6 +116,8 @@ import { useAIStore } from '@/stores/ai';
 import { useAppearanceStore } from '@/stores/appearance';
 import { useSettingsStore } from '@/stores/settings';
 import { useUiNotificationsStore } from '@/stores/uiNotifications';
+
+const VncSessionView = defineAsyncComponent(() => import('@/components/VncSessionView.vue'));
 
 const props = defineProps<{
   sessionId: string;
@@ -620,6 +630,31 @@ function shouldUseTransparentTerminalBackground(): boolean {
   return getTerminalBackgroundImageUrl() !== '' || terminalCustomHTML.value.trim() !== '';
 }
 
+function isTransparentColor(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  if (normalized === 'transparent') {
+    return true;
+  }
+
+  if (normalized.startsWith('rgba(') || normalized.startsWith('hsla(')) {
+    return true;
+  }
+
+  if (/^#[0-9a-f]{8}$/i.test(normalized)) {
+    return normalized.slice(-2) !== 'ff';
+  }
+
+  if (/^#[0-9a-f]{4}$/i.test(normalized)) {
+    return normalized.slice(-1) !== 'f';
+  }
+
+  return false;
+}
+
 const terminalBackgroundSrcdoc = computed(() => {
   const html = terminalCustomHTML.value.trim();
   if (!html) {
@@ -1003,17 +1038,18 @@ function initTerminal(sid: string): void {
   resetAutocompleteState();
 
   const activeTheme = effectiveTerminalTheme.value;
+  const terminalBackground = shouldUseTransparentTerminalBackground()
+    ? '#00000000'
+    : (activeTheme.background ?? '#1e1e2e');
   term = new Terminal({
     cursorBlink: true,
     scrollback: getTerminalScrollbackLimit(),
     fontSize: getTerminalFontSize(),
     fontFamily: getTerminalFontFamily(),
-    allowTransparency: true,
+    allowTransparency: isTransparentColor(terminalBackground),
     theme: {
       ...activeTheme,
-      background: shouldUseTransparentTerminalBackground()
-        ? '#00000000'
-        : (activeTheme.background ?? '#1e1e2e'),
+      background: terminalBackground,
     },
   });
 
@@ -1076,8 +1112,8 @@ function initTerminal(sid: string): void {
       return sshApi.takeOutputBacklog(sid).catch(() => [] as SshOutputChunk[]);
     })
     .then((chunks) => {
-      const ordered = chunks.slice().sort((a, b) => a.seq - b.seq);
-      for (const chunk of ordered) {
+      chunks.sort((a, b) => a.seq - b.seq);
+      for (const chunk of chunks) {
         if (!shouldConsumeChunk(chunk)) {
           continue;
         }
