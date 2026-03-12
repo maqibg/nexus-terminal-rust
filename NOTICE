@@ -1,19 +1,32 @@
 Nexus Terminal Desktop
 Copyright (C) 2025 nexus-terminal-rust contributors
 
-This product is based on and derived from nexus-terminal:
+This product is a desktop rewrite derived from nexus-terminal:
 
   nexus-terminal — Web SSH / RDP / VNC Client
   Copyright (C) Heavrnl
   Licensed under the GNU General Public License v3.0
   https://github.com/Heavrnl/nexus-terminal
 
-This project incorporates design concepts and features from Mshell:
+  Derived components:
+  - Frontend architecture and terminal UI design
+  - SSH session management and SFTP functionality
+  - Connection lifecycle and authentication flow
+
+This project draws design inspiration from Mshell:
 
   Mshell — Windows SSH Client
   Copyright (C) MShell Team
   Licensed under the MIT License
   https://github.com/inspoaibox/Mshell
+
+  Inspired features (independently implemented):
+  - AI assistant integration concept
+  - Port forwarding workflow design
+  - Task scheduling interface patterns
+
+  Note: No source code from Mshell was copied or incorporated.
+  All AI and advanced features are original implementations.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

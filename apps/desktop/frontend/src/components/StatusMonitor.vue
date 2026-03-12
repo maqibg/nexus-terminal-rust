@@ -18,6 +18,11 @@
       <span>无活动连接</span>
     </div>
 
+    <div v-else-if="!statusMonitorEnabled" class="placeholder-state">
+      <i class="fas fa-ban"></i>
+      <span>状态监控已关闭</span>
+    </div>
+
     <div v-else-if="statusError" class="placeholder-state error-state">
       <i class="fas fa-exclamation-triangle"></i>
       <span>{{ statusError }}</span>
@@ -116,6 +121,17 @@
             <span class="metric-detail">{{ diskDisplay }}</span>
           </div>
         </div>
+
+        <details v-if="diskItems.length > 1" class="disk-details">
+          <summary class="disk-summary">所有磁盘 ({{ diskItems.length }})</summary>
+          <div class="disk-list">
+            <div v-for="disk in diskItems" :key="disk.name" class="disk-list-item">
+              <span class="disk-name" :title="disk.name">{{ disk.name }}</span>
+              <span class="disk-size">{{ formatDiskSize(disk.usedKb) }} / {{ formatDiskSize(disk.totalKb) }}</span>
+              <span class="disk-percent">{{ formatPercent(normalizePercent(disk.percent)) }}</span>
+            </div>
+          </div>
+        </details>
       </div>
 
       <div class="network-row">
@@ -181,6 +197,7 @@ const {
 
 void settingsStore.loadAll().catch(() => undefined);
 
+const statusMonitorEnabled = computed(() => settingsStore.getBoolean('statusMonitorEnabled', true));
 const chartsEnabled = computed(() => settingsStore.getBoolean('statusMonitorShowCharts', true));
 
 async function toggleCharts(): Promise<void> {
@@ -244,6 +261,8 @@ const diskDisplay = computed(() => {
   }
   return `${formatDiskSize(used)} / ${formatDiskSize(total)}`;
 });
+
+const diskItems = computed(() => currentStatus.value?.disks ?? []);
 
 const swapDisplay = computed(() => {
   const used = currentStatus.value?.swapUsed;
@@ -461,6 +480,55 @@ async function copyIpToClipboard() {
   grid-template-columns: 40px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
+}
+
+.disk-details {
+  margin-left: 40px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border, #45475a) 78%, transparent);
+  background: color-mix(in srgb, var(--bg-surface0, #313244) 60%, transparent);
+}
+
+.disk-summary {
+  cursor: pointer;
+  color: var(--text-sub, #a6adc8);
+  font-weight: 600;
+  font-size: calc(0.72rem + var(--ui-font-size-offset));
+}
+
+.disk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.disk-list-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  font-size: calc(0.72rem + var(--ui-font-size-offset));
+}
+
+.disk-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.disk-size {
+  color: var(--text, #cdd6f4);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.disk-percent {
+  color: var(--text-sub, #a6adc8);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .metric-main {

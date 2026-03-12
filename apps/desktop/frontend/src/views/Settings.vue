@@ -262,6 +262,17 @@
 
             <div class="settings-section-content">
               <h3 class="section-heading">状态监控设置</h3>
+              <form class="section-form" @submit.prevent="saveStatusMonitorEnabled">
+                <div class="checkbox-row">
+                  <input id="workspace-status-monitor-enabled" v-model="workspaceForm.statusMonitorEnabled" class="checkbox-input" type="checkbox">
+                  <label for="workspace-status-monitor-enabled">启用状态监控（关闭后不再采集远端状态）</label>
+                </div>
+                <small class="section-desc">关闭后将停止状态监控采集与事件推送；已连接的 SSH 会话也会立即停止采集。</small>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">保存</button>
+                  <p v-if="feedback.statusMonitorEnabled?.message" :class="['feedback-msg', feedback.statusMonitorEnabled.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.statusMonitorEnabled.message }}</p>
+                </div>
+              </form>
               <form class="section-form" @submit.prevent="saveStatusMonitorInterval">
                 <div class="form-field">
                   <label class="form-label" for="workspace-status-monitor-interval">状态刷新间隔 (秒):</label>
@@ -507,7 +518,7 @@ import { storeToRefs } from 'pinia';
 import { useRoute } from 'vue-router';
 import AppSelect from '@/components/AppSelect.vue';
 import AISettingsPanel from '@/components/AI/AISettingsPanel.vue';
-import { authApi, connectionsApi } from '@/lib/api';
+import { authApi, connectionsApi, statusApi } from '@/lib/api';
 import type { ImportResult } from '@/lib/api';
 import { useUiNotificationsStore } from '@/stores/uiNotifications';
 import {
@@ -640,6 +651,7 @@ const workspaceForm = reactive({
   fileManagerShowDeleteConfirmation: true,
   terminalEnableRightClickPaste: true,
   showStatusMonitorIpAddress: false,
+  statusMonitorEnabled: true,
   statusMonitorIntervalSeconds: 3,
   dockerStatusIntervalSeconds: 5,
   dockerDefaultExpand: false,
@@ -776,6 +788,7 @@ function hydrateFormsFromSettings() {
   workspaceForm.fileManagerShowDeleteConfirmation = toBool(map.fileManagerShowDeleteConfirmation, true);
   workspaceForm.terminalEnableRightClickPaste = toBool(map.terminalEnableRightClickPaste, true);
   workspaceForm.showStatusMonitorIpAddress = toBool(map.showStatusMonitorIpAddress, false);
+  workspaceForm.statusMonitorEnabled = toBool(map.statusMonitorEnabled, true);
   workspaceForm.statusMonitorIntervalSeconds = toInt(map.statusMonitorIntervalSeconds, 3);
   workspaceForm.dockerStatusIntervalSeconds = toInt(map.dockerStatusIntervalSeconds, 5);
   workspaceForm.dockerDefaultExpand = toBool(map.dockerDefaultExpand, false);
@@ -870,6 +883,16 @@ async function saveStatusMonitorInterval() {
     '状态监视器刷新间隔设置已保存',
     1,
   );
+}
+
+async function saveStatusMonitorEnabled() {
+  try {
+    await saveSetting('statusMonitorEnabled', workspaceForm.statusMonitorEnabled ? 'true' : 'false');
+    await statusApi.setStatusMonitorEnabled(workspaceForm.statusMonitorEnabled);
+    setFeedback('statusMonitorEnabled', '状态监控开关已保存', true);
+  } catch (error) {
+    setFeedback('statusMonitorEnabled', normalizeError(error, '保存失败'), false);
+  }
 }
 
 async function saveDockerStatusInterval() {

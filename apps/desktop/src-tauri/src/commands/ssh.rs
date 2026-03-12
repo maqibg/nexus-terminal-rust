@@ -143,24 +143,36 @@ pub async fn ssh_connect(
         .await
         .map_err(AppError::Ssh)?;
 
-    let status_monitor_interval = state
+    let status_monitor_enabled = match state
         .settings_repo
-        .get_setting("statusMonitorIntervalSeconds")
+        .get_setting("statusMonitorEnabled")
         .await
         .map_err(AppError::from)?
-        .and_then(|raw| raw.trim().parse::<u64>().ok())
-        .filter(|seconds| *seconds >= 1)
-        .map(Duration::from_secs);
+    {
+        Some(raw) => raw.trim().eq_ignore_ascii_case("true") || raw.trim() == "1",
+        None => true,
+    };
 
-    state
-        .status_monitor
-        .start_session(
-            session_id.clone(),
-            state.ssh_manager.clone(),
-            app_handle,
-            status_monitor_interval,
-        )
-        .await;
+    if status_monitor_enabled {
+        let status_monitor_interval = state
+            .settings_repo
+            .get_setting("statusMonitorIntervalSeconds")
+            .await
+            .map_err(AppError::from)?
+            .and_then(|raw| raw.trim().parse::<u64>().ok())
+            .filter(|seconds| *seconds >= 1)
+            .map(Duration::from_secs);
+
+        state
+            .status_monitor
+            .start_session(
+                session_id.clone(),
+                state.ssh_manager.clone(),
+                app_handle,
+                status_monitor_interval,
+            )
+            .await;
+    }
 
     Ok(session_id)
 }

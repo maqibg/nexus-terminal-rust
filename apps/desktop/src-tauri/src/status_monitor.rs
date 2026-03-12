@@ -32,6 +32,7 @@ SWAP_USED=$(free -m 2>/dev/null | awk "/^Swap:/{print \$3+0}")
 
 DISK_TOTAL=$(df -kP / 2>/dev/null | awk "NR==2{print \$2+0}")
 DISK_USED=$(df -kP / 2>/dev/null | awk "NR==2{print \$3+0}")
+df -kP 2>/dev/null | awk "NR>1 && \$2+0>0 && \$1!~/^(tmpfs|devtmpfs|overlay|squashfs)\$/{print \"disk_item=\" \$6 \"|\" \$2+0 \"|\" \$3+0}"
 
 CPU_TOTAL_TICKS=0
 CPU_IDLE_TICKS=0
@@ -76,7 +77,16 @@ echo "net_rx_total=${RX_TOTAL:-0}"
 echo "net_tx_total=${TX_TOTAL:-0}"
 '"#;
 
-const METRICS_SCRIPT_POWERSHELL: &str = r#"powershell -NoProfile -Command "$ErrorActionPreference='SilentlyContinue'; $ip=(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '169.254*' -and $_.IPAddress -ne '127.0.0.1' } | Select-Object -First 1 -ExpandProperty IPAddress); if (-not $ip) { $ip=(hostname) }; $cpu=(Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Name); $os=(Get-CimInstance Win32_OperatingSystem | Select-Object -First 1 -ExpandProperty Caption); $cpuPct=[double]((Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average); $osInfo=Get-CimInstance Win32_OperatingSystem; $memTotal=[int]([math]::Round($osInfo.TotalVisibleMemorySize / 1024)); $memFree=[int]([math]::Round($osInfo.FreePhysicalMemory / 1024)); $memUsed=[int]([math]::Max(0, $memTotal - $memFree)); $disk=Get-CimInstance Win32_LogicalDisk -Filter 'DeviceID=''C:'''; if (-not $disk) { $disk=Get-CimInstance Win32_LogicalDisk | Select-Object -First 1 }; $diskSize=[double]($disk | Select-Object -First 1 -ExpandProperty Size); $diskFree=[double]($disk | Select-Object -First 1 -ExpandProperty FreeSpace); $diskTotal=[int64]([math]::Round($diskSize / 1KB)); $diskUsed=[int64]([math]::Round(($diskSize - $diskFree) / 1KB)); $net=Get-NetAdapterStatistics | Where-Object { $_.Name -notmatch 'Loopback' } | Select-Object -First 1; $netIf=''; $rx=0; $tx=0; if ($net) { $netIf=$net.Name; $rx=[int64]$net.ReceivedBytes; $tx=[int64]$net.SentBytes; }; Write-Output ('ip_address=' + $ip); Write-Output ('cpu_model=' + $cpu); Write-Output ('os_name=' + $os); Write-Output ('cpu_percent=' + [math]::Round($cpuPct, 1)); Write-Output 'cpu_total_ticks=0'; Write-Output 'cpu_idle_ticks=0'; Write-Output ('mem_total_mb=' + $memTotal); Write-Output ('mem_used_mb=' + $memUsed); Write-Output 'swap_total_mb=0'; Write-Output 'swap_used_mb=0'; Write-Output ('disk_total_kb=' + $diskTotal); Write-Output ('disk_used_kb=' + $diskUsed); Write-Output ('net_interface=' + $netIf); Write-Output ('net_rx_total=' + $rx); Write-Output ('net_tx_total=' + $tx)""#;
+const METRICS_SCRIPT_POWERSHELL: &str = r#"powershell -NoProfile -Command "$ErrorActionPreference='SilentlyContinue'; $ip=(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '169.254*' -and $_.IPAddress -ne '127.0.0.1' } | Select-Object -First 1 -ExpandProperty IPAddress); if (-not $ip) { $ip=(hostname) }; $cpu=(Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Name); $os=(Get-CimInstance Win32_OperatingSystem | Select-Object -First 1 -ExpandProperty Caption); $cpuPct=[double]((Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average); $osInfo=Get-CimInstance Win32_OperatingSystem; $memTotal=[int]([math]::Round($osInfo.TotalVisibleMemorySize / 1024)); $memFree=[int]([math]::Round($osInfo.FreePhysicalMemory / 1024)); $memUsed=[int]([math]::Max(0, $memTotal - $memFree)); $disks=(Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DriveType -in 2,3 }); if ($disks) { foreach ($d in $disks) { $id=$d.DeviceID; $size=[double]$d.Size; $free=[double]$d.FreeSpace; if ($size -and $size -gt 0) { $diskTotal=[int64]([math]::Round($size / 1KB)); $diskUsed=[int64]([math]::Round(($size - $free) / 1KB)); Write-Output ('disk_item=' + $id + '|' + $diskTotal + '|' + $diskUsed) } } }; $primary=($disks | Where-Object { $_.DeviceID -eq 'C:' } | Select-Object -First 1); if (-not $primary) { $primary=($disks | Select-Object -First 1) }; $diskSize=[double]($primary | Select-Object -First 1 -ExpandProperty Size); $diskFree=[double]($primary | Select-Object -First 1 -ExpandProperty FreeSpace); $diskTotal=[int64]([math]::Round($diskSize / 1KB)); $diskUsed=[int64]([math]::Round(($diskSize - $diskFree) / 1KB)); $net=Get-NetAdapterStatistics | Where-Object { $_.Name -notmatch 'Loopback' } | Select-Object -First 1; $netIf=''; $rx=0; $tx=0; if ($net) { $netIf=$net.Name; $rx=[int64]$net.ReceivedBytes; $tx=[int64]$net.SentBytes; }; Write-Output ('ip_address=' + $ip); Write-Output ('cpu_model=' + $cpu); Write-Output ('os_name=' + $os); Write-Output ('cpu_percent=' + [math]::Round($cpuPct, 1)); Write-Output 'cpu_total_ticks=0'; Write-Output 'cpu_idle_ticks=0'; Write-Output ('mem_total_mb=' + $memTotal); Write-Output ('mem_used_mb=' + $memUsed); Write-Output 'swap_total_mb=0'; Write-Output 'swap_used_mb=0'; Write-Output ('disk_total_kb=' + $diskTotal); Write-Output ('disk_used_kb=' + $diskUsed); Write-Output ('net_interface=' + $netIf); Write-Output ('net_rx_total=' + $rx); Write-Output ('net_tx_total=' + $tx)""#;
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DiskUsageEntry {
+    pub name: String,
+    pub used_kb: u64,
+    pub total_kb: u64,
+    pub percent: f64,
+}
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -97,6 +107,7 @@ pub struct StatusUpdatePayload {
     pub disk_used: u64,
     pub disk_total: u64,
     pub disk_percent: f64,
+    pub disks: Vec<DiskUsageEntry>,
     pub net_interface: String,
     pub net_rx_total: u64,
     pub net_tx_total: u64,
@@ -126,6 +137,7 @@ struct RawMetrics {
     swap_total_mb: u64,
     disk_used_kb: u64,
     disk_total_kb: u64,
+    disks: Vec<(String, u64, u64)>,
     net_interface: String,
     net_rx_total: u64,
     net_tx_total: u64,
@@ -156,6 +168,12 @@ impl StatusMonitorService {
         Self {
             tasks: Arc::new(Mutex::new(HashMap::new())),
             poll_interval: DEFAULT_POLL_INTERVAL,
+        }
+    }
+
+    pub async fn stop_all(&self) {
+        for (_, task) in self.tasks.lock().await.drain() {
+            task.abort();
         }
     }
 
@@ -277,6 +295,16 @@ async fn collect_status_with_prev(
         disk_used: raw.disk_used_kb,
         disk_total: raw.disk_total_kb,
         disk_percent: calc_percent(raw.disk_used_kb, raw.disk_total_kb),
+        disks: raw
+            .disks
+            .into_iter()
+            .map(|(name, total_kb, used_kb)| DiskUsageEntry {
+                name,
+                used_kb,
+                total_kb,
+                percent: calc_percent(used_kb, total_kb),
+            })
+            .collect(),
         net_interface: raw.net_interface,
         net_rx_total: raw.net_rx_total,
         net_tx_total: raw.net_tx_total,
@@ -436,6 +464,18 @@ fn parse_metrics_output(output: &str) -> RawMetrics {
             "swap_used_mb" => raw.swap_used_mb = parse_u64(value),
             "disk_total_kb" => raw.disk_total_kb = parse_u64(value),
             "disk_used_kb" => raw.disk_used_kb = parse_u64(value),
+            "disk_item" => {
+                let mut parts = value.split('|').map(str::trim);
+                let Some(name) = parts.next().filter(|v| !v.is_empty()) else {
+                    continue;
+                };
+                let total_kb = parts.next().map(parse_u64).unwrap_or(0);
+                let used_kb = parts.next().map(parse_u64).unwrap_or(0);
+                if total_kb == 0 {
+                    continue;
+                }
+                raw.disks.push((name.to_string(), total_kb, used_kb));
+            }
             "net_interface" => raw.net_interface = value.to_string(),
             "net_rx_total" => raw.net_rx_total = parse_u64(value),
             "net_tx_total" => raw.net_tx_total = parse_u64(value),

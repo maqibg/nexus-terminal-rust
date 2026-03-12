@@ -74,6 +74,7 @@ pub fn run() {
             commands::status::get_backend_health,
             commands::status::get_connection_runtime_status,
             commands::status::get_runtime_paths,
+            commands::status::set_status_monitor_enabled,
             // Auth
             commands::auth::auth_status,
             commands::auth::auth_setup,

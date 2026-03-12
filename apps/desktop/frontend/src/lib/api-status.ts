@@ -29,11 +29,19 @@ export interface RuntimeStatusSnapshot {
   diskUsed: number;
   diskTotal: number;
   diskPercent: number;
+  disks: DiskUsageEntry[];
   netInterface: string;
   netRxTotal: number;
   netTxTotal: number;
   netRxRate: number;
   netTxRate: number;
+}
+
+export interface DiskUsageEntry {
+  name: string;
+  usedKb: number;
+  totalKb: number;
+  percent: number;
 }
 
 export const statusApi = {
@@ -44,4 +52,6 @@ export const statusApi = {
       connectionId: args.connectionId,
       sessionId: args.sessionId,
     }),
+  setStatusMonitorEnabled: (enabled: boolean) =>
+    tauriInvoke<void>('set_status_monitor_enabled', { enabled }),
 };

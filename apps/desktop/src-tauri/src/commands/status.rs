@@ -1,7 +1,9 @@
 use api_contract::error::AppError;
 use serde::Serialize;
+use settings_core::repository::SettingsRepository;
 use sqlx::Row;
 use tauri::State;
+use tokio::time::Duration;
 
 use crate::state::AppState;
 use crate::status_monitor::{collect_status_once, StatusUpdatePayload};
@@ -74,9 +76,61 @@ pub async fn get_connection_runtime_status(
             })?
     };
 
+    let status_monitor_enabled = match state
+        .settings_repo
+        .get_setting("statusMonitorEnabled")
+        .await
+        .map_err(AppError::from)?
+    {
+        Some(raw) => raw.trim().eq_ignore_ascii_case("true") || raw.trim() == "1",
+        None => true,
+    };
+
+    if !status_monitor_enabled {
+        return Err(AppError::Validation("status monitor is disabled".into()));
+    }
+
     collect_status_once(&state.ssh_manager, &target_session_id)
         .await
         .map_err(AppError::Ssh)
+}
+
+#[tauri::command]
+pub async fn set_status_monitor_enabled(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), AppError> {
+    state.auth.require_auth().await?;
+
+    if !enabled {
+        state.status_monitor.stop_all().await;
+        return Ok(());
+    }
+
+    let poll_interval_override = state
+        .settings_repo
+        .get_setting("statusMonitorIntervalSeconds")
+        .await
+        .map_err(AppError::from)?
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .filter(|seconds| *seconds >= 1)
+        .map(Duration::from_secs);
+
+    let sessions = state.ssh_manager.list_sessions().await;
+    for (session_id, _, _) in sessions {
+        state
+            .status_monitor
+            .start_session(
+                session_id,
+                state.ssh_manager.clone(),
+                app_handle.clone(),
+                poll_interval_override,
+            )
+            .await;
+    }
+
+    Ok(())
 }
 
 #[tauri::command]

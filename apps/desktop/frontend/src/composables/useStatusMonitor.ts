@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia';
 
 import { statusApi } from '@/lib/api';
 import { useSessionStore } from '@/stores/session';
+import { useSettingsStore } from '@/stores/settings';
 
 const HISTORY_POINTS = 60;
 
@@ -24,11 +25,19 @@ export interface SessionStatusSnapshot {
   diskUsed: number;
   diskTotal: number;
   diskPercent: number;
+  disks?: DiskUsageEntry[];
   netInterface: string;
   netRxTotal: number;
   netTxTotal: number;
   netRxRate: number;
   netTxRate: number;
+}
+
+export interface DiskUsageEntry {
+  name: string;
+  usedKb: number;
+  totalKb: number;
+  percent: number;
 }
 
 interface StatusErrorPayload {
@@ -50,7 +59,12 @@ function pushHistory(history: (number | null)[], value: number): (number | null)
 
 export function useStatusMonitor() {
   const sessionStore = useSessionStore();
+  const settingsStore = useSettingsStore();
   const { activeSessionId, activeSession } = storeToRefs(sessionStore);
+
+  const statusMonitorEnabled = computed(() =>
+    settingsStore.getBoolean('statusMonitorEnabled', true)
+  );
 
   const currentStatus = ref<SessionStatusSnapshot | null>(null);
   const statusError = ref<string | null>(null);
@@ -155,9 +169,9 @@ export function useStatusMonitor() {
   }
 
   watch(
-    [activeSessionId, () => activeSession.value?.status],
-    ([sessionId, status]) => {
-      if (status === 'connected' && sessionId && activeSession.value?.protocol === 'SSH') {
+    [activeSessionId, () => activeSession.value?.status, statusMonitorEnabled],
+    ([sessionId, status, enabled]) => {
+      if (enabled && status === 'connected' && sessionId && activeSession.value?.protocol === 'SSH') {
         void bindSession(sessionId);
       } else {
         void bindSession(null);

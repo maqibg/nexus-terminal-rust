@@ -17,9 +17,9 @@
 
 ## 概述
 
-**Nexus Terminal Desktop** 是 [nexus-terminal](https://github.com/Heavrnl/nexus-terminal) 的本地桌面端重写版本，融合了 [Mshell](https://github.com/inspoaibox/Mshell) 的多项核心功能，以 **Rust** 重构后端，采用 **Tauri 2** 框架交付跨平台原生体验。
+**Nexus Terminal Desktop** 是 [nexus-terminal](https://github.com/Heavrnl/nexus-terminal) 的桌面版重写，采用 **Rust + Tauri 2** 架构重构。在保留原版完整终端、SFTP、会话管理能力的基础上，新增了 **AI 助手**、**端口转发**、**任务调度**等高级功能（功能设计参考 [Mshell](https://github.com/inspoaibox/Mshell)，代码独立实现）。
 
-相比原版 Web 应用，桌面版在保留完整终端、SFTP、会话管理能力的基础上，新增了 **AI 助手集成**、**端口转发**、**任务调度**等来自 Mshell 的高级功能，并通过 Rust 原生实现取代 Node.js 后端，大幅降低资源占用、提升性能。
+相比原版 Web 应用，桌面版通过 Rust 原生实现取代 Node.js 后端，大幅降低资源占用、提升性能。
 
 ---
 
@@ -196,16 +196,40 @@ pnpm tauri build
 
 ---
 
-## 致谢
+## 许可证与归属
 
-- 原版 Web 端：[nexus-terminal](https://github.com/Heavrnl/nexus-terminal)
-- Mshell（功能来源参考）：[Mshell](https://github.com/inspoaibox/Mshell)
-- 终端主题：[iTerm2-Color-Schemes](https://github.com/mbadolato/iTerm2-Color-Schemes)
-
----
-
-## 开源协议
+### 开源协议
 
 本项目采用 [GPL-3.0](LICENSE) 开源协议。
 
-本项目基于 [nexus-terminal](https://github.com/Heavrnl/nexus-terminal)（GPL-3.0）修改而来，前端代码部分衍生自原版实现。版权归属及上游致谢详见 [NOTICE](NOTICE) 文件。
+### 上游项目归属
+
+本项目是 [nexus-terminal](https://github.com/Heavrnl/nexus-terminal)（GPL-3.0）的衍生作品，前端架构、终端功能、SFTP模块等核心组件基于原版设计重写。
+
+### 功能设计参考
+
+AI 助手、端口转发等高级功能的设计理念参考了 [Mshell](https://github.com/inspoaibox/Mshell)（MIT License），但所有代码均为独立实现，未使用 Mshell 的源代码。
+
+### 版权声明
+
+详细的版权归属和上游致谢请参见 [NOTICE](NOTICE) 文件。
+
+### 第三方依赖
+
+本项目使用的所有第三方库的许可证信息可通过以下命令查看：
+
+```bash
+# Rust依赖
+cargo license --json
+
+# 前端依赖
+cd apps/desktop/frontend && pnpm licenses list
+```
+
+---
+
+## 致谢
+
+- 原版 Web 端：[nexus-terminal](https://github.com/Heavrnl/nexus-terminal)
+- 功能设计参考：[Mshell](https://github.com/inspoaibox/Mshell)
+- 终端主题：[iTerm2-Color-Schemes](https://github.com/mbadolato/iTerm2-Color-Schemes)
