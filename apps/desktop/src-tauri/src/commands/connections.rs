@@ -8,9 +8,12 @@ use quick_command_core::repository::QuickCommandRepository;
 use serde::{Deserialize, Serialize};
 use settings_core::repository::SettingsRepository;
 use std::collections::HashMap;
+use std::io::{Cursor, Read};
 use tauri::State;
+use tokio::fs;
 use tokio::net::TcpStream;
 use tokio::time::{timeout, Duration};
+use zip::ZipArchive;
 
 use crate::state::AppState;
 
@@ -567,6 +570,19 @@ pub async fn connection_export(
 }
 
 #[tauri::command]
+pub async fn connection_export_to_file(
+    state: State<'_, AppState>,
+    ids: Option<Vec<i64>>,
+    file_path: String,
+) -> CmdResult<String> {
+    let payload = connection_export(state, ids).await?;
+    fs::write(&file_path, payload)
+        .await
+        .map_err(|e| AppError::Internal(format!("write export file failed: {e}")))?;
+    Ok(file_path)
+}
+
+#[tauri::command]
 pub async fn connection_import(state: State<'_, AppState>, json: String) -> CmdResult<Vec<i64>> {
     state.auth.require_auth().await?;
     let items: Vec<ExportConnection> = serde_json::from_str(&json)
@@ -738,7 +754,7 @@ pub struct AppExportData {
 }
 
 /// Settings key prefixes that must never be exported / imported.
-const PROTECTED_KEY_PREFIXES: &[&str] = &["auth.", "ai."];
+const PROTECTED_KEY_PREFIXES: &[&str] = &["auth."];
 
 fn is_protected_key(key: &str) -> bool {
     PROTECTED_KEY_PREFIXES
@@ -759,6 +775,51 @@ pub struct ImportResult {
     pub settings: usize,
     pub appearance: usize,
     pub notification_channels: usize,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetDataRequest {
+    pub connections: bool,
+    pub tags: bool,
+    pub proxies: bool,
+    pub ssh_keys: bool,
+    pub quick_commands: bool,
+    pub quick_command_tags: bool,
+    pub favorite_paths: bool,
+    pub terminal_themes: bool,
+    pub notification_channels: bool,
+    pub appearance: bool,
+    /// 清除 settings 表中除 auth./ai. 外的普通设置项。
+    pub settings: bool,
+    /// 清除 settings 表中的 ai.*（包含 AI 配置与聊天记录等）。
+    pub ai_settings: bool,
+    pub command_history: bool,
+    pub path_history: bool,
+    pub audit_logs: bool,
+    pub ssh_known_hosts: bool,
+}
+
+#[allow(dead_code)]
+#[derive(Serialize, Default)]
+pub struct ResetDataResult {
+    pub connections: u64,
+    pub tags: u64,
+    pub proxies: u64,
+    pub ssh_keys: u64,
+    pub quick_commands: u64,
+    pub quick_command_tags: u64,
+    pub favorite_paths: u64,
+    pub terminal_themes: u64,
+    pub notification_channels: u64,
+    pub appearance: u64,
+    pub settings: u64,
+    pub ai_settings: u64,
+    pub command_history: u64,
+    pub path_history: u64,
+    pub audit_logs: u64,
+    pub ssh_known_hosts: u64,
 }
 
 #[tauri::command]
@@ -986,6 +1047,18 @@ pub async fn app_export(state: State<'_, AppState>) -> CmdResult<String> {
     };
 
     serde_json::to_string_pretty(&payload).map_err(|e| AppError::Internal(e.to_string()))
+}
+
+#[tauri::command]
+pub async fn app_export_to_file(
+    state: State<'_, AppState>,
+    file_path: String,
+) -> CmdResult<String> {
+    let payload = app_export(state).await?;
+    fs::write(&file_path, payload)
+        .await
+        .map_err(|e| AppError::Internal(format!("write backup file failed: {e}")))?;
+    Ok(file_path)
 }
 
 #[tauri::command]
@@ -1347,4 +1420,587 @@ pub async fn app_import(state: State<'_, AppState>, json: String) -> CmdResult<I
         appearance: appearance_count,
         notification_channels: channels_count,
     })
+}
+
+#[tauri::command]
+pub async fn app_import_from_file(
+    state: State<'_, AppState>,
+    file_path: String,
+    password: Option<String>,
+) -> CmdResult<ImportResult> {
+    state.auth.require_auth().await?;
+    let bytes = fs::read(&file_path)
+        .await
+        .map_err(|e| AppError::Internal(format!("read backup file failed: {e}")))?;
+
+    if let Ok(text) = std::str::from_utf8(&bytes) {
+        if looks_like_json_payload(text) {
+            return app_import(state, text.to_string()).await;
+        }
+    }
+
+    if !looks_like_zip_payload(&bytes) {
+        return Err(AppError::Validation(
+            "不支持的备份文件类型（仅支持 .json 或旧版加密 .zip）".into(),
+        ));
+    }
+
+    let json = legacy_zip_to_app_export_json(&state, &bytes, password.as_deref()).await?;
+    app_import(state, json).await
+}
+
+#[tauri::command]
+pub async fn app_reset_data(
+    state: State<'_, AppState>,
+    req: ResetDataRequest,
+) -> CmdResult<ResetDataResult> {
+    state.auth.require_auth().await?;
+
+    let mut tx = state
+        .storage
+        .pool
+        .begin()
+        .await
+        .map_err(|e| AppError::Internal(format!("transaction begin failed: {e}")))?;
+
+    sqlx::query("PRAGMA foreign_keys = ON")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| AppError::Internal(format!("enable foreign_keys failed: {e}")))?;
+
+    let mut result = ResetDataResult::default();
+
+    if req.connections {
+        result.connections = sqlx::query("DELETE FROM connections")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Internal(format!("clear connections failed: {e}")))?
+            .rows_affected();
+    }
+
+    if req.tags {
+        result.tags = sqlx::query("DELETE FROM tags")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Internal(format!("clear tags failed: {e}")))?
+            .rows_affected();
+    }
+
+    if req.proxies {
+        result.proxies = sqlx::query("DELETE FROM proxies")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Internal(format!("clear proxies failed: {e}")))?
+            .rows_affected();
+    }
+
+    if req.ssh_keys {
+        result.ssh_keys = sqlx::query("DELETE FROM ssh_keys")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Internal(format!("clear ssh keys failed: {e}")))?
+            .rows_affected();
+    }
+
+    if req.quick_commands {
+        result.quick_commands = sqlx::query("DELETE FROM quick_commands")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Internal(format!("clear quick commands failed: {e}")))?
+            .rows_affected();
+    }
+
+    if req.quick_command_tags {
+        result.quick_command_tags = sqlx::query("DELETE FROM quick_command_tags")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Internal(format!("clear quick command tags failed: {e}")))?
+            .rows_affected();
+    }
+
+    if req.favorite_paths {
+        result.favorite_paths = sqlx::query("DELETE FROM favorite_paths")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Internal(format!("clear favorite paths failed: {e}")))?
+            .rows_affected();
+    }
+
+    if req.terminal_themes {
+        result.terminal_themes = sqlx::query(
+            "DELETE FROM terminal_themes WHERE theme_type IS NULL OR theme_type != 'preset'",
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| AppError::Internal(format!("clear terminal themes failed: {e}")))?
+        .rows_affected();
+    }
+
+    if req.notification_channels {
+        result.notification_channels = sqlx::query("DELETE FROM notification_settings")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Internal(format!("clear notification channels failed: {e}")))?
+            .rows_affected();
+    }
+
+    if req.appearance {
+        result.appearance = sqlx::query("DELETE FROM appearance_settings")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Internal(format!("clear appearance settings failed: {e}")))?
+            .rows_affected();
+    }
+
+    if req.settings {
+        result.settings =
+            sqlx::query("DELETE FROM settings WHERE key NOT LIKE 'auth.%' AND key NOT LIKE 'ai.%'")
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| AppError::Internal(format!("clear settings failed: {e}")))?
+                .rows_affected();
+    }
+
+    if req.ai_settings {
+        result.ai_settings = sqlx::query("DELETE FROM settings WHERE key LIKE 'ai.%'")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Internal(format!("clear ai settings failed: {e}")))?
+            .rows_affected();
+    }
+
+    if req.command_history {
+        result.command_history = sqlx::query("DELETE FROM command_history")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Internal(format!("clear command history failed: {e}")))?
+            .rows_affected();
+    }
+
+    if req.path_history {
+        result.path_history = sqlx::query("DELETE FROM path_history")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Internal(format!("clear path history failed: {e}")))?
+            .rows_affected();
+    }
+
+    if req.audit_logs {
+        result.audit_logs = sqlx::query("DELETE FROM audit_logs")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Internal(format!("clear audit logs failed: {e}")))?
+            .rows_affected();
+    }
+
+    if req.ssh_known_hosts {
+        result.ssh_known_hosts = sqlx::query("DELETE FROM ssh_known_hosts")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Internal(format!("clear ssh known hosts failed: {e}")))?
+            .rows_affected();
+    }
+
+    tx.commit()
+        .await
+        .map_err(|e| AppError::Internal(format!("transaction commit failed: {e}")))?;
+
+    Ok(result)
+}
+
+#[allow(dead_code)]
+#[derive(Serialize, Default)]
+pub struct ResetDataCounts {
+    pub connections: u64,
+    pub tags: u64,
+    pub proxies: u64,
+    pub ssh_keys: u64,
+    pub quick_commands: u64,
+    pub quick_command_tags: u64,
+    pub favorite_paths: u64,
+    pub terminal_themes: u64,
+    pub notification_channels: u64,
+    pub appearance: u64,
+    pub settings: u64,
+    pub ai_settings: u64,
+    pub command_history: u64,
+    pub path_history: u64,
+    pub audit_logs: u64,
+    pub ssh_known_hosts: u64,
+}
+
+async fn table_count(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    sql: &str,
+) -> Result<u64, AppError> {
+    let count = sqlx::query_scalar::<_, i64>(sql)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(|e| AppError::Internal(format!("count query failed: {e}")))?;
+    Ok(u64::try_from(count).unwrap_or(0))
+}
+
+#[tauri::command]
+pub async fn app_reset_data_counts(state: State<'_, AppState>) -> CmdResult<ResetDataCounts> {
+    state.auth.require_auth().await?;
+
+    let mut tx = state
+        .storage
+        .pool
+        .begin()
+        .await
+        .map_err(|e| AppError::Internal(format!("transaction begin failed: {e}")))?;
+
+    let counts = ResetDataCounts {
+        connections: table_count(&mut tx, "SELECT COUNT(*) FROM connections").await?,
+        tags: table_count(&mut tx, "SELECT COUNT(*) FROM tags").await?,
+        proxies: table_count(&mut tx, "SELECT COUNT(*) FROM proxies").await?,
+        ssh_keys: table_count(&mut tx, "SELECT COUNT(*) FROM ssh_keys").await?,
+        quick_commands: table_count(&mut tx, "SELECT COUNT(*) FROM quick_commands").await?,
+        quick_command_tags: table_count(&mut tx, "SELECT COUNT(*) FROM quick_command_tags").await?,
+        favorite_paths: table_count(&mut tx, "SELECT COUNT(*) FROM favorite_paths").await?,
+        terminal_themes: table_count(
+            &mut tx,
+            "SELECT COUNT(*) FROM terminal_themes WHERE theme_type IS NULL OR theme_type != 'preset'",
+        )
+        .await?,
+        notification_channels: table_count(&mut tx, "SELECT COUNT(*) FROM notification_settings").await?,
+        appearance: table_count(&mut tx, "SELECT COUNT(*) FROM appearance_settings").await?,
+        settings: table_count(
+            &mut tx,
+            "SELECT COUNT(*) FROM settings WHERE key NOT LIKE 'auth.%' AND key NOT LIKE 'ai.%'",
+        )
+        .await?,
+        ai_settings: table_count(&mut tx, "SELECT COUNT(*) FROM settings WHERE key LIKE 'ai.%'").await?,
+        command_history: table_count(&mut tx, "SELECT COUNT(*) FROM command_history").await?,
+        path_history: table_count(&mut tx, "SELECT COUNT(*) FROM path_history").await?,
+        audit_logs: table_count(&mut tx, "SELECT COUNT(*) FROM audit_logs").await?,
+        ssh_known_hosts: table_count(&mut tx, "SELECT COUNT(*) FROM ssh_known_hosts").await?,
+    };
+
+    tx.commit()
+        .await
+        .map_err(|e| AppError::Internal(format!("transaction commit failed: {e}")))?;
+
+    Ok(counts)
+}
+
+fn looks_like_json_payload(text: &str) -> bool {
+    let trimmed = text.trim_start_matches('\u{feff}').trim_start();
+    trimmed.starts_with('{') || trimmed.starts_with('[')
+}
+
+fn looks_like_zip_payload(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"PK\x03\x04")
+        || bytes.starts_with(b"PK\x05\x06")
+        || bytes.starts_with(b"PK\x07\x08")
+}
+
+fn sanitize_legacy_ssh_key_filename(name: &str) -> String {
+    name.chars()
+        .map(|ch| match ch {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
+            _ => ch,
+        })
+        .collect()
+}
+
+fn tokenize_legacy_cli_line(line: &str) -> Result<Vec<String>, String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut token_started = false;
+    let mut chars = line.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if in_quotes {
+            match ch {
+                '"' => in_quotes = false,
+                '\\' => match chars.next() {
+                    Some(escaped) => {
+                        current.push(escaped);
+                        token_started = true;
+                    }
+                    None => {
+                        current.push('\\');
+                        token_started = true;
+                    }
+                },
+                _ => {
+                    current.push(ch);
+                    token_started = true;
+                }
+            }
+            continue;
+        }
+
+        match ch {
+            '"' => {
+                in_quotes = true;
+                token_started = true;
+            }
+            ' ' | '\t' | '\r' | '\n' => {
+                if token_started {
+                    tokens.push(std::mem::take(&mut current));
+                    token_started = false;
+                }
+            }
+            _ => {
+                current.push(ch);
+                token_started = true;
+            }
+        }
+    }
+
+    if in_quotes {
+        return Err("未闭合的引号".into());
+    }
+
+    if token_started {
+        tokens.push(current);
+    }
+
+    Ok(tokens)
+}
+
+struct LegacyParsedLine {
+    conn: ExportConnectionV2,
+    ssh_key_passphrase: Option<String>,
+}
+
+fn parse_legacy_connections_line(line: &str) -> Result<LegacyParsedLine, String> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return Err("empty line".into());
+    }
+
+    let tokens = tokenize_legacy_cli_line(trimmed)?;
+    let first = tokens.first().ok_or_else(|| "缺少连接描述".to_string())?;
+
+    let Some((user_part, host_port)) = first.split_once('@') else {
+        return Err("连接描述缺少 '@'".into());
+    };
+    let Some((host_part, port_part)) = host_port.rsplit_once(':') else {
+        return Err("连接描述缺少端口".into());
+    };
+
+    let username = user_part.trim().to_string();
+    let host = host_part.trim().to_string();
+    let port: i32 = port_part
+        .trim()
+        .parse()
+        .map_err(|_| "端口不是有效数字".to_string())?;
+
+    let mut conn_type: Option<String> = None;
+    let mut name: Option<String> = None;
+    let mut password: Option<String> = None;
+    let mut ssh_key_name: Option<String> = None;
+    let mut ssh_key_passphrase: Option<String> = None;
+    let mut tags: Vec<String> = Vec::new();
+    let mut notes: Option<String> = None;
+
+    let mut idx = 1usize;
+    while idx < tokens.len() {
+        match tokens[idx].as_str() {
+            "-type" => {
+                idx += 1;
+                conn_type = tokens.get(idx).map(|v| v.trim().to_string());
+            }
+            "-name" => {
+                idx += 1;
+                name = tokens.get(idx).map(|v| v.to_string());
+            }
+            "-p" => {
+                idx += 1;
+                password = tokens.get(idx).map(|v| v.to_string());
+            }
+            "-k" => {
+                idx += 1;
+                ssh_key_name = tokens.get(idx).map(|v| v.to_string());
+            }
+            "-passphrase" => {
+                idx += 1;
+                ssh_key_passphrase = tokens.get(idx).map(|v| v.to_string());
+            }
+            "-note" => {
+                idx += 1;
+                notes = tokens.get(idx).map(|v| v.to_string());
+            }
+            "-tags" => {
+                idx += 1;
+                while idx < tokens.len() && !tokens[idx].starts_with('-') {
+                    tags.push(tokens[idx].to_string());
+                    idx += 1;
+                }
+                continue;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+
+    let conn_type = conn_type.unwrap_or_else(|| "SSH".to_string());
+    let name = name.unwrap_or_else(|| format!("{username}@{host}:{port}"));
+    let ssh_key_name = ssh_key_name
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    let auth_method = if conn_type == "SSH" && ssh_key_name.is_some() {
+        "key".to_string()
+    } else {
+        "password".to_string()
+    };
+
+    Ok(LegacyParsedLine {
+        conn: ExportConnectionV2 {
+            name,
+            conn_type,
+            host,
+            port,
+            username,
+            auth_method,
+            password,
+            ssh_key_name,
+            proxy_name: None,
+            jump_chain: None,
+            notes,
+            rdp_options: None,
+            vnc_options: None,
+            provider: None,
+            region: None,
+            expiry_date: None,
+            billing_cycle: None,
+            billing_amount: None,
+            billing_currency: None,
+            tags,
+        },
+        ssh_key_passphrase,
+    })
+}
+
+async fn legacy_zip_to_app_export_json(
+    state: &AppState,
+    zip_bytes: &[u8],
+    password: Option<&str>,
+) -> CmdResult<String> {
+    let mut password_candidates: Vec<Vec<u8>> = Vec::new();
+    if let Some(pwd) = password.filter(|v| !v.trim().is_empty()) {
+        password_candidates.push(pwd.as_bytes().to_vec());
+    } else if let Ok(key) =
+        fs::read_to_string(state.runtime_paths.data_dir.join(".encryption_key")).await
+    {
+        let trimmed = key.trim();
+        if !trimmed.is_empty() {
+            password_candidates.push(trimmed.as_bytes().to_vec());
+        }
+    }
+
+    let cursor = Cursor::new(zip_bytes.to_vec());
+    let mut archive = ZipArchive::new(cursor)
+        .map_err(|e| AppError::Validation(format!("无效的 ZIP 备份文件: {e}")))?;
+
+    let connections_txt =
+        read_legacy_zip_text_entry(&mut archive, "connections.txt", &password_candidates)?;
+
+    let mut ssh_key_name_to_stub: HashMap<String, ExportSshKeyStub> = HashMap::new();
+    let mut export_connections: Vec<ExportConnectionV2> = Vec::new();
+
+    for (index, line) in connections_txt.lines().enumerate() {
+        let parsed = match parse_legacy_connections_line(line) {
+            Ok(value) => value,
+            Err(err) if err == "empty line" => continue,
+            Err(err) => {
+                return Err(AppError::Validation(format!(
+                    "旧版 connections.txt 第 {} 行解析失败: {}",
+                    index + 1,
+                    err
+                )));
+            }
+        };
+
+        if let Some(key_name) = parsed.conn.ssh_key_name.clone() {
+            let entry = ssh_key_name_to_stub
+                .entry(key_name.clone())
+                .or_insert_with(|| ExportSshKeyStub {
+                    name: key_name.clone(),
+                    private_key_pem: None,
+                    passphrase: None,
+                });
+            if entry.passphrase.is_none() {
+                entry.passphrase = parsed.ssh_key_passphrase.clone();
+            }
+        }
+
+        export_connections.push(parsed.conn);
+    }
+
+    // Try to attach ssh_keys/<name>.txt contents when present.
+    for stub in ssh_key_name_to_stub.values_mut() {
+        let sanitized = sanitize_legacy_ssh_key_filename(&stub.name);
+        let path_in_zip = format!("ssh_keys/{sanitized}.txt");
+        if let Ok(key_pem) =
+            read_legacy_zip_text_entry(&mut archive, &path_in_zip, &password_candidates)
+        {
+            if !key_pem.trim().is_empty() {
+                stub.private_key_pem = Some(key_pem);
+            }
+        }
+    }
+
+    let payload = AppExportData {
+        version: 2,
+        ssh_keys: ssh_key_name_to_stub.into_values().collect(),
+        proxies: Vec::new(),
+        connections: export_connections,
+        quick_command_tags: Vec::new(),
+        quick_commands: Vec::new(),
+        favorite_paths: Vec::new(),
+        terminal_themes: Vec::new(),
+        settings: Vec::new(),
+        appearance: Vec::new(),
+        notification_channels: Vec::new(),
+    };
+
+    serde_json::to_string(&payload).map_err(|e| AppError::Internal(e.to_string()))
+}
+
+fn read_legacy_zip_text_entry(
+    archive: &mut ZipArchive<Cursor<Vec<u8>>>,
+    name: &str,
+    password_candidates: &[Vec<u8>],
+) -> Result<String, AppError> {
+    match archive.by_name(name) {
+        Ok(mut file) => {
+            let mut text = String::new();
+            file.read_to_string(&mut text)
+                .map_err(|e| AppError::Validation(format!("读取 ZIP 条目失败: {e}")))?;
+            return Ok(text);
+        }
+        Err(zip::result::ZipError::FileNotFound) => {
+            return Err(AppError::Validation(format!("ZIP 备份缺少条目: {name}")));
+        }
+        Err(_) if password_candidates.is_empty() => {
+            return Err(AppError::Validation(
+                "旧版加密 ZIP 备份文件需要密码，请输入导出时使用的 ENCRYPTION_KEY".into(),
+            ));
+        }
+        Err(_) => {}
+    }
+
+    let mut last_error: Option<String> = None;
+    for pwd in password_candidates {
+        match archive.by_name_decrypt(name, pwd) {
+            Ok(mut file) => {
+                let mut text = String::new();
+                file.read_to_string(&mut text)
+                    .map_err(|e| AppError::Validation(format!("读取 ZIP 条目失败: {e}")))?;
+                return Ok(text);
+            }
+            Err(err) => last_error = Some(err.to_string()),
+        }
+    }
+
+    Err(AppError::Validation(format!(
+        "旧版加密 ZIP 备份文件解密失败：{}",
+        last_error.unwrap_or_else(|| "unknown error".into())
+    )))
 }

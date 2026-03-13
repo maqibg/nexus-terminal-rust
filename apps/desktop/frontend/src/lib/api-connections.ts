@@ -76,6 +76,44 @@ export interface ImportResult {
   notification_channels: number;
 }
 
+export interface ResetDataRequest {
+  connections: boolean;
+  tags: boolean;
+  proxies: boolean;
+  sshKeys: boolean;
+  quickCommands: boolean;
+  quickCommandTags: boolean;
+  favoritePaths: boolean;
+  terminalThemes: boolean;
+  notificationChannels: boolean;
+  appearance: boolean;
+  settings: boolean;
+  aiSettings: boolean;
+  commandHistory: boolean;
+  pathHistory: boolean;
+  auditLogs: boolean;
+  sshKnownHosts: boolean;
+}
+
+export interface ResetDataResult {
+  connections: number;
+  tags: number;
+  proxies: number;
+  ssh_keys: number;
+  quick_commands: number;
+  quick_command_tags: number;
+  favorite_paths: number;
+  terminal_themes: number;
+  notification_channels: number;
+  appearance: number;
+  settings: number;
+  ai_settings: number;
+  command_history: number;
+  path_history: number;
+  audit_logs: number;
+  ssh_known_hosts: number;
+}
+
 export const connectionsApi = {
   list: () => tauriInvoke<Connection[]>('connection_list'),
   get: (id: number) => tauriInvoke<Connection>('connection_get', { id }),
@@ -91,11 +129,21 @@ export const connectionsApi = {
     tauriInvoke<boolean>('connection_test_unsaved', { input: data }),
   clone: (id: number) => tauriInvoke<number>('connection_clone', { id }),
   export: (ids?: number[]) => tauriInvoke<string>('connection_export', { ids }),
+  exportToFile: (filePath: string, ids?: number[]) =>
+    tauriInvoke<string>('connection_export_to_file', { ids, filePath }),
   import: (json: string) => tauriInvoke<number[]>('connection_import', { json }),
 
   // Full-backup export / import
   appExport: () => tauriInvoke<string>('app_export'),
+  appExportToFile: (filePath: string) =>
+    tauriInvoke<string>('app_export_to_file', { filePath }),
   appImport: (json: string) => tauriInvoke<ImportResult>('app_import', { json }),
+  appImportFromFile: (filePath: string, password?: string) =>
+    tauriInvoke<ImportResult>('app_import_from_file', { filePath, password }),
+  appResetData: (req: ResetDataRequest) =>
+    tauriInvoke<ResetDataResult>('app_reset_data', { req }),
+  appResetDataCounts: () =>
+    tauriInvoke<ResetDataResult>('app_reset_data_counts'),
 
   // Tags
   tagList: () => tauriInvoke<Tag[]>('tag_list'),
@@ -119,4 +167,3 @@ export const connectionsApi = {
     tauriInvoke<boolean>('proxy_update', { input: data }),
   proxyDelete: (id: number) => tauriInvoke<boolean>('proxy_delete', { id }),
 };
-

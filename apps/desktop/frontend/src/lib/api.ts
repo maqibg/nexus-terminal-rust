@@ -5,7 +5,7 @@ export { tauriInvoke } from './invoke';
 export { authApi } from './api-auth';
 export type { AuthState, TwoFactorSetupResponse, PasskeyInfo } from './api-auth';
 export { connectionsApi } from './api-connections';
-export type { Connection, Tag, SshKey, Proxy, ImportResult } from './api-connections';
+export type { Connection, Tag, SshKey, Proxy, ImportResult, ResetDataRequest, ResetDataResult } from './api-connections';
 export { sshApi, onSshOutput } from './api-ssh';
 export type { SshSession, SshOutputChunk, HostKeyEntry } from './api-ssh';
 export { sftpApi } from './api-sftp';

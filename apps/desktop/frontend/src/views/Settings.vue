@@ -388,7 +388,7 @@
             <!-- 完整备份导出 -->
             <div class="settings-section-content">
               <h3 class="section-heading">完整备份导出</h3>
-              <p class="section-desc">导出全部数据（连接、SSH 密钥名称存根、代理、快捷命令、收藏路径、终端主题、设置及通知渠道）。加密密钥材料不会被包含在内。</p>
+              <p class="section-desc">导出全部数据（连接、SSH 密钥、代理、快捷命令、收藏路径、终端主题、设置及通知渠道）。备份文件会包含连接密码 / 代理凭据 / SSH 私钥等敏感信息，请妥善保管。</p>
               <div class="form-actions">
                 <button type="button" class="btn btn-primary" :disabled="appExportLoading" @click="appExport">
                   {{ appExportLoading ? '导出中...' : '导出完整备份' }}
@@ -402,14 +402,7 @@
             <!-- 完整备份导入 -->
             <div class="settings-section-content">
               <h3 class="section-heading">完整备份导入</h3>
-              <p class="section-desc">从备份文件恢复数据。导入在单个数据库事务中执行，失败时自动回滚。SSH 私钥不包含在备份中，导入后需重新录入。</p>
-              <input
-                ref="appImportFileInput"
-                type="file"
-                accept=".json"
-                style="display: none"
-                @change="appImport"
-              >
+              <p class="section-desc">从备份文件恢复数据（支持本项目 .json 完整备份，以及旧版 Nexus Terminal 导出的加密 .zip 连接备份）。导入在单个数据库事务中执行，失败时自动回滚。</p>
               <div class="form-actions">
                 <button type="button" class="btn btn-primary" :disabled="appImportLoading" @click="triggerAppImport">
                   {{ appImportLoading ? '导入中...' : '选择备份文件' }}
@@ -441,6 +434,73 @@
                 </div>
               </form>
             </div>
+
+            <hr class="section-divider">
+
+            <!-- 重置/清除数据 -->
+            <div class="settings-section-content">
+              <h3 class="section-heading">重置 / 清除数据</h3>
+              <p class="section-desc">勾选需要清除的数据项。此操作不可撤销，建议先导出完整备份。不会清除认证相关数据（auth.*）。</p>
+              <div class="form-actions">
+                <button type="button" class="btn btn-primary" :disabled="resetDataLoading" @click="openResetPicker">
+                  选择要清除的数据…
+                </button>
+                <button type="button" class="btn btn-muted" :disabled="resetDataLoading || selectedResetDataCount === 0" @click="clearResetSelection">清空选择</button>
+                <p v-if="resetDataMessage" :class="['feedback-msg', resetDataSuccess ? 'feedback-ok' : 'feedback-error']">{{ resetDataMessage }}</p>
+              </div>
+              <small v-if="selectedResetDataCount" class="section-desc">已选择：{{ getSelectedResetDataLabels().join('、') }}</small>
+              <div v-if="resetDataResult" class="import-result-grid">
+                <div class="import-result-item"><span class="label">连接</span><span class="value">{{ resetDataResult.connections }}</span></div>
+                <div class="import-result-item"><span class="label">标签</span><span class="value">{{ resetDataResult.tags }}</span></div>
+                <div class="import-result-item"><span class="label">代理</span><span class="value">{{ resetDataResult.proxies }}</span></div>
+                <div class="import-result-item"><span class="label">SSH 密钥</span><span class="value">{{ resetDataResult.ssh_keys }}</span></div>
+                <div class="import-result-item"><span class="label">快捷命令</span><span class="value">{{ resetDataResult.quick_commands }}</span></div>
+                <div class="import-result-item"><span class="label">快捷命令标签</span><span class="value">{{ resetDataResult.quick_command_tags }}</span></div>
+                <div class="import-result-item"><span class="label">收藏路径</span><span class="value">{{ resetDataResult.favorite_paths }}</span></div>
+                <div class="import-result-item"><span class="label">用户终端主题</span><span class="value">{{ resetDataResult.terminal_themes }}</span></div>
+                <div class="import-result-item"><span class="label">通知渠道</span><span class="value">{{ resetDataResult.notification_channels }}</span></div>
+                <div class="import-result-item"><span class="label">外观设置</span><span class="value">{{ resetDataResult.appearance }}</span></div>
+                <div class="import-result-item"><span class="label">设置项</span><span class="value">{{ resetDataResult.settings }}</span></div>
+                <div class="import-result-item"><span class="label">AI 设置</span><span class="value">{{ resetDataResult.ai_settings }}</span></div>
+                <div class="import-result-item"><span class="label">命令历史</span><span class="value">{{ resetDataResult.command_history }}</span></div>
+                <div class="import-result-item"><span class="label">路径历史</span><span class="value">{{ resetDataResult.path_history }}</span></div>
+                <div class="import-result-item"><span class="label">审计日志</span><span class="value">{{ resetDataResult.audit_logs }}</span></div>
+                <div class="import-result-item"><span class="label">SSH known_hosts</span><span class="value">{{ resetDataResult.ssh_known_hosts }}</span></div>
+              </div>
+            </div>
+
+            <Teleport to="body">
+              <div v-if="resetPickerVisible" class="dialog-backdrop" @click.self="closeResetPicker">
+                <div class="modal-card reset-picker-modal" role="dialog" aria-modal="true">
+                  <div class="modal-header">
+                    <span>选择要清除的数据</span>
+                    <span class="close-btn" @click="closeResetPicker">&times;</span>
+                  </div>
+                  <div class="reset-picker-body">
+                    <div v-if="resetCountsLoading" class="reset-picker-loading">加载数据统计中...</div>
+                    <div v-else class="reset-tile-grid">
+                      <button
+                        v-for="item in resetDataLabels"
+                        :key="item.key"
+                        type="button"
+                        class="reset-tile"
+                        :class="{ active: resetDataForm[item.key] }"
+                        @click="toggleResetItem(item.key)"
+                      >
+                        <div class="reset-tile-title">{{ item.label }}</div>
+                        <div class="reset-tile-value">{{ getResetCount(item.key) }}</div>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="modal-footer reset-picker-footer">
+                    <button type="button" class="btn btn-danger" :disabled="resetDataLoading || selectedResetDataCount === 0" @click="resetSelectedData">
+                      {{ resetDataLoading ? '清除中...' : `清除所选 (${selectedResetDataCount})` }}
+                    </button>
+                    <button type="button" class="btn btn-muted" :disabled="resetDataLoading" @click="closeResetPicker">关闭</button>
+                  </div>
+                </div>
+              </div>
+            </Teleport>
           </div>
         </section>
         <section v-if="activeTab === 'appearance'" class="settings-card">
@@ -515,12 +575,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import { useRoute } from 'vue-router';
 import AppSelect from '@/components/AppSelect.vue';
 import AISettingsPanel from '@/components/AI/AISettingsPanel.vue';
 import { authApi, connectionsApi, statusApi } from '@/lib/api';
-import type { ImportResult } from '@/lib/api';
+import type { ImportResult, ResetDataRequest, ResetDataResult } from '@/lib/api';
 import { useUiNotificationsStore } from '@/stores/uiNotifications';
+import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import {
   DEFAULT_UI_FONT_FAMILY,
   DEFAULT_UI_FONT_SIZE_BASE,
@@ -560,6 +622,7 @@ function getInitialActiveTab(): TabKey {
 const notifications = useUiNotificationsStore();
 const appearanceStore = useAppearanceStore();
 const settingsStore = useSettingsStore();
+const { confirm } = useConfirmDialog();
 const route = useRoute();
 const { settings: runtimeSettings } = storeToRefs(settingsStore);
 const { currentUiFontFamily, currentUiFontSize } = storeToRefs(appearanceStore);
@@ -685,7 +748,158 @@ const appImportLoading = ref(false);
 const appImportMessage = ref('');
 const appImportSuccess = ref(false);
 const appImportResult = ref<ImportResult | null>(null);
-const appImportFileInput = ref<HTMLInputElement | null>(null);
+
+// Reset data (selective)
+const resetDataForm = reactive<ResetDataRequest>({
+  connections: false,
+  tags: false,
+  proxies: false,
+  sshKeys: false,
+  quickCommands: false,
+  quickCommandTags: false,
+  favoritePaths: false,
+  terminalThemes: false,
+  notificationChannels: false,
+  appearance: false,
+  settings: false,
+  aiSettings: false,
+  commandHistory: false,
+  pathHistory: false,
+  auditLogs: false,
+  sshKnownHosts: false,
+});
+const resetDataLoading = ref(false);
+const resetDataMessage = ref('');
+const resetDataSuccess = ref(false);
+const resetDataResult = ref<ResetDataResult | null>(null);
+const resetPickerVisible = ref(false);
+const resetCountsLoading = ref(false);
+const resetDataCounts = ref<ResetDataResult | null>(null);
+const resetDataLabels: Array<{ key: keyof ResetDataRequest; label: string }> = [
+  { key: 'connections', label: '连接' },
+  { key: 'tags', label: '连接标签' },
+  { key: 'proxies', label: '代理' },
+  { key: 'sshKeys', label: 'SSH 密钥' },
+  { key: 'quickCommands', label: '快捷命令' },
+  { key: 'quickCommandTags', label: '快捷命令标签' },
+  { key: 'favoritePaths', label: '收藏路径' },
+  { key: 'terminalThemes', label: '用户终端主题' },
+  { key: 'notificationChannels', label: '通知渠道' },
+  { key: 'appearance', label: '外观设置' },
+  { key: 'settings', label: '设置项（不含 AI）' },
+  { key: 'aiSettings', label: 'AI 设置与聊天记录' },
+  { key: 'commandHistory', label: '命令历史' },
+  { key: 'pathHistory', label: '路径历史' },
+  { key: 'auditLogs', label: '审计日志' },
+  { key: 'sshKnownHosts', label: 'SSH known_hosts' },
+];
+
+const selectedResetDataCount = computed(() =>
+  resetDataLabels.reduce((acc, item) => acc + (resetDataForm[item.key] ? 1 : 0), 0),
+);
+
+function clearResetSelection() {
+  for (const item of resetDataLabels) {
+    resetDataForm[item.key] = false;
+  }
+  resetDataMessage.value = '';
+  resetDataSuccess.value = false;
+  resetDataResult.value = null;
+}
+
+function getSelectedResetDataLabels(): string[] {
+  return resetDataLabels
+    .filter((item) => resetDataForm[item.key])
+    .map((item) => item.label);
+}
+
+function toggleResetItem(key: keyof ResetDataRequest) {
+  resetDataForm[key] = !resetDataForm[key];
+}
+
+function getResetCount(key: keyof ResetDataRequest): number {
+  if (!resetDataCounts.value) {
+    return 0;
+  }
+  const c = resetDataCounts.value as unknown as Record<string, number>;
+  const mapping: Record<keyof ResetDataRequest, string> = {
+    connections: 'connections',
+    tags: 'tags',
+    proxies: 'proxies',
+    sshKeys: 'ssh_keys',
+    quickCommands: 'quick_commands',
+    quickCommandTags: 'quick_command_tags',
+    favoritePaths: 'favorite_paths',
+    terminalThemes: 'terminal_themes',
+    notificationChannels: 'notification_channels',
+    appearance: 'appearance',
+    settings: 'settings',
+    aiSettings: 'ai_settings',
+    commandHistory: 'command_history',
+    pathHistory: 'path_history',
+    auditLogs: 'audit_logs',
+    sshKnownHosts: 'ssh_known_hosts',
+  };
+  return c[mapping[key]] ?? 0;
+}
+
+async function openResetPicker() {
+  resetPickerVisible.value = true;
+  resetCountsLoading.value = true;
+  resetDataCounts.value = null;
+  try {
+    resetDataCounts.value = await connectionsApi.appResetDataCounts();
+  } catch (error) {
+    resetDataMessage.value = normalizeError(error, '加载统计失败');
+    resetDataSuccess.value = false;
+  } finally {
+    resetCountsLoading.value = false;
+  }
+}
+
+function closeResetPicker() {
+  resetPickerVisible.value = false;
+}
+
+async function resetSelectedData() {
+  resetDataMessage.value = '';
+  resetDataSuccess.value = false;
+  resetDataResult.value = null;
+
+  const selected = getSelectedResetDataLabels();
+  if (selected.length === 0) {
+    resetDataMessage.value = '请先勾选要清除的数据项。';
+    resetDataSuccess.value = false;
+    return;
+  }
+
+  const ok = await confirm(
+    '确认清除所选数据？',
+    `将永久删除以下数据：\n- ${selected.join('\n- ')}\n\n此操作不可撤销，建议先导出完整备份。`,
+  );
+  if (!ok) {
+    resetDataMessage.value = '已取消。';
+    resetDataSuccess.value = false;
+    return;
+  }
+
+  resetDataLoading.value = true;
+  try {
+    const req: ResetDataRequest = { ...resetDataForm };
+    const result = await connectionsApi.appResetData(req);
+    resetDataResult.value = result;
+    resetDataMessage.value = '清除完成。';
+    resetDataSuccess.value = true;
+    notifications.addNotification({ type: 'success', message: '数据清除完成' });
+    resetPickerVisible.value = false;
+  } catch (error) {
+    resetDataMessage.value = normalizeError(error, '清除失败');
+    resetDataSuccess.value = false;
+    notifications.addNotification({ type: 'error', message: resetDataMessage.value });
+  } finally {
+    resetDataLoading.value = false;
+  }
+}
 
 const appVersion = (() => {
   const maybeVersion = (globalThis as AppVersionHost).__APP_VERSION__;
@@ -978,16 +1192,17 @@ async function exportConnections() {
   exportConnectionsSuccess.value = false;
 
   try {
-    const payload = await connectionsApi.export();
-    const blob = new Blob([payload], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'nexus_connections_export.json';
-    anchor.click();
-    URL.revokeObjectURL(url);
+    const filePath = await save({
+      defaultPath: 'nexus_connections_export.json',
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    });
+    if (!filePath) {
+      return;
+    }
+    const normalizedPath = filePath.toLowerCase().endsWith('.json') ? filePath : `${filePath}.json`;
+    await connectionsApi.exportToFile(normalizedPath);
 
-    exportConnectionsMessage.value = '导出成功。文件已开始下载。';
+    exportConnectionsMessage.value = `导出成功：${normalizedPath}`;
     exportConnectionsSuccess.value = true;
     notifications.addNotification({ type: 'success', message: '连接数据导出成功' });
   } catch (error) {
@@ -999,24 +1214,22 @@ async function exportConnections() {
   }
 }
 
-function triggerAppImport() {
-  appImportFileInput.value?.click();
-}
-
 async function appExport() {
   appExportLoading.value = true;
   appExportMessage.value = '';
   appExportSuccess.value = false;
   try {
-    const payload = await connectionsApi.appExport();
-    const blob = new Blob([payload], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `nexus_backup_${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    appExportMessage.value = '完整备份导出成功，文件已开始下载。';
+    const suggestedName = `nexus_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    const filePath = await save({
+      defaultPath: suggestedName,
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    });
+    if (!filePath) {
+      return;
+    }
+    const normalizedPath = filePath.toLowerCase().endsWith('.json') ? filePath : `${filePath}.json`;
+    await connectionsApi.appExportToFile(normalizedPath);
+    appExportMessage.value = `完整备份导出成功：${normalizedPath}`;
     appExportSuccess.value = true;
     notifications.addNotification({ type: 'success', message: '完整备份导出成功' });
   } catch (error) {
@@ -1028,25 +1241,48 @@ async function appExport() {
   }
 }
 
-async function appImport(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  if (!file) return;
-  // Reset so same file can be re-selected next time
-  input.value = '';
+async function triggerAppImport() {
+  const selection = await open({
+    multiple: false,
+    filters: [{ name: 'Backup', extensions: ['json', 'zip'] }],
+  });
+
+  const filePath = Array.isArray(selection) ? selection[0] : selection;
+  if (!filePath) {
+    return;
+  }
+
   appImportLoading.value = true;
   appImportMessage.value = '';
   appImportSuccess.value = false;
   appImportResult.value = null;
   try {
-    const json = await file.text();
-    const result = await connectionsApi.appImport(json);
+    const result = await connectionsApi.appImportFromFile(filePath);
     appImportResult.value = result;
     appImportMessage.value = '导入成功。';
     appImportSuccess.value = true;
     notifications.addNotification({ type: 'success', message: '完整备份导入成功' });
   } catch (error) {
-    appImportMessage.value = normalizeError(error, '导入失败');
+    const message = normalizeError(error, '导入失败');
+    if (message.includes('旧版加密 ZIP') && (message.includes('需要密码') || message.includes('解密失败'))) {
+      const pwd = prompt('检测到旧版加密 ZIP 备份，请输入导出时使用的 ENCRYPTION_KEY：');
+      if (typeof pwd === 'string' && pwd.trim()) {
+        try {
+          const result = await connectionsApi.appImportFromFile(filePath, pwd.trim());
+          appImportResult.value = result;
+          appImportMessage.value = '导入成功。';
+          appImportSuccess.value = true;
+          notifications.addNotification({ type: 'success', message: '完整备份导入成功' });
+          return;
+        } catch (retryError) {
+          appImportMessage.value = normalizeError(retryError, '导入失败');
+        }
+      } else {
+        appImportMessage.value = '已取消输入密码。';
+      }
+    } else {
+      appImportMessage.value = message;
+    }
     appImportSuccess.value = false;
     notifications.addNotification({ type: 'error', message: appImportMessage.value });
   } finally {
@@ -1442,6 +1678,112 @@ onUnmounted(() => {
 
 .btn-danger:hover {
   opacity: 0.9;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-card {
+  background: var(--bg-surface0);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  font-size: calc(16px + var(--ui-font-size-offset));
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+
+.close-btn {
+  cursor: pointer;
+  font-size: calc(22px + var(--ui-font-size-offset));
+  color: var(--text-dim);
+  line-height: 1;
+}
+
+.close-btn:hover {
+  color: var(--red);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-surface0) 70%, transparent);
+}
+
+.reset-picker-modal {
+  width: min(860px, calc(100vw - 24px));
+  max-height: min(75vh, 780px);
+  display: flex;
+  flex-direction: column;
+}
+
+.reset-picker-body {
+  padding: 16px;
+  overflow: auto;
+}
+
+.reset-picker-loading {
+  padding: 24px 8px;
+  text-align: center;
+  color: var(--text-sub);
+  font-size: calc(13px + var(--ui-font-size-offset));
+}
+
+.reset-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.reset-tile {
+  border: 1px solid var(--border);
+  background: var(--bg-surface1);
+  border-radius: 10px;
+  padding: 12px 12px 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.08s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.reset-tile:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--bg-surface2) 85%, transparent);
+}
+
+.reset-tile.active {
+  border-color: color-mix(in srgb, var(--blue) 55%, var(--border));
+  background: color-mix(in srgb, var(--blue) 16%, var(--bg-surface1));
+}
+
+.reset-tile-title {
+  color: var(--text-sub);
+  font-size: calc(12px + var(--ui-font-size-offset));
+  margin-bottom: 10px;
+}
+
+.reset-tile-value {
+  color: var(--text);
+  font-size: calc(22px + var(--ui-font-size-offset));
+  font-weight: 700;
+  letter-spacing: 0.2px;
 }
 
 .btn-xs {
