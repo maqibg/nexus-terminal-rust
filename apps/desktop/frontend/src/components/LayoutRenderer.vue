@@ -22,21 +22,23 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, computed } from 'vue';
+import { defineAsyncComponent, defineComponent, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { Splitpanes, Pane } from 'splitpanes';
 import 'splitpanes/dist/splitpanes.css';
 import type { LayoutNode, PaneName } from '@/stores/layout';
 import { notifyGlobalLayoutResized, useLayoutStore } from '@/stores/layout';
 import TerminalView from '@/components/TerminalView.vue';
-import SftpBrowser from '@/components/SftpBrowser.vue';
-import FileEditorContainer from '@/components/FileEditorContainer.vue';
 import CommandInputBar from '@/components/CommandInputBar.vue';
 import StatusMonitor from '@/components/StatusMonitor.vue';
-import CommandHistoryPanel from '@/components/CommandHistoryPanel.vue';
-import QuickCommandsPanel from '@/components/QuickCommandsPanel.vue';
-import WorkspaceConnectionList from '@/components/WorkspaceConnectionList.vue';
-import DockerManager from '@/components/DockerManager.vue';
+
+// Async panes reduce initial bundle cost for the workspace route.
+const WorkspaceConnectionList = defineAsyncComponent(() => import('@/components/WorkspaceConnectionList.vue'));
+const DockerManager = defineAsyncComponent(() => import('@/components/DockerManager.vue'));
+const SftpBrowser = defineAsyncComponent(() => import('@/components/SftpBrowser.vue'));
+const FileEditorContainer = defineAsyncComponent(() => import('@/components/FileEditorContainer.vue'));
+const CommandHistoryPanel = defineAsyncComponent(() => import('@/components/CommandHistoryPanel.vue'));
+const QuickCommandsPanel = defineAsyncComponent(() => import('@/components/QuickCommandsPanel.vue'));
 
 const componentMap: Record<PaneName, unknown> = {
   connections: WorkspaceConnectionList,

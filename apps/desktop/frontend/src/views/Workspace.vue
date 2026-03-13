@@ -155,7 +155,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, computed, nextTick, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { storeToRefs } from 'pinia';
 import { Splitpanes, Pane } from 'splitpanes';
 import 'splitpanes/dist/splitpanes.css';
@@ -170,13 +170,15 @@ import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import { useSessionLifecycle } from '@/composables/useSessionLifecycle';
 import LayoutRenderer from '@/components/LayoutRenderer.vue';
 import TerminalTabBar from '@/components/TerminalTabBar.vue';
-import WorkspaceConnectionList from '@/components/WorkspaceConnectionList.vue';
-import TransferProgressModal from '@/components/TransferProgressModal.vue';
-import LayoutConfigurator from '@/components/LayoutConfigurator.vue';
-import SftpBrowser from '@/components/SftpBrowser.vue';
-import FileEditorOverlay from '@/components/FileEditorOverlay.vue';
-import TerminalAIChatPanel from '@/components/AI/TerminalAIChatPanel.vue';
-import DockerManager from '@/components/DockerManager.vue';
+
+// Large/rarely-used panels are async-loaded to reduce first-time navigation cost.
+const WorkspaceConnectionList = defineAsyncComponent(() => import('@/components/WorkspaceConnectionList.vue'));
+const TransferProgressModal = defineAsyncComponent(() => import('@/components/TransferProgressModal.vue'));
+const LayoutConfigurator = defineAsyncComponent(() => import('@/components/LayoutConfigurator.vue'));
+const SftpBrowser = defineAsyncComponent(() => import('@/components/SftpBrowser.vue'));
+const FileEditorOverlay = defineAsyncComponent(() => import('@/components/FileEditorOverlay.vue'));
+const TerminalAIChatPanel = defineAsyncComponent(() => import('@/components/AI/TerminalAIChatPanel.vue'));
+const DockerManager = defineAsyncComponent(() => import('@/components/DockerManager.vue'));
 
 const sessionStore = useSessionStore();
 const layoutStore = useLayoutStore();

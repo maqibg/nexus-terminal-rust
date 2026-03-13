@@ -612,7 +612,7 @@ const tabs = computed<Array<{ key: TabKey; label: string }>>(() => [
 ]);
 
 function getInitialActiveTab(): TabKey {
-  const raw = localStorage.getItem(SETTINGS_TAB_STORAGE_KEY);
+  const raw = sessionStorage.getItem(SETTINGS_TAB_STORAGE_KEY);
   if (raw && tabs.value.some((tab) => tab.key === raw)) {
     return raw as TabKey;
   }
@@ -630,7 +630,7 @@ const { currentUiFontFamily, currentUiFontSize } = storeToRefs(appearanceStore);
 const activeTab = ref<TabKey>(getInitialActiveTab());
 
 watch(activeTab, (value) => {
-  localStorage.setItem(SETTINGS_TAB_STORAGE_KEY, value);
+  sessionStorage.setItem(SETTINGS_TAB_STORAGE_KEY, value);
   void maybeFocusRequestedSection();
 });
 
