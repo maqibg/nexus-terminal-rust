@@ -23,10 +23,10 @@
         <div class="nav-right no-drag">
           <a
             class="nav-icon-btn"
-            href="https://github.com/Heavrnl/nexus-terminal"
+            href="https://github.com/maqibg/nexus-terminal-rust"
             target="_blank"
             rel="noopener noreferrer"
-            title="Heavrnl/nexus-terminal"
+            title="maqibg/nexus-terminal-rust"
           >
             <i class="fab fa-github"></i>
           </a>

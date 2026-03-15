@@ -557,12 +557,35 @@
                 <span class="about-item">版本：{{ appVersion }}</span>
                 <span v-if="isCheckingVersion" class="status-pill info">检查更新中...</span>
                 <span v-else-if="versionCheckError" class="status-pill danger" :title="versionCheckError">检查失败</span>
+                <span v-else-if="noReleaseYet" class="status-pill info">暂无发布</span>
                 <span v-else-if="latestVersion && !isUpdateAvailable" class="status-pill success">已是最新版本</span>
                 <a v-else-if="latestVersion && isUpdateAvailable" class="status-pill warning" :href="latestReleaseUrl" target="_blank" rel="noopener noreferrer">发现新版本 {{ latestVersion }}</a>
+                <button type="button" class="btn btn-muted btn-sm" :disabled="isCheckingVersion" @click="checkLatestVersion('manual')">检查更新</button>
                 <span class="about-sep">|</span>
-                <a class="about-link" href="https://github.com/Heavrnl/nexus-terminal" target="_blank" rel="noopener noreferrer">Heavrnl/nexus-terminal</a>
+                <a class="about-link" href="https://github.com/maqibg/nexus-terminal-rust" target="_blank" rel="noopener noreferrer">maqibg/nexus-terminal-rust</a>
                 <span class="about-sep">|</span>
                 <a class="about-link" href="https://ko-fi.com/0heavrnl" target="_blank" rel="noopener noreferrer">Ko-fi</a>
+              </div>
+
+              <hr class="section-divider">
+
+              <div class="settings-section-content">
+                <h3 class="section-heading">版本监控</h3>
+                <form class="section-form" @submit.prevent="saveVersionMonitorSettings">
+                  <div class="checkbox-row">
+                    <input id="version-monitor-enabled" v-model="aboutForm.versionMonitorEnabled" class="checkbox-input" type="checkbox">
+                    <label for="version-monitor-enabled">定时检查 GitHub Releases</label>
+                  </div>
+                  <div class="form-field">
+                    <label class="form-label" for="version-monitor-interval">检查间隔（小时）</label>
+                    <input id="version-monitor-interval" v-model.number="aboutForm.versionMonitorIntervalHours" class="form-control" type="number" min="1" max="168">
+                    <small class="section-desc">关闭后不会自动发起版本检查；你仍可手动点击“检查更新”。</small>
+                  </div>
+                  <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">保存</button>
+                    <p v-if="feedback.versionMonitor?.message" :class="['feedback-msg', feedback.versionMonitor.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.versionMonitor.message }}</p>
+                  </div>
+                </form>
               </div>
             </div>
           </div>
@@ -911,6 +934,7 @@ const appVersion = (() => {
 const latestVersion = ref('');
 const isCheckingVersion = ref(false);
 const versionCheckError = ref('');
+const noReleaseYet = ref(false);
 
 const isUpdateAvailable = computed(() => {
   if (!latestVersion.value) {
@@ -926,6 +950,19 @@ const latestReleaseUrl = computed(() => {
   return `${RELEASES_BASE_URL}/tag/${latestVersion.value}`;
 });
 
+const aboutForm = reactive({
+  versionMonitorEnabled: true,
+  versionMonitorIntervalHours: 24,
+});
+
+let versionMonitorTimer: number | null = null;
+
+function stopVersionMonitor() {
+  if (versionMonitorTimer !== null) {
+    window.clearInterval(versionMonitorTimer);
+    versionMonitorTimer = null;
+  }
+}
 
 function setFeedback(key: string, message: string, success: boolean) {
   feedback[key] = { message, success };
@@ -1007,6 +1044,9 @@ function hydrateFormsFromSettings() {
   workspaceForm.dockerStatusIntervalSeconds = toInt(map.dockerStatusIntervalSeconds, 5);
   workspaceForm.dockerDefaultExpand = toBool(map.dockerDefaultExpand, false);
   workspaceForm.dockerUseSudo = toBool(map.dockerUseSudo, false);
+
+  aboutForm.versionMonitorEnabled = toBool(map.versionMonitorEnabled, true);
+  aboutForm.versionMonitorIntervalHours = Math.max(1, toInt(map.versionMonitorIntervalHours, 24));
 
   systemForm.timezone = map.timezone || 'Asia/Shanghai';
   appearanceForm.uiFontFamily = currentUiFontFamily.value;
@@ -1322,9 +1362,13 @@ function compareVersion(left: string, right: string): number {
 }
 
 
-async function checkLatestVersion() {
+async function checkLatestVersion(mode: 'auto' | 'manual' = 'auto') {
+  if (isCheckingVersion.value) {
+    return;
+  }
   isCheckingVersion.value = true;
   versionCheckError.value = '';
+  noReleaseYet.value = false;
 
   try {
     const response = await fetch(LATEST_RELEASE_API_URL, {
@@ -1333,16 +1377,70 @@ async function checkLatestVersion() {
       },
     });
 
+    if (response.status === 404) {
+      noReleaseYet.value = true;
+      latestVersion.value = '';
+      if (mode === 'manual') {
+        notifications.addNotification({ type: 'info', message: '当前仓库暂无 Release' });
+      }
+      return;
+    }
+
     if (!response.ok) {
       throw new Error(`GitHub API 请求失败 (${response.status})`);
     }
 
     const data = await response.json() as { tag_name?: string };
     latestVersion.value = normalizeVersion(data.tag_name ?? '');
+
+    if (mode === 'manual') {
+      if (latestVersion.value && isUpdateAvailable.value) {
+        notifications.addNotification({ type: 'info', message: `发现新版本：${latestVersion.value}` });
+      } else {
+        notifications.addNotification({ type: 'success', message: '已是最新版本' });
+      }
+    }
   } catch (error) {
     versionCheckError.value = normalizeError(error, '检查版本失败');
+    if (mode === 'manual') {
+      notifications.addNotification({ type: 'error', message: versionCheckError.value });
+    }
   } finally {
     isCheckingVersion.value = false;
+  }
+}
+
+async function startVersionMonitor() {
+  stopVersionMonitor();
+  if (!aboutForm.versionMonitorEnabled) {
+    return;
+  }
+
+  await checkLatestVersion('auto');
+
+  const hours = Number(aboutForm.versionMonitorIntervalHours) || 24;
+  const intervalMs = Math.min(168, Math.max(1, Math.round(hours))) * 60 * 60 * 1000;
+  versionMonitorTimer = window.setInterval(() => {
+    void checkLatestVersion('auto');
+  }, intervalMs);
+}
+
+async function saveVersionMonitorSettings() {
+  try {
+    const hours = Number(aboutForm.versionMonitorIntervalHours);
+    if (!Number.isInteger(hours) || hours < 1 || hours > 168) {
+      throw new Error('检查间隔请输入 1~168 的整数（小时）');
+    }
+
+    await saveSettingsBatch([
+      ['versionMonitorEnabled', aboutForm.versionMonitorEnabled ? 'true' : 'false'],
+      ['versionMonitorIntervalHours', String(hours)],
+    ]);
+
+    setFeedback('versionMonitor', '版本监控设置已保存', true);
+    await startVersionMonitor();
+  } catch (error) {
+    setFeedback('versionMonitor', normalizeError(error, '保存失败'), false);
   }
 }
 
@@ -1351,12 +1449,13 @@ onMounted(async () => {
   window.addEventListener('keydown', handleCommandSyncEscape);
   await appearanceStore.loadAll().catch(() => undefined);
   await loadSettings();
-  await checkLatestVersion();
+  await startVersionMonitor();
 });
 
 onUnmounted(() => {
   document.removeEventListener('mousedown', handleCommandSyncOutsideClick);
   window.removeEventListener('keydown', handleCommandSyncEscape);
+  stopVersionMonitor();
 });
 </script>
 
