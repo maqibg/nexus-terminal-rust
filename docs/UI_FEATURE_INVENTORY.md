@@ -4,7 +4,7 @@
 
 ## 1. 盘点范围
 
-- 路由接入（来自 `apps/desktop/frontend/src/main.ts`）：`/setup`、`/login`、`/connections`、`/workspace`、`/proxies`、`/statistics`、`/settings`
+- 路由接入（来自 `apps/desktop/frontend/src/main.ts`）：`/setup`、`/login`、`/connections`、`/workspace`、`/databases`、`/tools`、`/proxies`、`/statistics`、`/settings`
 - 全局壳（来自 `apps/desktop/frontend/src/App.vue`）：顶部导航、窗口控制、全局 AI/外观/焦点切换、全局对话框与通知
 - 工作区布局 pane（来自 `apps/desktop/frontend/src/components/LayoutRenderer.vue` + `apps/desktop/frontend/src/stores/layout.ts`）：`connections/dockerManager/terminal/fileManager/editor/commandBar/statusMonitor/commandHistory/quickCommands`
 - 未接入路由但仍在代码树内的 `views/*`：单独列出（不保证可从 UI 访问）
@@ -17,7 +17,7 @@
 
 | ID | 页面/模块 | 控件/入口 | 功能 | 代码定位 | 备注 |
 |---:|---|---|---|---|---|
-| F001 | 全局 | 顶部导航：连接/工作区/代理/统计/设置 | 页面切换 | `apps/desktop/frontend/src/App.vue` + `apps/desktop/frontend/src/main.ts` |  |
+| F001 | 全局 | 顶部导航：连接/工作区/数据库/工具箱/代理/统计/设置 | 页面切换 | `apps/desktop/frontend/src/App.vue` + `apps/desktop/frontend/src/main.ts` |  |
 | F002 | 全局 | GitHub 图标按钮 | 打开仓库链接 | `apps/desktop/frontend/src/App.vue` | 外链 |
 | F003 | 全局 | 机器人图标按钮 | 打开/关闭全局 AI 侧栏 | `apps/desktop/frontend/src/App.vue` + `apps/desktop/frontend/src/components/AI/TerminalAIChatPanel.vue` |  |
 | F004 | 全局 | 画笔图标按钮 | 打开外观定制器（StyleCustomizer） | `apps/desktop/frontend/src/App.vue` + `apps/desktop/frontend/src/stores/appearance.ts` |  |
@@ -134,5 +134,11 @@
 | F152 | 设置·外观 | 界面字体 | 字体族/字号偏移设置 | `apps/desktop/frontend/src/views/Settings.vue` + `apps/desktop/frontend/src/stores/appearance.ts` |  |
 | F153 | 设置·外观 | 主题与背景 | 打开 StyleCustomizer + 终端主题/背景 | `apps/desktop/frontend/src/views/Settings.vue` + `apps/desktop/frontend/src/stores/appearance.ts` |  |
 | F154 | 设置·关于 | 版本/检查更新 | 打开 releases/拉取 latest release | `apps/desktop/frontend/src/views/Settings.vue` | GitHub API |
+
+| F160 | 数据库 | 打开 SQLite | 选择本地 SQLite 文件并记录连接资产 | `apps/desktop/frontend/src/views/Databases.vue` + `apps/desktop/frontend/src/views/databases/useSqliteManager.ts` | SQLite MVP |
+| F161 | 数据库 | SQLite 资产树 | 表/列列表与刷新 | `apps/desktop/frontend/src/views/Databases.vue` + `apps/desktop/frontend/src/lib/api-database.ts` + `apps/desktop/src-tauri/src/commands/database.rs` |  |
+| F162 | 数据库 | SQL 编辑器 + 查询结果 | SQL 执行与结果表（columns/rows/影响行数/耗时） | `apps/desktop/frontend/src/views/Databases.vue` + `apps/desktop/frontend/src/lib/api-database.ts` + `apps/desktop/src-tauri/src/commands/database.rs` |  |
+
+| F165 | 工具箱 | 工具集合页面 | 17 内置开发工具（JSON/Base64/URL/HTML/Unicode/Hash/JWT/Regex/Diff/UUID/Cron/QR/时间戳/密码/颜色/命名/行处理） | `apps/desktop/frontend/src/views/Tools.vue` + `apps/desktop/frontend/src/views/tools/*` |  |
 
 | F173 | 未接入路由 | `views/Notifications.vue` | 通知渠道管理（未路由接入） | `apps/desktop/frontend/src/views/Notifications.vue` + `apps/desktop/frontend/src/lib/api-settings.ts` |  |

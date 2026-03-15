@@ -28,6 +28,18 @@ This project draws design inspiration from Mshell:
   Note: No source code from Mshell was copied or incorporated.
   All AI and advanced features are original implementations.
 
+This project draws design inspiration from HiKit:
+
+  HiKit — Developer toolbox
+  Licensed under the Apache License 2.0
+  https://github.com/hsqbyte/hikit
+
+  Inspired features (independently implemented):
+  - Toolbox information architecture
+  - Database management patterns (asset tree + editor + results)
+
+  Note: No source code from HiKit was copied or incorporated.
+
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or

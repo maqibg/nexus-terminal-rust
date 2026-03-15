@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { v4 as uuidv4 } from 'uuid';
 
-export type SessionProtocol = 'SSH' | 'RDP' | 'VNC';
+export type SessionProtocol = 'SSH' | 'RDP' | 'VNC' | 'TELNET' | 'LOCAL';
 
 export interface SessionInfo {
   id: string;

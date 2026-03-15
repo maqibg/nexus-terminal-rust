@@ -19,6 +19,8 @@ use tokio::sync::{Mutex, Semaphore};
 use transfer_core::TransferManager;
 
 use crate::status_monitor::StatusMonitorService;
+use crate::telnet::TelnetSessionManager;
+use crate::local_terminal::LocalTerminalManager;
 
 #[derive(Clone, Debug)]
 pub struct RuntimePaths {
@@ -65,6 +67,8 @@ pub struct AppState {
     pub history_repo: Arc<SqliteHistoryRepo>,
     pub qc_repo: Arc<SqliteQuickCommandRepo>,
     pub ssh_manager: SshSessionManager,
+    pub telnet_manager: TelnetSessionManager,
+    pub local_terminal_manager: LocalTerminalManager,
     pub transfer_manager: TransferManager,
     pub status_monitor: StatusMonitorService,
     pub suspend_manager: SuspendManager,
@@ -93,6 +97,8 @@ impl AppState {
             history_repo: Arc::new(SqliteHistoryRepo::new(pool.clone())),
             qc_repo: Arc::new(SqliteQuickCommandRepo::new(pool)),
             ssh_manager: SshSessionManager::new(),
+            telnet_manager: TelnetSessionManager::new(),
+            local_terminal_manager: LocalTerminalManager::new(),
             transfer_manager: TransferManager::new(),
             status_monitor: StatusMonitorService::new(),
             suspend_manager: SuspendManager::new(),

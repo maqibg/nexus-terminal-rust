@@ -1,4 +1,4 @@
-import { desktopApi, sftpApi, sshApi, type Connection } from '@/lib/api';
+import { desktopApi, localTerminalApi, sftpApi, sshApi, telnetApi, type Connection } from '@/lib/api';
 import { toAppError } from '@/lib/errors';
 import { useSessionStore } from '@/stores/session';
 import { useUiNotificationsStore } from '@/stores/uiNotifications';
@@ -101,6 +101,26 @@ export function useSessionLifecycle(reportError?: ErrorReporter) {
         } catch {
           // ignore best-effort close failures
         }
+      }
+      sessionStore.removeSession(sessionId);
+      return;
+    }
+
+    if (session.protocol === 'TELNET') {
+      try {
+        await telnetApi.close(sessionId);
+      } catch {
+        // ignore best-effort close failures
+      }
+      sessionStore.removeSession(sessionId);
+      return;
+    }
+
+    if (session.protocol === 'LOCAL') {
+      try {
+        await localTerminalApi.close(sessionId);
+      } catch {
+        // ignore best-effort close failures
       }
       sessionStore.removeSession(sessionId);
       return;

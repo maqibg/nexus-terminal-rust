@@ -134,4 +134,8 @@
 | F152 | ✅ | 静态 | `apps/desktop/frontend/src/views/Settings.vue`（UI 字体）+ `apps/desktop/frontend/src/stores/appearance.ts`（setUiFontFamily/size） |  |
 | F153 | ✅ | 静态 | `apps/desktop/frontend/src/views/Settings.vue`（toggleStyleCustomizer）+ `apps/desktop/frontend/src/stores/appearance.ts`（主题/背景/HTML） |  |
 | F154 | ⚠️ | 静态 | `apps/desktop/frontend/src/views/Settings.vue`（LATEST_RELEASE_API_URL + RELEASES_BASE_URL） | 需联网访问 GitHub API |
+| F160 | ✅ | 静态 | `apps/desktop/frontend/src/views/Databases.vue`（打开 SQLite）+ `apps/desktop/frontend/src/views/databases/useSqliteManager.ts`（addSqlite/persistConnections） |  |
+| F161 | ✅ | 静态 | `apps/desktop/frontend/src/views/Databases.vue`（资产树）+ `apps/desktop/frontend/src/lib/api-database.ts`（sqliteListTables/sqliteListColumns）+ `apps/desktop/src-tauri/src/commands/database.rs`（db_sqlite_list_*） |  |
+| F162 | ✅ | 静态 | `apps/desktop/frontend/src/views/Databases.vue`（SQL 编辑器/执行）+ `apps/desktop/frontend/src/lib/api-database.ts`（sqliteQuery）+ `apps/desktop/src-tauri/src/commands/database.rs`（db_sqlite_query） | SQLite MVP |
+| F165 | ✅ | 静态 | `apps/desktop/frontend/src/views/Tools.vue` + `apps/desktop/frontend/src/views/tools/*`（17 工具） |  |
 | F173 | ⚠️ | 静态 | `apps/desktop/frontend/src/views/Notifications.vue` + `apps/desktop/frontend/src/lib/api-settings.ts` | 未路由接入 |

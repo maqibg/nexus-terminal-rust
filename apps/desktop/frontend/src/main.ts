@@ -14,6 +14,8 @@ const router = createRouter({
     { path: '/', redirect: '/connections' },
     { path: '/connections', component: () => import('./views/Connections.vue'), meta: { requiresAuth: true } },
     { path: '/workspace', component: () => import('./views/Workspace.vue'), meta: { requiresAuth: true } },
+    { path: '/databases', component: () => import('./views/Databases.vue'), meta: { requiresAuth: true } },
+    { path: '/tools', component: () => import('./views/Tools.vue'), meta: { requiresAuth: true } },
     { path: '/proxies', component: () => import('./views/Proxies.vue'), meta: { requiresAuth: true } },
     { path: '/statistics', component: () => import('./views/Statistics.vue'), meta: { requiresAuth: true } },
     { path: '/settings', component: () => import('./views/Settings.vue'), meta: { requiresAuth: true } },

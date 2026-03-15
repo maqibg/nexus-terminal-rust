@@ -1,6 +1,6 @@
 [package]
 name = "nexus-terminal"
-version = "1.1.4"
+version = "1.1.5"
 edition = "2021"
 
 [lib]
@@ -49,6 +49,7 @@ storage-sqlite = { path = "../../../crates/storage-sqlite" }
 shared-utils = { path = "../../../crates/shared-utils" }
 uuid = { workspace = true }
 base64 = { workspace = true }
+dashmap = { workspace = true }
 russh = { workspace = true }
 russh-sftp = { workspace = true }
 walkdir = "2"
@@ -58,3 +59,9 @@ tokio-tungstenite = "0.24"
 zip = { version = "2", default-features = false, features = ["deflate", "aes-crypto"] }
 reqwest = { workspace = true }
 log = "0.4"
+tiberius = { workspace = true }
+tokio-util = { workspace = true }
+redis = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+odbc-api = { workspace = true }

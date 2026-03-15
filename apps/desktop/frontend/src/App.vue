@@ -11,6 +11,8 @@
           <img :src="logoPng" alt="Nexus Terminal" class="brand-logo" title="Nexus Terminal" />
           <router-link to="/connections" class="nav-link" active-class="nav-link-active">{{ uiText.navConnections }}</router-link>
           <router-link to="/workspace" class="nav-link" active-class="nav-link-active">{{ uiText.navTerminal }}</router-link>
+          <router-link to="/databases" class="nav-link" active-class="nav-link-active">{{ uiText.navDatabases }}</router-link>
+          <router-link to="/tools" class="nav-link" active-class="nav-link-active">{{ uiText.navTools }}</router-link>
           <router-link to="/proxies" class="nav-link nav-link-desktop" active-class="nav-link-active">{{ uiText.navProxy }}</router-link>
           <router-link to="/statistics" class="nav-link" active-class="nav-link-active">{{ uiText.navStatistics }}</router-link>
           <router-link to="/settings" class="nav-link" active-class="nav-link-active">{{ uiText.navSettings }}</router-link>
@@ -130,6 +132,8 @@ const appWindow = getCurrentWindow();
 const uiText = computed(() => ({
   navConnections: '连接管理',
   navTerminal: '终端',
+  navDatabases: '数据库',
+  navTools: '工具箱',
   navProxy: '代理管理',
   navStatistics: '统计分析',
   navSettings: '设置',

@@ -1,8 +1,10 @@
 //! Nexus Terminal - Tauri 2 desktop application entry point
 
 mod commands;
+mod local_terminal;
 mod state;
 mod status_monitor;
+mod telnet;
 
 use anyhow::{anyhow, Context};
 use log::LevelFilter;
@@ -134,6 +136,30 @@ pub fn run() {
             commands::settings::notification_channel_create,
             commands::settings::notification_channel_update,
             commands::settings::notification_channel_delete,
+            // Crypto
+            commands::crypto::crypto_encrypt,
+            // Database
+            commands::database::db_sqlite_list_tables,
+            commands::database::db_sqlite_list_columns,
+            commands::database::db_sqlite_query,
+            commands::db_mysql::db_mysql_list_tables,
+            commands::db_mysql::db_mysql_list_columns,
+            commands::db_mysql::db_mysql_query,
+            commands::db_postgres::db_postgres_list_tables,
+            commands::db_postgres::db_postgres_list_columns,
+            commands::db_postgres::db_postgres_query,
+            commands::db_mssql::db_mssql_list_tables,
+            commands::db_mssql::db_mssql_list_columns,
+            commands::db_mssql::db_mssql_query,
+            commands::db_redis::db_redis_scan_keys,
+            commands::db_redis::db_redis_get_key,
+            commands::db_redis::db_redis_command,
+            commands::db_clickhouse::db_clickhouse_list_tables,
+            commands::db_clickhouse::db_clickhouse_list_columns,
+            commands::db_clickhouse::db_clickhouse_query,
+            commands::db_oracle::db_oracle_list_tables,
+            commands::db_oracle::db_oracle_list_columns,
+            commands::db_oracle::db_oracle_query,
             // AI
             commands::ai::ai_get_all_channels,
             commands::ai::ai_add_channel,
@@ -194,6 +220,19 @@ pub fn run() {
             commands::ssh::ssh_host_key_list,
             commands::ssh::ssh_host_key_delete,
             commands::ssh::ssh_host_key_get,
+            // Telnet
+            commands::telnet::telnet_connect,
+            commands::telnet::telnet_write,
+            commands::telnet::telnet_close,
+            commands::telnet::telnet_session_list,
+            commands::telnet::telnet_take_output_backlog,
+            // Local Terminal
+            commands::local_terminal::local_terminal_open,
+            commands::local_terminal::local_terminal_write,
+            commands::local_terminal::local_terminal_resize,
+            commands::local_terminal::local_terminal_close,
+            commands::local_terminal::local_terminal_session_list,
+            commands::local_terminal::local_terminal_take_output_backlog,
             commands::ssh_suspend::ssh_suspend_list,
             commands::ssh_suspend::ssh_suspend,
             commands::ssh_suspend::ssh_resume,

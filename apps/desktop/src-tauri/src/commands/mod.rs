@@ -2,12 +2,23 @@ pub mod ai;
 pub mod auth;
 pub mod auxiliary;
 pub mod connections;
+pub mod crypto;
+pub mod database;
+pub mod db_clickhouse;
+pub mod db_mssql;
+pub mod db_mysql;
+pub mod db_oracle;
+pub mod db_postgres;
+pub mod db_redis;
+pub mod db_types;
 pub mod desktop;
+pub mod local_terminal;
 pub mod settings;
 pub mod sftp;
 pub mod ssh;
 pub mod ssh_suspend;
 pub mod status;
+pub mod telnet;
 pub mod transfer;
 
 // ── 内部共用：SettingsHostKeyStore + build_creds ──

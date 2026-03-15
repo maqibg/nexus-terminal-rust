@@ -8,6 +8,10 @@ export { connectionsApi } from './api-connections';
 export type { Connection, Tag, SshKey, Proxy, ImportResult, ResetDataRequest, ResetDataResult } from './api-connections';
 export { sshApi, onSshOutput } from './api-ssh';
 export type { SshSession, SshOutputChunk, HostKeyEntry } from './api-ssh';
+export { telnetApi, onTelnetOutput } from './api-telnet';
+export type { TelnetSessionInfo, TelnetOutputChunk } from './api-telnet';
+export { localTerminalApi, onLocalTerminalOutput } from './api-local-terminal';
+export type { LocalTerminalSessionInfo, LocalTerminalOutputChunk } from './api-local-terminal';
 export { sftpApi } from './api-sftp';
 export type { FileEntry } from './api-sftp';
 export { desktopApi } from './api-desktop';
@@ -18,6 +22,25 @@ export { statusApi } from './api-status';
 export type { BackendHealth, RuntimePaths } from './api-status';
 export { settingsApi } from './api-settings';
 export type { Setting, TerminalTheme, NotificationChannel } from './api-settings';
+export { databaseApi } from './api-database';
+export type {
+  DbTable,
+  DbColumn,
+  DbQueryResult,
+  MysqlConnection,
+  PostgresConnection,
+  MssqlConnection,
+  ClickHouseConnection,
+  OracleConnection,
+  RedisConnection,
+  RedisKeyInfo,
+  RedisKeyDetail,
+  RedisCommandResult,
+  SqliteTable,
+  SqliteColumn,
+  SqliteQueryResult,
+} from './api-database';
+export { cryptoApi } from './api-crypto';
 export { aiApi } from './api-ai';
 export { auditApi, historyApi, pathHistoryApi, favoritePathApi, quickCommandApi, quickCommandTagApi } from './api-auxiliary';
 export type { AuditLog, CommandHistory, PathHistory, FavoritePath, QuickCommand, QuickCommandTag } from './api-auxiliary';

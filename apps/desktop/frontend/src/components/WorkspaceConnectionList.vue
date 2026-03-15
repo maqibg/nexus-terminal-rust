@@ -1,5 +1,7 @@
 <template>
   <div class="ws-conn-list">
+    <WorkspaceQuickSessions />
+
     <div class="search-wrap">
       <input
         ref="searchInputRef"
@@ -43,6 +45,7 @@ import { storeToRefs } from 'pinia';
 import { useConnectionsStore } from '@/stores/connections';
 import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 import type { Connection } from '@/lib/api';
+import WorkspaceQuickSessions from './WorkspaceQuickSessions.vue';
 
 interface ConnectionGroup {
   key: string;

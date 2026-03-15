@@ -1,0 +1,365 @@
+.db-page {
+  padding: 20px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.db-page .page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+.db-page .page-header h2 {
+  font-size: calc(18px + var(--ui-font-size-offset));
+  color: var(--text);
+}
+.db-page .header-actions {
+  display: flex;
+  gap: 8px;
+}
+.db-page .db-layout {
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+}
+.db-page .db-sidebar {
+  width: 320px;
+  min-width: 260px;
+  background: var(--bg-surface0);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.db-page .db-main {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-surface0);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  overflow: auto;
+}
+.db-page .section-title {
+  color: var(--text-sub);
+  font-size: calc(12px + var(--ui-font-size-offset));
+  font-weight: 600;
+}
+.db-page .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.db-page .conn-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.db-page .db-conn-search {
+  display: flex;
+}
+.db-page .conn-item-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.db-page .conn-main {
+  flex: 1;
+}
+.db-page .conn-action {
+  flex: 0 0 auto;
+  height: 100%;
+}
+.db-page .conn-item {
+  text-align: left;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+}
+.db-page .conn-item:hover {
+  background: var(--ui-action-hover);
+}
+.db-page .conn-item.active {
+  border-color: var(--blue);
+  background: rgba(160, 108, 213, 0.12);
+}
+.db-page .conn-name {
+  font-size: calc(13px + var(--ui-font-size-offset));
+  color: var(--text);
+  font-weight: 650;
+}
+.db-page .conn-path {
+  font-size: calc(12px + var(--ui-font-size-offset));
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.db-page .field-block,
+.db-dialog-scope .field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.db-page .field-label,
+.db-dialog-scope .field-label {
+  font-size: calc(13px + var(--ui-font-size-offset));
+  font-weight: 500;
+  color: var(--text-sub);
+}
+.db-page .field-input,
+.db-dialog-scope .field-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-base);
+  color: var(--text);
+  font-size: calc(13px + var(--ui-font-size-offset));
+}
+.db-page .field-grid,
+.db-dialog-scope .field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.db-page .field-row,
+.db-dialog-scope .field-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.db-page .checkbox,
+.db-dialog-scope .checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-sub);
+  font-size: calc(12px + var(--ui-font-size-offset));
+}
+.db-page .hint,
+.db-dialog-scope .hint {
+  font-size: calc(12px + var(--ui-font-size-offset));
+  color: var(--text-dim);
+}
+.db-page .pwd-input,
+.db-dialog-scope .pwd-input {
+  width: 180px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  color: var(--text);
+  font-size: calc(13px + var(--ui-font-size-offset));
+}
+.db-page .table-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.db-page .table-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--bg-surface1);
+  color: var(--text);
+  cursor: pointer;
+}
+.db-page .table-item:hover {
+  background: var(--bg-mantle);
+}
+.db-page .table-item.active {
+  border-color: var(--blue);
+}
+.db-page .table-name {
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: calc(12px + var(--ui-font-size-offset));
+}
+.db-page .table-kind {
+  font-size: calc(11px + var(--ui-font-size-offset));
+  color: var(--text-dim);
+}
+.db-page .columns-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.db-page .columns-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.db-page .column-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: calc(12px + var(--ui-font-size-offset));
+}
+.db-page .column-name {
+  font-family: Consolas, 'Courier New', monospace;
+  color: var(--text);
+}
+.db-page .column-type {
+  color: var(--text-dim);
+}
+.db-page .column-tag {
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--text-sub);
+  font-size: calc(11px + var(--ui-font-size-offset));
+}
+.db-page .db-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.db-page .panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.db-page .panel-title {
+  font-size: calc(14px + var(--ui-font-size-offset));
+  font-weight: 650;
+}
+.db-page .panel-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.db-page .editor-wrap {
+  min-height: 320px;
+  height: 320px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.db-page .meta {
+  display: flex;
+  gap: 12px;
+  color: var(--text-dim);
+  font-size: calc(12px + var(--ui-font-size-offset));
+}
+.db-page .table-wrap {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.db-page .table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.db-page .table th,
+.db-page .table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: calc(12px + var(--ui-font-size-offset));
+}
+.db-page .table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-surface1);
+  color: var(--text-sub);
+  text-align: left;
+}
+.db-page .btn,
+.db-dialog-scope .btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface1);
+  color: var(--text);
+  cursor: pointer;
+  font-size: calc(13px + var(--ui-font-size-offset));
+}
+.db-page .btn:hover,
+.db-dialog-scope .btn:hover {
+  background: var(--bg-mantle);
+}
+
+.db-page .page-subtitle {
+  color: var(--text-dim);
+  font-size: calc(12px + var(--ui-font-size-offset));
+}
+
+.db-page .db-type-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.db-page .tab-btn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface0);
+  color: var(--text);
+  cursor: pointer;
+  font-size: calc(13px + var(--ui-font-size-offset));
+}
+
+.db-page .tab-btn:hover {
+  background: var(--bg-surface1);
+}
+
+.db-page .tab-btn.active {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: rgba(160, 108, 213, 0.12);
+}
+.db-page .btn-primary,
+.db-dialog-scope .btn-primary {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: var(--bg-base);
+}
+.db-page .btn-primary:hover,
+.db-dialog-scope .btn-primary:hover {
+  background: var(--button-hover-bg-color);
+  border-color: var(--button-hover-bg-color);
+}
+.db-page .btn-ghost,
+.db-dialog-scope .btn-ghost {
+  background: transparent;
+}
+.db-page .btn-ghost:hover,
+.db-dialog-scope .btn-ghost:hover {
+  background: var(--ui-action-hover);
+}
+.db-page .btn-sm,
+.db-dialog-scope .btn-sm {
+  padding: 2px 8px;
+  font-size: calc(12px + var(--ui-font-size-offset));
+}
+.db-page .empty,
+.db-dialog-scope .empty {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 12px;
+  font-size: calc(12px + var(--ui-font-size-offset));
+}
+.db-page .empty.big {
+  padding: 60px 12px;
+}
+.db-page .error,
+.db-dialog-scope .error {
+  color: var(--red);
+  font-size: calc(12px + var(--ui-font-size-offset));
+}

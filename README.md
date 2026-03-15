@@ -88,6 +88,16 @@
 - 加密备份与恢复
 - 配置导入 / 导出
 
+### 数据库管理（新增）
+
+- SQLite 本地文件：资产树（表/列）浏览
+- SQL 编辑器 + 查询结果表（支持执行与影响行数）
+- 已支持：Redis、MySQL/MariaDB、PostgreSQL、SQLite、SQL Server、ClickHouse、Oracle（Oracle 基于 ODBC；在当前构建中仅 Windows 可用）
+
+### 工具箱（新增）
+
+- 17 种内置开发工具：JSON、Base64、URL、HTML 实体、Unicode、Hash、JWT、Regex、Diff、UUID、Cron、QR 码、时间戳、密码生成、颜色转换、命名转换、行处理
+
 ---
 
 ## 架构
@@ -209,6 +219,8 @@ pnpm tauri build
 ### 功能设计参考
 
 AI 助手、端口转发等高级功能的设计理念参考了 [Mshell](https://github.com/inspoaibox/Mshell)（MIT License），但所有代码均为独立实现，未使用 Mshell 的源代码。
+
+工具箱、数据库管理等功能形态参考了 [HiKit](https://github.com/hsqbyte/hikit)（Apache-2.0），但所有实现均为独立开发，未拷贝 HiKit 源代码。
 
 ### 版权声明
 

@@ -1,13 +1,23 @@
 <template>
   <div class="terminal-view-stack">
-    <div v-if="!activeSessionId" class="terminal-placeholder">
+    <div v-if="!activeSession" class="terminal-placeholder">
       <span class="placeholder-text">无活动会话</span>
     </div>
     <KeepAlive :max="16">
+      <LocalTerminalSessionView
+        v-if="activeSession && activeSession.protocol === 'LOCAL'"
+        :key="activeSession.id"
+        :session-id="activeSession.id"
+      />
+      <TelnetTerminalView
+        v-else-if="activeSession && activeSession.protocol === 'TELNET'"
+        :key="activeSession.id"
+        :session-id="activeSession.id"
+      />
       <SessionTerminalView
-        v-if="activeSessionId"
-        :key="activeSessionId"
-        :session-id="activeSessionId"
+        v-else-if="activeSession"
+        :key="activeSession.id"
+        :session-id="activeSession.id"
       />
     </KeepAlive>
   </div>
@@ -17,9 +27,11 @@
 import { storeToRefs } from 'pinia';
 import { useSessionStore } from '@/stores/session';
 import SessionTerminalView from '@/components/SessionTerminalView.vue';
+import TelnetTerminalView from '@/components/TelnetTerminalView.vue';
+import LocalTerminalSessionView from '@/components/LocalTerminalSessionView.vue';
 
 const sessionStore = useSessionStore();
-const { activeSessionId } = storeToRefs(sessionStore);
+const { activeSession } = storeToRefs(sessionStore);
 </script>
 
 <style scoped>
