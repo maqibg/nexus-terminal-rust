@@ -10,14 +10,10 @@
 </template>
 
 <script setup lang="ts">
-type AppVersionHost = {
-  __APP_VERSION__?: unknown;
-};
-
 const version = (() => {
-  const maybeVersion = (globalThis as AppVersionHost).__APP_VERSION__;
+  const maybeVersion = import.meta.env.VITE_APP_VERSION;
   if (typeof maybeVersion === 'string' && maybeVersion.trim()) {
-    return maybeVersion;
+    return maybeVersion.replace(/^v/i, '').trim();
   }
   return '0.1.0';
 })();

@@ -8,6 +8,8 @@
         class="search-input"
         data-focus-id="quickCommandsSearch"
         placeholder="搜索名称或指令..."
+        @keydown="handleSearchInputKeydown"
+        @blur="handleSearchInputBlur"
       />
       <button class="ctrl-btn" :title="sortButtonTitle" @click="toggleSortBy">
         <i class="fas" :class="sortButtonIcon"></i>
@@ -25,7 +27,7 @@
       </button>
     </div>
 
-    <div class="commands-list">
+    <div ref="commandListContainerRef" class="commands-list">
       <div v-if="quickCommandsStore.loading && groupedCommands.length === 0" class="empty-state">
         <i class="fas fa-spinner fa-spin"></i>
         <span>加载快捷指令...</span>
@@ -52,6 +54,8 @@
               v-for="command in group.commands"
               :key="command.id"
               class="command-item"
+              :class="{ selected: command.id === selectedCommandId }"
+              :data-command-id="command.id"
               :title="command.command"
               @click="prepareExecuteCommand(command)"
               @contextmenu.prevent="showContextMenu($event, command)"
@@ -116,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import AddEditQuickCommandForm from '@/components/AddEditQuickCommandForm.vue';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
@@ -138,6 +142,7 @@ interface CommandInputSyncEventDetail {
 }
 
 const UNTAGGED_GROUP_NAME = '未标记';
+const EXPANDED_GROUPS_STORAGE_KEY = 'quickCommandsExpandedGroups';
 
 const quickCommandsStore = useQuickCommandsStore();
 const historyStore = useCommandHistoryStore();
@@ -150,10 +155,12 @@ const { confirm } = useConfirmDialog();
 const { items: quickCommands } = storeToRefs(quickCommandsStore);
 
 const searchInputRef = ref<HTMLInputElement>();
+const commandListContainerRef = ref<HTMLDivElement | null>(null);
 const searchTerm = ref('');
 const sortBy = ref<'name' | 'usage'>('name');
 const isCompactMode = ref(false);
 const expandedGroups = reactive<Record<string, boolean>>({});
+const selectedIndex = ref(-1);
 
 const showAddEditForm = ref(false);
 const editingCommand = ref<QuickCommand | null>(null);
@@ -210,16 +217,32 @@ const groupedCommands = computed<GroupedCommands[]>(() => {
   }
 
   const groups: Record<string, QuickCommand[]> = {};
+  const seenByGroup = new Map<string, Set<number>>();
 
   for (const item of filteredCommands.value) {
-    const tag = item.tags?.[0] || UNTAGGED_GROUP_NAME;
-    if (!groups[tag]) {
-      groups[tag] = [];
-      if (expandedGroups[tag] === undefined) {
-        expandedGroups[tag] = true;
+    const tags = (item.tags ?? []).filter((tag) => tag.trim().length > 0);
+    const groupNames = tags.length ? tags : [UNTAGGED_GROUP_NAME];
+
+    for (const groupName of groupNames) {
+      if (!groups[groupName]) {
+        groups[groupName] = [];
+        seenByGroup.set(groupName, new Set<number>());
+        if (expandedGroups[groupName] === undefined) {
+          expandedGroups[groupName] = true;
+        }
       }
+
+      const seen = seenByGroup.get(groupName);
+      if (!seen) {
+        continue;
+      }
+      if (seen.has(item.id)) {
+        continue;
+      }
+
+      groups[groupName].push(item);
+      seen.add(item.id);
     }
-    groups[tag].push(item);
   }
 
   const groupNames = Object.keys(groups).sort((a, b) => {
@@ -233,6 +256,28 @@ const groupedCommands = computed<GroupedCommands[]>(() => {
   });
 
   return groupNames.map((name) => ({ name, commands: groups[name] }));
+});
+
+const flatVisibleCommands = computed(() => {
+  if (!showQuickCommandTags.value) {
+    return filteredCommands.value;
+  }
+
+  const flatList: QuickCommand[] = [];
+  for (const group of groupedCommands.value) {
+    if (expandedGroups[group.name]) {
+      flatList.push(...group.commands);
+    }
+  }
+  return flatList;
+});
+
+const selectedCommandId = computed(() => {
+  const list = flatVisibleCommands.value;
+  if (selectedIndex.value < 0 || selectedIndex.value >= list.length) {
+    return null;
+  }
+  return list[selectedIndex.value].id;
 });
 
 function isVisibleInput(input: HTMLInputElement | undefined): input is HTMLInputElement {
@@ -263,6 +308,107 @@ function toggleGroup(name: string) {
 
 function toggleSortBy() {
   sortBy.value = sortBy.value === 'name' ? 'usage' : 'name';
+}
+
+function resetSelection() {
+  selectedIndex.value = -1;
+}
+
+function selectNextCommand() {
+  const list = flatVisibleCommands.value;
+  if (!list.length) {
+    resetSelection();
+    return;
+  }
+  selectedIndex.value = (selectedIndex.value + 1) % list.length;
+}
+
+function selectPreviousCommand() {
+  const list = flatVisibleCommands.value;
+  if (!list.length) {
+    resetSelection();
+    return;
+  }
+  selectedIndex.value = (selectedIndex.value - 1 + list.length) % list.length;
+}
+
+function scrollToSelected() {
+  if (!commandListContainerRef.value || selectedCommandId.value === null) {
+    return;
+  }
+
+  const selectedElement = commandListContainerRef.value.querySelector(
+    `li[data-command-id="${selectedCommandId.value}"]`,
+  ) as HTMLLIElement | null;
+  selectedElement?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function handleSearchInputKeydown(event: KeyboardEvent) {
+  if (!flatVisibleCommands.value.length) {
+    return;
+  }
+
+  switch (event.key) {
+  case 'ArrowDown':
+    event.preventDefault();
+    selectNextCommand();
+    break;
+  case 'ArrowUp':
+    event.preventDefault();
+    selectPreviousCommand();
+    break;
+  case 'Enter': {
+    if (selectedIndex.value < 0) {
+      return;
+    }
+    event.preventDefault();
+    const cmd = flatVisibleCommands.value[selectedIndex.value];
+    if (cmd) {
+      void prepareExecuteCommand(cmd);
+    }
+    break;
+  }
+  default:
+    break;
+  }
+}
+
+function handleSearchInputBlur() {
+  setTimeout(() => {
+    if (document.activeElement !== searchInputRef.value && !commandListContainerRef.value?.contains(document.activeElement)) {
+      resetSelection();
+    }
+  }, 100);
+}
+
+function loadExpandedGroupsState() {
+  try {
+    const raw = localStorage.getItem(EXPANDED_GROUPS_STORAGE_KEY);
+    if (!raw) {
+      return;
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return;
+    }
+
+    for (const key of Object.keys(expandedGroups)) {
+      delete expandedGroups[key];
+    }
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      expandedGroups[key] = Boolean(value);
+    }
+  } catch {
+    localStorage.removeItem(EXPANDED_GROUPS_STORAGE_KEY);
+  }
+}
+
+function saveExpandedGroupsState() {
+  try {
+    localStorage.setItem(EXPANDED_GROUPS_STORAGE_KEY, JSON.stringify(expandedGroups));
+  } catch {
+    // ignore
+  }
 }
 
 function openAddForm() {
@@ -497,6 +643,7 @@ async function loadCommands() {
 }
 
 onMounted(async () => {
+  loadExpandedGroupsState();
   await Promise.all([
     loadCommands(),
     settingsStore.loadAll().catch(() => undefined),
@@ -504,6 +651,16 @@ onMounted(async () => {
   unregisterFocusAction = focusSwitcherStore.registerFocusAction('quickCommandsSearch', focusSearchInput);
   document.addEventListener('mousedown', handleDocumentPointerDown);
   window.addEventListener('nexus:quick-commands:set-search', handleCommandInputSearchSync as EventListener);
+});
+
+watch(expandedGroups, saveExpandedGroupsState, { deep: true });
+watch(selectedIndex, () => void nextTick(scrollToSelected));
+watch([searchTerm, () => showQuickCommandTags.value], resetSelection);
+watch(groupedCommands, () => {
+  const list = flatVisibleCommands.value;
+  if (selectedIndex.value >= list.length) {
+    selectedIndex.value = list.length ? list.length - 1 : -1;
+  }
 });
 
 onUnmounted(() => {
@@ -667,6 +824,11 @@ onUnmounted(() => {
 
 .command-item:hover {
   background: rgba(137, 180, 250, 0.1);
+}
+
+.command-item.selected {
+  background: rgba(137, 180, 250, 0.18);
+  box-shadow: 0 0 0 1px rgba(137, 180, 250, 0.25);
 }
 
 .command-main {

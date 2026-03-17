@@ -614,10 +614,6 @@ import {
 } from '@/stores/appearance';
 import { useSettingsStore } from '@/stores/settings';
 
-type AppVersionHost = {
-  __APP_VERSION__?: unknown;
-};
-
 type TabKey = 'workspace' | 'ai' | 'system' | 'security' | 'dataManagement' | 'appearance' | 'about';
 const SETTINGS_TAB_STORAGE_KEY = 'settings_active_tab';
 const SETTINGS_FOCUS_SECTION_STORAGE_KEY = 'settings_focus_section';
@@ -925,7 +921,7 @@ async function resetSelectedData() {
 }
 
 const appVersion = (() => {
-  const maybeVersion = (globalThis as AppVersionHost).__APP_VERSION__;
+  const maybeVersion = import.meta.env.VITE_APP_VERSION;
   if (typeof maybeVersion === 'string' && maybeVersion.trim()) {
     return maybeVersion.replace(/^v/i, '');
   }

@@ -136,7 +136,7 @@ const selectedTags = computed<GenericTag[]>(() => {
 });
 
 const stringSuggestions = computed(() => {
-  if (!showSuggestions.value || isNumericMode.value) {
+  if (isNumericMode.value) {
     return [] as string[];
   }
   const q = inputValue.value.trim().toLowerCase();
@@ -146,7 +146,7 @@ const stringSuggestions = computed(() => {
 });
 
 const objectSuggestions = computed(() => {
-  if (!showSuggestions.value || !isNumericMode.value) {
+  if (!isNumericMode.value) {
     return [] as GenericTag[];
   }
   const q = inputValue.value.trim().toLowerCase();

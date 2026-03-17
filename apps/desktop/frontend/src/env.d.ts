@@ -23,3 +23,7 @@ declare module '@novnc/novnc/lib/rfb.js' {
   const RFB: any;
   export default RFB;
 }
+
+interface ImportMetaEnv {
+  readonly VITE_APP_VERSION?: string;
+}
