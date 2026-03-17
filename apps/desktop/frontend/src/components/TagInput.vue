@@ -67,36 +67,61 @@ const availableStringTags = computed<string[]>(() => {
 const selectedTagIds = ref<number[]>([]);
 const selectedTagNames = ref<string[]>([]);
 
+const arraysEqual = (a: TagValue[], b: TagValue[]): boolean => {
+  if (a.length !== b.length) return false;
+  return a.every((val, idx) => val === b[idx]);
+};
+
+const normalizeToNumbers = (value: TagValue[]): number[] => {
+  return value
+    .filter(item => typeof item === 'number')
+    .map(item => Number(item));
+};
+
+const normalizeToStrings = (value: TagValue[]): string[] => {
+  return value
+    .map(item => String(item))
+    .filter(item => item.trim().length > 0);
+};
+
 watch(
   () => props.modelValue,
   (value) => {
     if (isNumericMode.value) {
-      selectedTagIds.value = value
-        .filter(item => typeof item === 'number')
-        .map(item => Number(item));
+      const normalized = normalizeToNumbers(value);
+      if (!arraysEqual(normalized, selectedTagIds.value)) {
+        selectedTagIds.value = normalized;
+      }
       return;
     }
 
-    selectedTagNames.value = value
-      .map(item => String(item))
-      .filter(item => item.trim().length > 0);
+    const normalized = normalizeToStrings(value);
+    if (!arraysEqual(normalized, selectedTagNames.value)) {
+      selectedTagNames.value = normalized;
+    }
   },
-  { immediate: true, deep: true },
+  { immediate: true },
 );
 
 watch(selectedTagIds, (value) => {
   if (!isNumericMode.value) {
     return;
   }
-  emit('update:modelValue', [...value]);
-}, { deep: true });
+  const normalized = normalizeToNumbers(props.modelValue);
+  if (!arraysEqual(value, normalized)) {
+    emit('update:modelValue', [...value]);
+  }
+});
 
 watch(selectedTagNames, (value) => {
   if (isNumericMode.value) {
     return;
   }
-  emit('update:modelValue', [...value]);
-}, { deep: true });
+  const normalized = normalizeToStrings(props.modelValue);
+  if (!arraysEqual(value, normalized)) {
+    emit('update:modelValue', [...value]);
+  }
+});
 
 const selectedTags = computed<GenericTag[]>(() => {
   if (!isNumericMode.value) {
