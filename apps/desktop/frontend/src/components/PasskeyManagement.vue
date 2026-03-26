@@ -20,9 +20,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { authApi, type PasskeyInfo } from '@/lib/api';
+import { useConfirmDialog } from '@/composables/useConfirmDialog';
+import { usePromptDialog } from '@/composables/usePromptDialog';
 import { useUINotificationStore } from '@/stores/uiNotifications';
 
 const notify = useUINotificationStore();
+const { confirm } = useConfirmDialog();
+const { prompt } = usePromptDialog();
 const passkeys = ref<PasskeyInfo[]>([]);
 const registering = ref(false);
 
@@ -68,7 +72,13 @@ function serializeCredential(credential: PublicKeyCredential): string {
 }
 
 async function register() {
-  const name = prompt('Passkey 名称:');
+  const name = await prompt({
+    title: '注册 Passkey',
+    message: '请输入这枚 Passkey 的显示名称',
+    placeholder: '例如 我的笔记本 / Windows Hello',
+    confirmText: '开始注册',
+    validate: (value) => value.trim() ? null : '请输入 Passkey 名称',
+  });
   if (!name?.trim()) return;
 
   registering.value = true;
@@ -108,7 +118,7 @@ async function register() {
 }
 
 async function remove(pk: PasskeyInfo) {
-  if (!confirm(`确定删除 "${pk.name}"？`)) return;
+  if (!(await confirm('删除 Passkey', `确定删除 “${pk.name}” 吗？`))) return;
   try {
     await authApi.passkeyDelete(pk.credential_id);
     notify.addNotification('success', 'Passkey 已删除');
@@ -119,10 +129,17 @@ async function remove(pk: PasskeyInfo) {
 }
 
 async function rename(pk: PasskeyInfo) {
-  const name = prompt('新名称:', pk.name);
-  if (!name || name === pk.name) return;
+  const name = await prompt({
+    title: '重命名 Passkey',
+    message: `正在修改 “${pk.name}” 的显示名称`,
+    initialValue: pk.name,
+    placeholder: '输入新的 Passkey 名称',
+    confirmText: '保存',
+    validate: (value) => value.trim() ? null : '请输入新的 Passkey 名称',
+  });
+  if (!name || name.trim() === pk.name) return;
   try {
-    await authApi.passkeyRename(pk.credential_id, name);
+    await authApi.passkeyRename(pk.credential_id, name.trim());
     notify.addNotification('success', '已重命名');
     load();
   } catch (e: unknown) {

@@ -253,6 +253,7 @@ import { computed, onMounted, ref } from 'vue';
 import AppSelect from '@/components/AppSelect.vue';
 import AIChannelForm from '@/components/AI/AIChannelForm.vue';
 import AIModelForm from '@/components/AI/AIModelForm.vue';
+import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import { useAIStore } from '@/stores/ai';
 import { useUiNotificationsStore } from '@/stores/uiNotifications';
 import type { AIChannel, AIConfig, AIModel, AIProviderType } from '@/types/ai';
@@ -274,6 +275,7 @@ const tabs: Array<{ key: TabKey; label: string }> = [
 
 const aiStore = useAIStore();
 const notifications = useUiNotificationsStore();
+const { confirm } = useConfirmDialog();
 
 const activeTab = ref<TabKey>('channels');
 const showChannelDialog = ref(false);
@@ -465,7 +467,7 @@ const onChannelToggleChange = (channel: AIChannel, event: Event) => {
 };
 
 const removeChannel = async (channel: AIChannel) => {
-  const confirmed = window.confirm(`确定删除渠道“${channel.name}”？其模型也会被删除。`);
+  const confirmed = await confirm('删除 AI 渠道', `确定删除渠道“${channel.name}”？其模型也会被删除。`);
   if (!confirmed) {
     return;
   }
@@ -488,7 +490,7 @@ const setDefaultModel = async (modelId: string) => {
 };
 
 const removeModel = async (modelId: string, displayName: string) => {
-  const confirmed = window.confirm(`确定删除模型“${displayName}”？`);
+  const confirmed = await confirm('删除 AI 模型', `确定删除模型“${displayName}”？`);
   if (!confirmed) {
     return;
   }

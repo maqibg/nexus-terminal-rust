@@ -352,10 +352,36 @@
             <i class="fas fa-folder-plus"></i>
             <span>新建文件夹</span>
           </div>
-          <input class="mini-dialog-input" v-model="mkdirName" @keydown.enter="doMkdir" placeholder="输入文件夹名称..." />
+          <input class="mini-dialog-input" v-model="mkdirName" :disabled="mkdirSubmitting" @keydown.enter.prevent="doMkdir" placeholder="输入文件夹名称..." />
           <div class="mini-actions">
-            <button class="btn-cancel" @click="showMkdir = false">取消</button>
-            <button class="btn-save" @click="doMkdir">创建</button>
+            <button class="btn-cancel" :disabled="mkdirSubmitting" @click="showMkdir = false">取消</button>
+            <button class="btn-save" :disabled="mkdirSubmitting" @click="doMkdir">{{ mkdirSubmitting ? '创建中...' : '创建' }}</button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="showRename" class="mini-dialog-backdrop" @click.self="() => closeRenameDialog()">
+        <div class="mini-dialog rename-dialog">
+          <div class="mini-dialog-title">
+            <i :class="renameTargetEntry?.is_dir ? 'fas fa-folder' : 'far fa-file-alt'"></i>
+            <span>重命名{{ renameTargetEntry?.is_dir ? '文件夹' : '文件' }}</span>
+          </div>
+          <div v-if="renameTargetEntry" class="mini-dialog-note">
+            <span class="mini-dialog-note-label">当前名称</span>
+            <span class="mini-dialog-note-value" :title="renameTargetEntry.name">{{ renameTargetEntry.name }}</span>
+          </div>
+          <input
+            ref="renameInputRef"
+            class="mini-dialog-input"
+            v-model="renameName"
+            :disabled="renameSubmitting"
+            @keydown.enter.prevent="submitRename"
+            placeholder="输入新的名称..."
+          />
+          <div v-if="renameError" class="mini-dialog-error">{{ renameError }}</div>
+          <div class="mini-actions">
+            <button class="btn-cancel" :disabled="renameSubmitting" @click="() => closeRenameDialog()">取消</button>
+            <button class="btn-save" :disabled="renameSubmitting" @click="submitRename">{{ renameSubmitting ? '重命名中...' : '确定' }}</button>
           </div>
         </div>
       </div>
@@ -398,10 +424,10 @@
             <i class="far fa-file-alt"></i>
             <span>新建文件</span>
           </div>
-          <input class="mini-dialog-input" v-model="newFileName" @keydown.enter="doCreateFile" placeholder="输入文件名称..." />
+          <input class="mini-dialog-input" v-model="newFileName" :disabled="newFileSubmitting" @keydown.enter.prevent="doCreateFile" placeholder="输入文件名称..." />
           <div class="mini-actions">
-            <button class="btn-cancel" @click="showNewFile = false">取消</button>
-            <button class="btn-save" @click="doCreateFile">创建</button>
+            <button class="btn-cancel" :disabled="newFileSubmitting" @click="showNewFile = false">取消</button>
+            <button class="btn-save" :disabled="newFileSubmitting" @click="doCreateFile">{{ newFileSubmitting ? '创建中...' : '创建' }}</button>
           </div>
         </div>
       </div>
@@ -452,10 +478,10 @@ const {
   isSearchActive, isEditingPath, showPathHistoryDropdown,
   ctxVisible, ctxPos, ctxNearRight, ctxSubmenuKey, ctxEntry,
   showFavoritePathsPopover, isFavoriteDialogOpen, favoritePopoverStyle,
-  showUpload, showMkdir, mkdirName, showNewFile, newFileName, showSendFile, sendFileTarget,
+  showUpload, showMkdir, mkdirName, mkdirSubmitting, showRename, renameName, renameSubmitting, renameError, renameTargetEntry, showNewFile, newFileName, newFileSubmitting, showSendFile, sendFileTarget,
   contextMenuItems, showPopupFileEditor, sortKey, sortDirection,
   // DOM refs
-  pathInputRef, pathInputWrapperRef, searchInputRef, ctxMenuRef, favoriteButtonRef, favoritePopoverRef,
+  pathInputRef, pathInputWrapperRef, searchInputRef, renameInputRef, ctxMenuRef, favoriteButtonRef, favoritePopoverRef,
   // actions
   navigateTo, goUp, refresh,
   handleRootModeButtonClick, enableRootMode, disableRootMode, closeRootModeDialog,
@@ -466,7 +492,7 @@ const {
   openUpload, openSendModal, onSendCreated,
   registerUploadTasksForRefresh,
   toggleSort, uploadLocalPaths, moveEntriesToDirectory,
-  doMkdir, doCreateFile, openPopupEditor, sendCdCommandToTerminal,
+  doMkdir, closeRenameDialog, submitRename, doCreateFile, openPopupEditor, sendCdCommandToTerminal,
   isEntrySelected, clearSelection,
   formatSize, formatModifiedTime, formatPerms,
   getPathDir,
@@ -1237,6 +1263,42 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   color: var(--text-dim, #6c7086);
 }
 
+.rename-dialog {
+  min-width: 360px;
+}
+
+.mini-dialog-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: -2px 0 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(137, 180, 250, 0.08);
+  border: 1px solid rgba(137, 180, 250, 0.18);
+}
+
+.mini-dialog-note-label {
+  font-size: calc(11px + var(--ui-font-size-offset));
+  color: var(--text-dim, #6c7086);
+}
+
+.mini-dialog-note-value {
+  color: var(--text, #cdd6f4);
+  font-size: calc(13px + var(--ui-font-size-offset));
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-dialog-error {
+  margin-top: 8px;
+  color: var(--red, #f38ba8);
+  font-size: calc(12px + var(--ui-font-size-offset));
+  line-height: 1.4;
+}
+
 .root-mode-hint {
   margin: -2px 0 10px;
   font-size: calc(12px + var(--ui-font-size-offset));
@@ -1280,6 +1342,13 @@ function handleUploadTasksCreated(taskIds: string[]): void {
 
 .btn-save:hover {
   opacity: 0.85;
+}
+
+.btn-cancel:disabled,
+.btn-save:disabled,
+.mini-dialog-input:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 @media (max-width: 1040px) {

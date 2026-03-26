@@ -10,6 +10,7 @@ import { useSessionStore } from '@/stores/session';
 import { useSettingsStore } from '@/stores/settings';
 import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 import { useConfirmDialog } from './useConfirmDialog';
+import { usePromptDialog } from './usePromptDialog';
 
 const VIEWPORT_PADDING = 8;
 const CONTEXT_SUBMENU_MIN_WIDTH = 190;
@@ -59,6 +60,7 @@ export function useSftpBrowser(
   const notify = useUINotificationStore();
   const fileEditorStore = useFileEditorStore();
   const { confirm } = useConfirmDialog();
+  const { prompt } = usePromptDialog();
 
   const currentPath = ref('/');
   const pathInput = ref('/');
@@ -163,8 +165,16 @@ export function useSftpBrowser(
   const lastSelectedPath = ref<string | null>(null);
   const showMkdir = ref(false);
   const mkdirName = ref('');
+  const mkdirSubmitting = ref(false);
+  const showRename = ref(false);
+  const renameName = ref('');
+  const renameSubmitting = ref(false);
+  const renameError = ref('');
+  const renameTargetEntry = ref<FileEntry | null>(null);
+  const renameInputRef = ref<HTMLInputElement>();
   const showNewFile = ref(false);
   const newFileName = ref('');
+  const newFileSubmitting = ref(false);
   const rootModeEnabled = ref(false);
   const rootModeSwitching = ref(false);
   const showRootModeDialog = ref(false);
@@ -284,6 +294,32 @@ export function useSftpBrowser(
     return `${base}_copy_${index}${ext}`;
   }
 
+  function validateNewEntryName(name: string, kind: '文件夹' | '文件', ignorePath?: string): string | null {
+    if (!name) {
+      return `请输入${kind}名称`;
+    }
+    if (name === '.' || name === '..') {
+      return `${kind}名称不能为 ${name}`;
+    }
+    if (name.includes('/')) {
+      return `${kind}名称不能包含 /`;
+    }
+    const existingEntry = entries.value.find((entry) => entry.name === name && entry.path !== ignorePath);
+    if (existingEntry) {
+      const existingKind = existingEntry.is_dir ? '文件夹' : '文件';
+      return `当前目录已存在同名${existingKind}：${name}`;
+    }
+    return null;
+  }
+
+  async function statTargetIfExists(sessionId: string, targetPath: string): Promise<FileEntry | null> {
+    try {
+      return await sftpApi.stat(sessionId, targetPath);
+    } catch {
+      return null;
+    }
+  }
+
   function resetBrowserState() {
     entries.value = [];
     currentPath.value = '/';
@@ -298,8 +334,15 @@ export function useSftpBrowser(
     showFavoritePathsPopover.value = false;
     showMkdir.value = false;
     showNewFile.value = false;
+    showRename.value = false;
     mkdirName.value = '';
     newFileName.value = '';
+    renameName.value = '';
+    mkdirSubmitting.value = false;
+    newFileSubmitting.value = false;
+    renameSubmitting.value = false;
+    renameError.value = '';
+    renameTargetEntry.value = null;
     rootModeEnabled.value = false;
     rootModeSwitching.value = false;
     showRootModeDialog.value = false;
@@ -818,8 +861,14 @@ export function useSftpBrowser(
   }
 
   function runContextAction(action: () => void | Promise<void>): void {
-    closeCtxMenu();
-    void Promise.resolve(action());
+    try {
+      const pending = Promise.resolve(action());
+      closeCtxMenu();
+      void pending;
+    } catch (error) {
+      closeCtxMenu();
+      throw error;
+    }
   }
 
   function getContextEntries(): FileEntry[] {
@@ -874,14 +923,14 @@ export function useSftpBrowser(
         label: '剪切',
         icon: 'fas fa-cut',
         disabled: !canUseSftp,
-        onClick: () => queueClipboardAction('cut'),
+        onClick: () => queueClipboardAction('cut', targetEntries),
       });
       items.push({
         key: 'copy-multi',
         label: '复制',
         icon: 'fas fa-copy',
         disabled: !canUseSftp,
-        onClick: () => queueClipboardAction('copy'),
+        onClick: () => queueClipboardAction('copy', targetEntries),
       });
 
       if (allFilesSelected) {
@@ -952,14 +1001,14 @@ export function useSftpBrowser(
         label: '剪切',
         icon: 'fas fa-cut',
         disabled: !canUseSftp,
-        onClick: () => queueClipboardAction('cut'),
+        onClick: () => queueClipboardAction('cut', targetEntries),
       });
       items.push({
         key: 'copy',
         label: '复制',
         icon: 'fas fa-copy',
         disabled: !canUseSftp,
-        onClick: () => queueClipboardAction('copy'),
+        onClick: () => queueClipboardAction('copy', targetEntries),
       });
 
       if (entry.is_dir) {
@@ -968,7 +1017,7 @@ export function useSftpBrowser(
           label: '粘贴',
           icon: 'fas fa-paste',
           disabled: !canUseSftp || !hasClipboard,
-          onClick: pasteFromClipboard,
+          onClick: () => pasteFromClipboard(entry.path),
         });
       }
 
@@ -977,7 +1026,7 @@ export function useSftpBrowser(
         label: '复制路径',
         icon: 'fas fa-link',
         disabled: !canUseSftp,
-        onClick: copyContextPath,
+        onClick: () => copyContextPath(entry.path),
       });
 
       items.push({ key: 'sep-single-1', separator: true });
@@ -1078,7 +1127,7 @@ export function useSftpBrowser(
         label: '粘贴',
         icon: 'fas fa-paste',
         disabled: !canUseSftp || !hasClipboard,
-        onClick: pasteFromClipboard,
+        onClick: () => pasteFromClipboard(currentPath.value),
       });
       items.push({ key: 'sep-empty-1', separator: true });
       items.push({
@@ -1123,7 +1172,7 @@ export function useSftpBrowser(
       label: '粘贴',
       icon: 'fas fa-paste',
       disabled: !canUseSftp || !hasClipboard,
-      onClick: pasteFromClipboard,
+      onClick: () => pasteFromClipboard(currentPath.value),
     });
     items.push({
       key: 'refresh-parent',
@@ -1151,9 +1200,9 @@ export function useSftpBrowser(
     }
   }
 
-  function queueClipboardAction(operation: 'copy' | 'cut'): void {
+  function queueClipboardAction(operation: 'copy' | 'cut', targetEntriesOverride?: FileEntry[]): void {
     const sid = sftpSessionId.value;
-    const targetEntries = getContextEntries();
+    const targetEntries = targetEntriesOverride?.length ? targetEntriesOverride : getContextEntries();
     if (!sid || !targetEntries.length) {
       return;
     }
@@ -1175,7 +1224,7 @@ export function useSftpBrowser(
     await sftpApi.copyEntry(sessionId, source.path, targetPath);
   }
 
-  async function pasteFromClipboard(): Promise<void> {
+  async function pasteFromClipboard(targetDirOverride?: string): Promise<void> {
     const sid = sftpSessionId.value;
     const clipboard = clipboardState.value;
     if (!sid || !clipboard || !clipboard.entries.length) {
@@ -1187,7 +1236,7 @@ export function useSftpBrowser(
       return;
     }
 
-    const targetDir = ctxEntry.value?.is_dir ? ctxEntry.value.path : currentPath.value;
+    const targetDir = targetDirOverride ?? (ctxEntry.value?.is_dir ? ctxEntry.value.path : currentPath.value);
 
     try {
       const existingNames = new Set((await sftpApi.listDir(sid, targetDir)).map((item) => item.name));
@@ -1254,14 +1303,14 @@ export function useSftpBrowser(
     }
   }
 
-  async function copyContextPath(): Promise<void> {
-    const entry = ctxEntry.value;
-    if (!entry) {
+  async function copyContextPath(targetPath?: string): Promise<void> {
+    const path = targetPath ?? ctxEntry.value?.path;
+    if (!path) {
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(entry.path);
+      await navigator.clipboard.writeText(path);
       notify.addNotification('success', '路径已复制到剪贴板');
     } catch {
       notify.addNotification('error', '复制路径失败，请检查剪贴板权限');
@@ -1513,19 +1562,70 @@ export function useSftpBrowser(
     await handleDeleteEntries([entry]);
   }
 
-  async function handleRename(entry: FileEntry) {
+  function closeRenameDialog(force = false): void {
+    if (renameSubmitting.value && !force) {
+      return;
+    }
+    showRename.value = false;
+    renameName.value = '';
+    renameError.value = '';
+    renameTargetEntry.value = null;
+  }
+
+  function handleRename(entry: FileEntry): void {
+    renameTargetEntry.value = entry;
+    renameName.value = entry.name;
+    renameError.value = '';
+    showRename.value = true;
+    void nextTick(() => {
+      renameInputRef.value?.focus();
+      renameInputRef.value?.select();
+    });
+  }
+
+  async function submitRename(): Promise<void> {
     const sid = sftpSessionId.value;
-    if (!sid) return;
+    const targetEntry = renameTargetEntry.value;
+    if (!sid || !targetEntry || renameSubmitting.value) {
+      return;
+    }
 
-    const newName = prompt('新名称:', entry.name);
-    if (!newName || newName === entry.name) return;
+    const nextName = renameName.value.trim();
+    if (!nextName || nextName === targetEntry.name) {
+      closeRenameDialog();
+      return;
+    }
 
-    const nextPath = joinRemotePath(currentPath.value, newName);
+    const validationMessage = validateNewEntryName(
+      nextName,
+      targetEntry.is_dir ? '文件夹' : '文件',
+      targetEntry.path,
+    );
+    if (validationMessage) {
+      renameError.value = validationMessage;
+      return;
+    }
+
+    renameSubmitting.value = true;
+    renameError.value = '';
+    const nextPath = joinRemotePath(getPathDir(targetEntry.path), nextName);
+
     try {
-      await sftpApi.rename(sid, entry.path, nextPath);
-      refresh();
+      await sftpApi.rename(sid, targetEntry.path, nextPath);
+      renameSubmitting.value = false;
+      closeRenameDialog(true);
+      await navigateTo(currentPath.value);
     } catch (e: unknown) {
-      error.value = toAppError(e).message;
+      const existingTarget = await statTargetIfExists(sid, nextPath);
+      if (existingTarget && existingTarget.path !== targetEntry.path) {
+        renameError.value = existingTarget.is_dir
+          ? `当前目录已存在同名文件夹：${nextName}`
+          : `当前目录已存在同名文件：${nextName}`;
+      } else {
+        renameError.value = toAppError(e).message || '重命名失败';
+      }
+    } finally {
+      renameSubmitting.value = false;
     }
   }
 
@@ -1534,10 +1634,26 @@ export function useSftpBrowser(
     if (!sid) return;
 
     const current = entry.permissions != null ? (entry.permissions & 0o7777).toString(8) : '644';
-    const input = prompt('权限 (八进制):', current);
+    const input = await prompt({
+      title: `修改${entry.is_dir ? '文件夹' : '文件'}权限`,
+      message: `正在修改 “${entry.name}” 的八进制权限值`,
+      initialValue: current,
+      placeholder: '例如 644 或 0755',
+      confirmText: '保存',
+      validate: (value) => {
+        const trimmed = value.trim();
+        if (!trimmed) {
+          return '请输入权限值';
+        }
+        if (!/^[0-7]{3,4}$/.test(trimmed)) {
+          return '请输入 3 到 4 位八进制权限值';
+        }
+        return null;
+      },
+    });
     if (!input) return;
 
-    const mode = parseInt(input, 8);
+    const mode = parseInt(input.trim(), 8);
     if (Number.isNaN(mode)) {
       notify.addNotification('error', '无效的权限值');
       return;
@@ -1684,30 +1800,76 @@ export function useSftpBrowser(
   async function doMkdir() {
     const sid = sftpSessionId.value;
     const folderName = mkdirName.value.trim();
-    if (!sid || !folderName) return;
+    if (!sid || mkdirSubmitting.value) return;
+
+    const validationMessage = validateNewEntryName(folderName, '文件夹');
+    if (validationMessage) {
+      notify.addNotification('warning', validationMessage);
+      return;
+    }
+
+    const targetPath = joinRemotePath(currentPath.value, folderName);
+    mkdirSubmitting.value = true;
 
     try {
-      await sftpApi.mkdir(sid, joinRemotePath(currentPath.value, folderName));
+      await sftpApi.mkdir(sid, targetPath);
       showMkdir.value = false;
       mkdirName.value = '';
-      refresh();
+      await navigateTo(currentPath.value);
     } catch (e: unknown) {
+      const existingTarget = await statTargetIfExists(sid, targetPath);
+      if (existingTarget?.is_dir) {
+        showMkdir.value = false;
+        mkdirName.value = '';
+        await navigateTo(currentPath.value);
+        notify.addNotification('warning', `当前目录已存在同名文件夹：${folderName}`);
+        return;
+      }
+      if (existingTarget) {
+        notify.addNotification('error', `创建文件夹失败：当前目录已存在同名文件 ${folderName}`);
+        return;
+      }
       notify.addNotification('error', toAppError(e).message || '创建文件夹失败');
+    } finally {
+      mkdirSubmitting.value = false;
     }
   }
 
   async function doCreateFile() {
     const sid = sftpSessionId.value;
     const fileName = newFileName.value.trim();
-    if (!sid || !fileName) return;
+    if (!sid || newFileSubmitting.value) return;
+
+    const validationMessage = validateNewEntryName(fileName, '文件');
+    if (validationMessage) {
+      notify.addNotification('warning', validationMessage);
+      return;
+    }
+
+    const targetPath = joinRemotePath(currentPath.value, fileName);
+    newFileSubmitting.value = true;
 
     try {
-      await sftpApi.writeFile(sid, joinRemotePath(currentPath.value, fileName), '');
+      await sftpApi.writeFile(sid, targetPath, '');
       showNewFile.value = false;
       newFileName.value = '';
-      refresh();
+      await navigateTo(currentPath.value);
     } catch (e: unknown) {
+      const existingTarget = await statTargetIfExists(sid, targetPath);
+      if (existingTarget?.is_dir) {
+        notify.addNotification('error', `创建文件失败：当前目录已存在同名文件夹 ${fileName}`);
+        return;
+      }
+      if (existingTarget) {
+        showNewFile.value = false;
+        newFileName.value = '';
+        await navigateTo(currentPath.value);
+        notify.addNotification('warning', `当前目录已存在同名文件：${fileName}`);
+        return;
+      }
       notify.addNotification('error', toAppError(e).message || '创建文件失败');
+    } finally {
+      newFileSubmitting.value = false;
     }
   }
 
@@ -1906,8 +2068,15 @@ export function useSftpBrowser(
     showUpload,
     showMkdir,
     mkdirName,
+    mkdirSubmitting,
+    showRename,
+    renameName,
+    renameSubmitting,
+    renameError,
+    renameTargetEntry,
     showNewFile,
     newFileName,
+    newFileSubmitting,
     showSendFile,
     sendFileTarget,
     defaultDownloadDir,
@@ -1922,6 +2091,7 @@ export function useSftpBrowser(
     pathInputRef,
     pathInputWrapperRef,
     searchInputRef,
+    renameInputRef,
     ctxMenuRef,
     favoriteButtonRef,
     favoritePopoverRef,
@@ -1992,6 +2162,8 @@ export function useSftpBrowser(
     openSendModal,
     handleDelete,
     handleRename,
+    closeRenameDialog,
+    submitRename,
     handleChmod,
     openPopupEditor,
     openEditor,

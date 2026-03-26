@@ -55,8 +55,10 @@
 import { ref, reactive, onMounted } from 'vue';
 import { quickCommandApi } from '@/lib/api';
 import type { QuickCommand } from '@/lib/api';
+import { useConfirmDialog } from '@/composables/useConfirmDialog';
 
 const emit = defineEmits<{ execute: [command: string] }>();
+const { confirm } = useConfirmDialog();
 
 const commands = ref<QuickCommand[]>([]);
 const loading = ref(false);
@@ -136,7 +138,7 @@ async function handleSave() {
 
 async function handleDelete(cmd: QuickCommand) {
   ctxCmd.value = null;
-  if (!confirm(`确定删除 "${cmd.name}"？`)) return;
+  if (!(await confirm('删除快捷命令', `确定删除 “${cmd.name}” 吗？`))) return;
   try { await quickCommandApi.delete(cmd.id); load(); } catch { /* ignore */ }
 }
 

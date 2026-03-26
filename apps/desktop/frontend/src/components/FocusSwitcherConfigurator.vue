@@ -103,6 +103,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import {
   useFocusSwitcherStore,
   type FocusItemConfig,
@@ -119,6 +120,7 @@ const emit = defineEmits<{
 }>();
 
 const focusSwitcherStore = useFocusSwitcherStore();
+const { confirm } = useConfirmDialog();
 
 const localSequence = ref<FocusableInput[]>([]);
 const localItemConfigs = ref<Record<string, FocusItemConfig>>(
@@ -275,8 +277,8 @@ function saveConfiguration(): void {
   emit('close');
 }
 
-function requestClose(): void {
-  if (hasChanges.value && !window.confirm('有未保存的更改，确定要关闭吗？')) {
+async function requestClose(): Promise<void> {
+  if (hasChanges.value && !(await confirm('关闭焦点切换配置', '有未保存的更改，确定要关闭吗？'))) {
     return;
   }
   emit('close');

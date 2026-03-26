@@ -2,6 +2,7 @@
   <UINotificationDisplay />
   <GlobalAlertDialog />
   <GlobalConfirmDialog />
+  <GlobalPromptDialog />
   <SshKeyConfirmModal />
 
   <div id="app-container">
@@ -111,6 +112,7 @@ import { statusApi } from '@/lib/api';
 import UINotificationDisplay from '@/components/UINotificationDisplay.vue';
 import GlobalAlertDialog from '@/components/GlobalAlertDialog.vue';
 import GlobalConfirmDialog from '@/components/GlobalConfirmDialog.vue';
+import GlobalPromptDialog from '@/components/GlobalPromptDialog.vue';
 import SshKeyConfirmModal from '@/components/SshKeyConfirmModal.vue';
 import FocusSwitcherConfigurator from '@/components/FocusSwitcherConfigurator.vue';
 import StyleCustomizer from '@/components/StyleCustomizer.vue';

@@ -215,6 +215,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { marked, type Tokens } from 'marked';
 import { aiApi, sftpApi, sshApi } from '@/lib/api';
+import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import { useAIStore } from '@/stores/ai';
 import { useSessionStore } from '@/stores/session';
 import { useUiNotificationsStore } from '@/stores/uiNotifications';
@@ -247,6 +248,7 @@ const emit = defineEmits<{
 const aiStore = useAIStore();
 const sessionStore = useSessionStore();
 const notifications = useUiNotificationsStore();
+const { confirm } = useConfirmDialog();
 
 const scrollContainer = ref<HTMLElement | null>(null);
 const inputRef = ref<HTMLTextAreaElement | null>(null);
@@ -1074,7 +1076,7 @@ const handleClear = async () => {
   if (!messages.value.length) {
     return;
   }
-  const confirmed = window.confirm('确定清空当前会话 AI 历史？');
+  const confirmed = await confirm('清空 AI 历史', '确定清空当前会话 AI 历史吗？');
   if (!confirmed) {
     return;
   }

@@ -19,9 +19,11 @@
 import { ref, onMounted } from 'vue';
 import { historyApi } from '@/lib/api';
 import type { CommandHistory } from '@/lib/api';
+import { useConfirmDialog } from '@/composables/useConfirmDialog';
 
 defineEmits<{ execute: [command: string] }>();
 
+const { confirm } = useConfirmDialog();
 const items = ref<CommandHistory[]>([]);
 const loading = ref(false);
 
@@ -32,7 +34,7 @@ async function load() {
 }
 
 async function handleClear() {
-  if (!confirm('确定清空命令历史？')) return;
+  if (!(await confirm('清空命令历史', '确定清空命令历史吗？'))) return;
   try { await historyApi.clear(); items.value = []; } catch { /* ignore */ }
 }
 

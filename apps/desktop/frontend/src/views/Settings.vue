@@ -606,6 +606,7 @@ import { authApi, connectionsApi, statusApi } from '@/lib/api';
 import type { ImportResult, ResetDataRequest, ResetDataResult } from '@/lib/api';
 import { useUiNotificationsStore } from '@/stores/uiNotifications';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
+import { usePromptDialog } from '@/composables/usePromptDialog';
 import {
   DEFAULT_UI_FONT_FAMILY,
   DEFAULT_UI_FONT_SIZE_BASE,
@@ -642,6 +643,7 @@ const notifications = useUiNotificationsStore();
 const appearanceStore = useAppearanceStore();
 const settingsStore = useSettingsStore();
 const { confirm } = useConfirmDialog();
+const { prompt } = usePromptDialog();
 const route = useRoute();
 const { settings: runtimeSettings } = storeToRefs(settingsStore);
 const { currentUiFontFamily, currentUiFontSize } = storeToRefs(appearanceStore);
@@ -1301,7 +1303,14 @@ async function triggerAppImport() {
   } catch (error) {
     const message = normalizeError(error, '导入失败');
     if (message.includes('旧版加密 ZIP') && (message.includes('需要密码') || message.includes('解密失败'))) {
-      const pwd = prompt('检测到旧版加密 ZIP 备份，请输入导出时使用的 ENCRYPTION_KEY：');
+      const pwd = await prompt({
+        title: '旧版备份密码',
+        message: '检测到旧版加密 ZIP 备份，请输入导出时使用的 ENCRYPTION_KEY。',
+        placeholder: '输入 ENCRYPTION_KEY',
+        inputType: 'password',
+        confirmText: '继续导入',
+        validate: (value) => value.trim() ? null : '请输入 ENCRYPTION_KEY',
+      });
       if (typeof pwd === 'string' && pwd.trim()) {
         try {
           const result = await connectionsApi.appImportFromFile(filePath, pwd.trim());
