@@ -1,0 +1,98 @@
+name: Release Single Exe
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - '*.*.*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-single-exe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: apps/desktop/frontend/pnpm-lock.yaml
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+
+      - name: Install Tauri CLI
+        shell: pwsh
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Install frontend dependencies
+        working-directory: apps/desktop/frontend
+        shell: pwsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Write CI Tauri override
+        shell: pwsh
+        run: |
+          $config = @{
+            build = @{
+              beforeBuildCommand = "pnpm build"
+            }
+            bundle = @{
+              active = $false
+            }
+          } | ConvertTo-Json -Depth 5 -Compress
+          [IO.File]::WriteAllText(
+            "apps/desktop/src-tauri/tauri.ci.single-exe.json",
+            $config,
+            [Text.UTF8Encoding]::new($false)
+          )
+
+      - name: Build single exe
+        working-directory: apps/desktop
+        shell: pwsh
+        run: cargo tauri build -c src-tauri/tauri.ci.single-exe.json
+
+      - name: Verify output
+        shell: pwsh
+        run: |
+          $asset = Join-Path $env:GITHUB_WORKSPACE "target\\release\\nexus-terminal.exe"
+          if (!(Test-Path $asset)) {
+            throw "Asset not found: $asset"
+          }
+          "ASSET_PATH=$asset" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-terminal.exe
+          path: ${{ env.ASSET_PATH }}
+          if-no-files-found: error
+
+      - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ASSET_PATH }}
+          fail_on_unmatched_files: true
+          generate_release_notes: true
