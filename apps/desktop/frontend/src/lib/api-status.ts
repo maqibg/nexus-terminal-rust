@@ -20,9 +20,14 @@ export interface RuntimeStatusSnapshot {
   cpuModel: string;
   osName: string;
   cpuPercent: number;
+  cpuCores?: number | null;
+  cpuPerCore: number[];
   memUsed: number;
   memTotal: number;
   memPercent: number;
+  memFree: number;
+  memBuffers: number;
+  memCached: number;
   swapUsed: number;
   swapTotal: number;
   swapPercent: number;
@@ -30,11 +35,13 @@ export interface RuntimeStatusSnapshot {
   diskTotal: number;
   diskPercent: number;
   disks: DiskUsageEntry[];
+  topProcesses: StatusProcessEntry[];
   netInterface: string;
   netRxTotal: number;
   netTxTotal: number;
   netRxRate: number;
   netTxRate: number;
+  netInterfaces: NetInterfaceEntry[];
 }
 
 export interface DiskUsageEntry {
@@ -42,6 +49,20 @@ export interface DiskUsageEntry {
   usedKb: number;
   totalKb: number;
   percent: number;
+}
+
+export interface StatusProcessEntry {
+  pid: string;
+  memPercent: number;
+  command: string;
+}
+
+export interface NetInterfaceEntry {
+  name: string;
+  rxTotal: number;
+  txTotal: number;
+  rxRate: number;
+  txRate: number;
 }
 
 export const statusApi = {
@@ -54,4 +75,8 @@ export const statusApi = {
     }),
   setStatusMonitorEnabled: (enabled: boolean) =>
     tauriInvoke<void>('set_status_monitor_enabled', { enabled }),
+  subscribe: (sessionId: string, consumerId: string) =>
+    tauriInvoke<void>('status_subscribe', { sessionId, consumerId }),
+  unsubscribe: (sessionId: string, consumerId: string) =>
+    tauriInvoke<void>('status_unsubscribe', { sessionId, consumerId }),
 };

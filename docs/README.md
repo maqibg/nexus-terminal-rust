@@ -24,6 +24,9 @@
 5. `UI_REMEDIATION_PLAN.md`
    本轮桌面端 UI / 运行链修复计划与验收口径，用于跟踪本次收敛工作。
 
+6. `STATUS_MONITOR_ENHANCEMENT_PLAN.md`
+   状态监控增强开发文档，用于指导 `nexus-terminal-rust` 对齐并超越 `Netcatty` 的监控能力实现。
+
 ---
 
 ## 2. 阅读顺序（建议）
@@ -31,7 +34,8 @@
 1. 先读：`REBUILD_PLAN_TAURI2_RUST.md`
 2. 再读：`DEVELOPMENT_GUIDE.md`
 3. 然后：`DEVELOPMENT_PLAN.md`
-4. 每日执行：`DELIVERY_CHECKLIST.md`
+4. 功能增强前读：`STATUS_MONITOR_ENHANCEMENT_PLAN.md`
+5. 每日执行：`DELIVERY_CHECKLIST.md`
 
 ---
 

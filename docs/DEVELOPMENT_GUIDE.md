@@ -288,6 +288,8 @@ nexus-terminal-rust/
 
 | 方向 | type | 说明 |
 |------|------|------|
+| C→S | `status_subscribe` | 前端订阅指定 SSH 会话的状态采集 |
+| C→S | `status_unsubscribe` | 前端取消订阅指定 SSH 会话的状态采集 |
 | S→C | `status:update:{sessionId}` | 服务器状态更新（CPU/内存/网络等，按会话隔离） |
 | S→C | `status:error:{sessionId}` | 状态采集失败（包含错误信息与时间戳） |
 

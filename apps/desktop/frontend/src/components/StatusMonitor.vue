@@ -1,334 +1,209 @@
 <template>
-  <div class="status-monitor" :class="{ 'status-monitor-empty': !activeSessionId }">
+  <div ref="rootEl" class="status-monitor" :class="{ 'status-monitor-empty': !activeSessionId, 'status-monitor-focus': focusPulse }">
     <div v-if="activeSessionId" class="panel-title-row">
       <h4 class="panel-title">服务器状态</h4>
-      <button
-        v-if="currentStatus"
-        class="panel-title-action"
-        type="button"
-        :title="chartsEnabled ? '隐藏图表' : '显示图表'"
-        @click="toggleCharts"
-      >
+      <button v-if="currentStatus" class="panel-title-action" type="button" :title="chartsEnabled ? '隐藏图表' : '显示图表'" @click="toggleCharts">
         <i class="fas fa-chart-line"></i>
       </button>
     </div>
 
-    <div v-if="!activeSessionId" class="placeholder-state">
-      <i class="fas fa-plug"></i>
-      <span>无活动连接</span>
-    </div>
-
-    <div v-else-if="!statusMonitorEnabled" class="placeholder-state">
-      <i class="fas fa-ban"></i>
-      <span>状态监控已关闭</span>
-    </div>
-
-    <div v-else-if="statusError" class="placeholder-state error-state">
-      <i class="fas fa-exclamation-triangle"></i>
-      <span>{{ statusError }}</span>
-    </div>
-
-    <div v-else-if="isWaitingForFirstSample" class="placeholder-state">
-      <i class="fas fa-spinner fa-spin"></i>
-      <span>正在采集状态...</span>
-    </div>
+    <div v-if="!activeSessionId" class="placeholder-state"><i class="fas fa-plug"></i><span>无活动连接</span></div>
+    <div v-else-if="!statusMonitorEnabled" class="placeholder-state"><i class="fas fa-ban"></i><span>状态监控已关闭</span></div>
+    <div v-else-if="isWaitingForFirstSample && !currentStatus" class="placeholder-state"><i class="fas fa-spinner fa-spin"></i><span>正在采集状态...</span></div>
+    <div v-else-if="!currentStatus" class="placeholder-state error-state"><i class="fas fa-exclamation-triangle"></i><span>{{ statusError || '暂无状态数据' }}</span></div>
 
     <div v-else class="status-content">
+      <div v-if="statusError" class="status-banner">{{ statusError }}</div>
+
       <div class="info-grid">
         <div v-if="showStatusMonitorIpAddress" class="status-item">
-          <label class="item-label">IP:</label>
-          <span
-            class="item-value item-link"
-            :class="{ disabled: !canCopyIp }"
-            :title="displayIpAddress"
-            @click="copyIpToClipboard"
-          >
-            {{ displayIpAddress }}
-          </span>
+          <label class="item-label">IP</label>
+          <span class="item-value item-link" :class="{ disabled: !canCopyIp }" :title="displayIpAddress" @click="copyIpToClipboard">{{ displayIpAddress }}</span>
         </div>
-
-        <div class="status-item">
-          <label class="item-label">CPU 型号:</label>
-          <span class="item-value" :title="displayCpuModel">{{ displayCpuModel }}</span>
-        </div>
-
-        <div class="status-item">
-          <label class="item-label">系统:</label>
-          <span class="item-value" :title="displayOsName">{{ displayOsName }}</span>
-        </div>
+        <div class="status-item"><label class="item-label">CPU 型号</label><span class="item-value" :title="displayCpuModel">{{ displayCpuModel }}</span></div>
+        <div class="status-item"><label class="item-label">系统</label><span class="item-value" :title="displayOsName">{{ displayOsName }}</span></div>
       </div>
 
       <div class="metrics-group">
-        <div class="metric-row">
-          <label class="metric-label">CPU:</label>
-          <div class="metric-main">
-            <div class="progress-track">
-              <div
-                class="progress-fill cpu"
-                :class="{ 'has-value': cpuPercent > 0 }"
-                :style="{ width: `${cpuPercent}%` }"
-              >
-                <span class="progress-text">{{ formatPercent(cpuPercent) }}</span>
-              </div>
-            </div>
-          </div>
+        <div
+          class="metric-hover-host"
+          @mouseenter="handleMetricEnter('cpu', $event)"
+          @mouseleave="scheduleMetricClose()"
+        >
+          <StatusMetricBar label="CPU" :percent="cpuPercent" :detail="cpuDetail" tone="cpu" />
         </div>
 
-        <div class="metric-row">
-          <label class="metric-label">内存:</label>
-          <div class="metric-main metric-main-with-detail">
-            <div class="progress-track">
-              <div
-                class="progress-fill memory"
-                :class="{ 'has-value': memPercent > 0 }"
-                :style="{ width: `${memPercent}%` }"
-              >
-                <span class="progress-text">{{ formatPercent(memPercent) }}</span>
-              </div>
-            </div>
-            <span class="metric-detail">{{ memDisplay }}</span>
-          </div>
+        <div
+          class="metric-hover-host"
+          @mouseenter="handleMetricEnter('memory', $event)"
+          @mouseleave="scheduleMetricClose()"
+        >
+          <StatusMetricBar label="内存" :percent="memPercent" :detail="memDisplay" tone="memory" />
         </div>
 
-        <div class="metric-row">
-          <label class="metric-label">Swap:</label>
-          <div class="metric-main metric-main-with-detail">
-            <div class="progress-track">
-              <div
-                class="progress-fill"
-                :class="{ 'has-value': swapPercent > 0 }"
-                :style="{ width: `${swapPercent}%`, backgroundColor: swapColor }"
-              >
-                <span class="progress-text">{{ formatPercent(swapPercent) }}</span>
-              </div>
-            </div>
-            <span class="metric-detail">{{ swapDisplay }}</span>
-          </div>
-        </div>
+        <StatusMetricBar label="Swap" :percent="swapPercent" :detail="swapDisplay" tone="swap" />
 
-        <div class="metric-row">
-          <label class="metric-label">磁盘:</label>
-          <div class="metric-main metric-main-with-detail">
-            <div class="progress-track">
-              <div
-                class="progress-fill disk"
-                :class="{ 'has-value': diskPercent > 0 }"
-                :style="{ width: `${diskPercent}%` }"
-              >
-                <span class="progress-text">{{ formatPercent(diskPercent) }}</span>
-              </div>
-            </div>
-            <span class="metric-detail">{{ diskDisplay }}</span>
-          </div>
+        <div
+          class="metric-hover-host"
+          @mouseenter="handleMetricEnter('disk', $event)"
+          @mouseleave="scheduleMetricClose()"
+        >
+          <StatusMetricBar label="磁盘" :percent="diskPercent" :detail="diskDisplay" tone="disk" />
         </div>
-
-        <details v-if="diskItems.length > 1" class="disk-details">
-          <summary class="disk-summary">所有磁盘 ({{ diskItems.length }})</summary>
-          <div class="disk-list">
-            <div v-for="disk in diskItems" :key="disk.name" class="disk-list-item">
-              <span class="disk-name" :title="disk.name">{{ disk.name }}</span>
-              <span class="disk-size">{{ formatDiskSize(disk.usedKb) }} / {{ formatDiskSize(disk.totalKb) }}</span>
-              <span class="disk-percent">{{ formatPercent(normalizePercent(disk.percent)) }}</span>
-            </div>
-          </div>
-        </details>
       </div>
 
       <div class="network-row">
-        <label class="item-label">网络 ({{ netInterfaceDisplay }}):</label>
+        <label class="item-label">网络 ({{ netInterfaceDisplay }})</label>
         <div class="network-values">
-          <span class="network-rate network-down">
-            <i class="fas fa-arrow-down"></i>
-            <span>{{ netRxDisplay }}</span>
-          </span>
-          <span class="network-rate network-up">
-            <i class="fas fa-arrow-up"></i>
-            <span>{{ netTxDisplay }}</span>
-          </span>
+          <span class="network-rate network-down"><i class="fas fa-arrow-down"></i><span>{{ netRxDisplay }}</span></span>
+          <span class="network-rate network-up"><i class="fas fa-arrow-up"></i><span>{{ netTxDisplay }}</span></span>
         </div>
       </div>
 
-      <Suspense v-if="chartsEnabled && activeSessionId && currentStatus">
+      <StatusNetworkList v-if="showInterfaceDetails && currentStatus.netInterfaces.length > 0" :interfaces="currentStatus.netInterfaces" />
+
+      <Suspense v-if="chartsEnabled">
         <template #default>
           <StatusCharts
             :cpu-history="cpuHistory"
+            :mem-used-history="memUsedHistory"
             :net-rx-history="netRxHistory"
             :net-tx-history="netTxHistory"
             :current-cpu-percent="cpuPercent"
+            :current-mem-used="currentStatus.memUsed ?? 0"
             :current-net-rx-rate="currentStatus.netRxRate ?? 0"
             :current-net-tx-rate="currentStatus.netTxRate ?? 0"
           />
         </template>
-        <template #fallback>
-          <div class="placeholder-state">
-            <i class="fas fa-spinner fa-spin"></i>
-            <span>图表加载中...</span>
-          </div>
-        </template>
+        <template #fallback><div class="placeholder-state"><i class="fas fa-spinner fa-spin"></i><span>图表加载中...</span></div></template>
       </Suspense>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="hoveredDetail && hoveredPanelVisible"
+        class="metric-hover-panel"
+        :style="hoverPanelStyle"
+        @mouseenter="cancelMetricClose()"
+        @mouseleave="closeMetricPanel()"
+      >
+        <StatusCpuGrid
+          v-if="hoveredDetail === 'cpu' && showPerCoreCpu && currentStatus?.cpuPerCore.length"
+          :usages="currentStatus.cpuPerCore"
+        />
+        <StatusProcessList
+          v-else-if="hoveredDetail === 'memory' && showTopProcesses && currentStatus?.topProcesses.length"
+          :processes="currentStatus.topProcesses"
+        />
+        <StatusDiskList
+          v-else-if="hoveredDetail === 'disk' && diskItems.length"
+          :disks="diskItems"
+        />
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 
+import StatusCpuGrid from '@/components/status/StatusCpuGrid.vue';
+import StatusDiskList from '@/components/status/StatusDiskList.vue';
+import StatusMetricBar from '@/components/status/StatusMetricBar.vue';
+import StatusNetworkList from '@/components/status/StatusNetworkList.vue';
+import StatusProcessList from '@/components/status/StatusProcessList.vue';
 import { useStatusMonitor } from '@/composables/useStatusMonitor';
 import { useSessionStore } from '@/stores/session';
-import { useUINotificationStore } from '@/stores/uiNotifications';
 import { useSettingsStore } from '@/stores/settings';
+import { useUINotificationStore } from '@/stores/uiNotifications';
 
 const StatusCharts = defineAsyncComponent(() => import('@/components/StatusCharts.vue'));
-
 const sessionStore = useSessionStore();
 const uiNotificationStore = useUINotificationStore();
 const settingsStore = useSettingsStore();
 const { activeSessionId } = storeToRefs(sessionStore);
+const rootEl = ref<HTMLElement | null>(null);
+const focusPulse = ref(false);
+const hoveredDetail = ref<'cpu' | 'memory' | 'disk' | null>(null);
+const hoveredPanelVisible = ref(false);
+const hoveredAnchor = ref<{ top: number; left: number; width: number; bottom: number } | null>(null);
+const cachedCpuModel = ref('');
+const cachedOsName = ref('');
+let focusTimer: number | null = null;
+let hoverCloseTimer: number | null = null;
 
 const {
   currentStatus,
   statusError,
   isWaitingForFirstSample,
   cpuHistory,
+  memUsedHistory,
   netRxHistory,
   netTxHistory,
-} = useStatusMonitor();
+} = useStatusMonitor({ consumerId: 'workspace-pane' });
 
 void settingsStore.loadAll().catch(() => undefined);
 
 const statusMonitorEnabled = computed(() => settingsStore.getBoolean('statusMonitorEnabled', true));
 const chartsEnabled = computed(() => settingsStore.getBoolean('statusMonitorShowCharts', true));
-
-async function toggleCharts(): Promise<void> {
-  const nextValue = chartsEnabled.value ? 'false' : 'true';
-  try {
-    await settingsStore.set('statusMonitorShowCharts', nextValue);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    uiNotificationStore.addNotification('error', `更新图表开关失败：${message}`);
-  }
-}
-
-const cachedCpuModel = ref<string>('');
-const cachedOsName = ref<string>('');
-
-watch(
-  currentStatus,
-  (value) => {
-    if (!value) {
-      return;
-    }
-
-    const nextCpuModel = value.cpuModel?.trim();
-    const nextOsName = value.osName?.trim();
-    if (nextCpuModel) {
-      cachedCpuModel.value = nextCpuModel;
-    }
-    if (nextOsName) {
-      cachedOsName.value = nextOsName;
-    }
-  },
-  { immediate: true },
-);
-
 const showStatusMonitorIpAddress = computed(() => settingsStore.getBoolean('showStatusMonitorIpAddress', false));
+const showTopProcesses = computed(() => settingsStore.getBoolean('statusMonitorShowTopProcesses', true));
+const showPerCoreCpu = computed(() => settingsStore.getBoolean('statusMonitorShowPerCoreCpu', true));
+const showInterfaceDetails = computed(() => settingsStore.getBoolean('statusMonitorShowInterfaceDetails', true));
+
+watch(currentStatus, (value) => {
+  if (value?.cpuModel?.trim()) cachedCpuModel.value = value.cpuModel.trim();
+  if (value?.osName?.trim()) cachedOsName.value = value.osName.trim();
+}, { immediate: true });
+
 const displayIpAddress = computed(() => currentStatus.value?.ipAddress?.trim() || '--');
 const canCopyIp = computed(() => displayIpAddress.value !== '--');
 const displayCpuModel = computed(() => currentStatus.value?.cpuModel?.trim() || cachedCpuModel.value || '未知');
 const displayOsName = computed(() => currentStatus.value?.osName?.trim() || cachedOsName.value || '未知');
-
 const cpuPercent = computed(() => normalizePercent(currentStatus.value?.cpuPercent));
 const memPercent = computed(() => normalizePercent(currentStatus.value?.memPercent));
 const swapPercent = computed(() => normalizePercent(currentStatus.value?.swapPercent));
 const diskPercent = computed(() => normalizePercent(currentStatus.value?.diskPercent));
-const swapColor = computed(() => (swapPercent.value > 0 ? '#eab308' : '#6b7280'));
-
-const memDisplay = computed(() => {
-  const used = currentStatus.value?.memUsed;
-  const total = currentStatus.value?.memTotal;
-  if (typeof used !== 'number' || typeof total !== 'number') {
-    return '--';
-  }
-  return `${formatMemorySize(used)} / ${formatMemorySize(total)}`;
-});
-
-const diskDisplay = computed(() => {
-  const used = currentStatus.value?.diskUsed;
-  const total = currentStatus.value?.diskTotal;
-  if (typeof used !== 'number' || typeof total !== 'number') {
-    return '--';
-  }
-  return `${formatDiskSize(used)} / ${formatDiskSize(total)}`;
-});
-
+const cpuDetail = computed(() => currentStatus.value?.cpuCores ? `${currentStatus.value.cpuCores} Cores` : '--');
+const memDisplay = computed(() => formatPair(currentStatus.value?.memUsed, currentStatus.value?.memTotal, 'MB'));
+const swapDisplay = computed(() => currentStatus.value?.swapTotal ? formatPair(currentStatus.value?.swapUsed, currentStatus.value?.swapTotal, 'MB') : '未启用');
+const diskDisplay = computed(() => formatPair(currentStatus.value?.diskUsed, currentStatus.value?.diskTotal, 'KB'));
 const diskItems = computed(() => currentStatus.value?.disks ?? []);
-
-const swapDisplay = computed(() => {
-  const used = currentStatus.value?.swapUsed;
-  const total = currentStatus.value?.swapTotal;
-  if (typeof used !== 'number' || typeof total !== 'number') {
-    return '--';
+const netInterfaceDisplay = computed(() => currentStatus.value?.netInterface?.trim() || '...');
+const netRxDisplay = computed(() => formatRate(currentStatus.value?.netRxRate));
+const netTxDisplay = computed(() => formatRate(currentStatus.value?.netTxRate));
+const hoverPanelStyle = computed(() => {
+  const anchor = hoveredAnchor.value;
+  if (!anchor || typeof window === 'undefined') {
+    return undefined;
   }
-
-  if (total <= 0) {
-    return '未启用';
-  }
-
-  return `${formatMemorySize(used)} / ${formatMemorySize(total)}`;
+  const panelWidth = Math.min(420, Math.max(300, window.innerWidth - anchor.left - 24));
+  const estimatedHeight =
+    hoveredDetail.value === 'cpu'
+      ? 220
+      : hoveredDetail.value === 'memory'
+        ? 260
+        : 240;
+  const showAbove = anchor.bottom + 8 + estimatedHeight > window.innerHeight - 12;
+  const top = showAbove ? Math.max(12, anchor.top - estimatedHeight - 8) : anchor.bottom + 8;
+  return {
+    top: `${top}px`,
+    left: `${Math.min(anchor.left, window.innerWidth - panelWidth - 12)}px`,
+    width: `${panelWidth}px`,
+  } as Record<string, string>;
 });
 
-const netInterfaceDisplay = computed(() => currentStatus.value?.netInterface?.trim() || '...');
-const netRxDisplay = computed(() => formatBytesPerSecond(currentStatus.value?.netRxRate));
-const netTxDisplay = computed(() => formatBytesPerSecond(currentStatus.value?.netTxRate));
-
-function normalizePercent(value: number | undefined): number {
-  if (!Number.isFinite(value)) {
-    return 0;
+async function toggleCharts() {
+  try {
+    await settingsStore.set('statusMonitorShowCharts', chartsEnabled.value ? 'false' : 'true');
+  } catch (error) {
+    uiNotificationStore.addNotification('error', `更新图表开关失败：${error instanceof Error ? error.message : String(error)}`);
   }
-  const clamped = Math.max(0, Math.min(100, Number(value)));
-  return Math.round(clamped * 10) / 10;
-}
-
-function formatPercent(value: number): string {
-  return `${Math.round(value)}%`;
-}
-
-function formatMemorySize(mb: number): string {
-  if (mb < 1024) {
-    const rounded = Number.isInteger(mb) ? mb.toFixed(0) : mb.toFixed(1);
-    return `${rounded} MB`;
-  }
-  return `${(mb / 1024).toFixed(1)} GB`;
-}
-
-function formatDiskSize(kb: number): string {
-  return `${(kb / 1024 / 1024).toFixed(1)} GB`;
-}
-
-function formatBytesPerSecond(bytes: number | undefined): string {
-  if (!Number.isFinite(bytes)) {
-    return '--';
-  }
-
-  const safeBytes = Math.max(0, Number(bytes));
-  if (safeBytes < 1024) {
-    return `${safeBytes.toFixed(0)} B/s`;
-  }
-  if (safeBytes < 1024 * 1024) {
-    return `${(safeBytes / 1024).toFixed(1)} KB/s`;
-  }
-  if (safeBytes < 1024 * 1024 * 1024) {
-    return `${(safeBytes / (1024 * 1024)).toFixed(1)} MB/s`;
-  }
-  return `${(safeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB/s`;
 }
 
 async function copyIpToClipboard() {
-  if (!canCopyIp.value) {
-    return;
-  }
-
+  if (!canCopyIp.value) return;
   try {
     await navigator.clipboard.writeText(displayIpAddress.value);
     uiNotificationStore.addNotification('success', 'IP 地址已复制');
@@ -336,333 +211,125 @@ async function copyIpToClipboard() {
     uiNotificationStore.addNotification('error', '复制 IP 地址失败');
   }
 }
+
+function handleFocusPanel() {
+  rootEl.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  focusPulse.value = true;
+  if (focusTimer !== null) window.clearTimeout(focusTimer);
+  focusTimer = window.setTimeout(() => {
+    focusPulse.value = false;
+    focusTimer = null;
+  }, 1600);
+}
+
+onMounted(() => {
+  window.addEventListener('nexus:status-monitor-focus', handleFocusPanel as EventListener);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('nexus:status-monitor-focus', handleFocusPanel as EventListener);
+  if (focusTimer !== null) window.clearTimeout(focusTimer);
+  if (hoverCloseTimer !== null) window.clearTimeout(hoverCloseTimer);
+});
+
+function handleMetricEnter(kind: 'cpu' | 'memory' | 'disk', event: MouseEvent) {
+  cancelMetricClose();
+  const target = event.currentTarget as HTMLElement | null;
+  if (!target) {
+    return;
+  }
+  const rect = target.getBoundingClientRect();
+  hoveredAnchor.value = {
+    top: rect.top,
+    left: rect.left + 68,
+    width: rect.width,
+    bottom: rect.bottom,
+  };
+  hoveredDetail.value = kind;
+  hoveredPanelVisible.value = true;
+}
+
+function scheduleMetricClose() {
+  cancelMetricClose();
+  hoverCloseTimer = window.setTimeout(() => {
+    closeMetricPanel();
+  }, 80);
+}
+
+function cancelMetricClose() {
+  if (hoverCloseTimer !== null) {
+    window.clearTimeout(hoverCloseTimer);
+    hoverCloseTimer = null;
+  }
+}
+
+function closeMetricPanel() {
+  cancelMetricClose();
+  hoveredPanelVisible.value = false;
+  hoveredDetail.value = null;
+  hoveredAnchor.value = null;
+}
+
+function normalizePercent(value: number | undefined): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(Math.max(0, Math.min(100, Number(value))) * 10) / 10;
+}
+
+function formatPair(used: number | undefined, total: number | undefined, unit: 'MB' | 'KB'): string {
+  if (!Number.isFinite(used) || !Number.isFinite(total)) return '--';
+  return `${formatSize(Number(used), unit)} / ${formatSize(Number(total), unit)}`;
+}
+
+function formatSize(value: number, unit: 'MB' | 'KB'): string {
+  if (unit === 'MB') return value < 1024 ? `${value.toFixed(0)} MB` : `${(value / 1024).toFixed(1)} GB`;
+  return `${(value / 1024 / 1024).toFixed(1)} GB`;
+}
+
+function formatRate(bytes: number | undefined): string {
+  if (!Number.isFinite(bytes)) return '--';
+  const safe = Math.max(0, Number(bytes));
+  if (safe < 1024) return `${safe.toFixed(0)} B/s`;
+  if (safe < 1024 * 1024) return `${(safe / 1024).toFixed(1)} KB/s`;
+  if (safe < 1024 * 1024 * 1024) return `${(safe / 1024 / 1024).toFixed(1)} MB/s`;
+  return `${(safe / 1024 / 1024 / 1024).toFixed(1)} GB/s`;
+}
 </script>
 
 <style scoped>
-.status-monitor {
-  display: flex;
-  flex-direction: column;
-  container-type: inline-size;
-  width: 100%;
-  min-width: 0;
-  height: 100%;
+.status-monitor { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: none; height: 100%; margin: 0; padding: 10px; overflow: auto; background: var(--bg-base, #020617); color: var(--text, #f8fafc); transition: box-shadow 0.2s ease, border-color 0.2s ease; }
+.status-monitor-empty { background: var(--bg-surface0, #1e293b); }
+.status-monitor-focus { box-shadow: inset 0 0 0 2px rgba(34, 197, 94, 0.9), 0 0 0 1px rgba(34, 197, 94, 0.24), 0 0 18px rgba(34, 197, 94, 0.22); }
+.panel-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.panel-title { margin: 0; font-size: calc(14px + var(--ui-font-size-offset)); }
+.panel-title-action { border: none; border-radius: 10px; padding: 6px 8px; background: color-mix(in srgb, var(--bg-surface0) 84%, transparent); color: var(--text); cursor: pointer; transition: background-color 0.18s ease, color 0.18s ease; }
+.panel-title-action:hover { background: color-mix(in srgb, #22c55e 18%, var(--bg-surface0)); color: #22c55e; }
+.placeholder-state { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 96px; border: 1px dashed var(--border); border-radius: 14px; color: var(--text-sub); background: color-mix(in srgb, var(--bg-surface0) 58%, transparent); }
+.error-state { color: #f59e0b; }
+.status-content { display: flex; flex-direction: column; gap: 12px; }
+.status-banner { padding: 10px 12px; border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 12px; background: rgba(245, 158, 11, 0.12); color: #fbbf24; }
+.info-grid { display: flex; flex-direction: column; gap: 10px; }
+.status-item { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--bg-surface0) 72%, transparent); min-width: 0; }
+.item-label { color: var(--text-sub); font-size: calc(11px + var(--ui-font-size-offset)); }
+.item-value { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-link { cursor: pointer; }
+.item-link.disabled { cursor: not-allowed; opacity: 0.6; }
+.metrics-group { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: color-mix(in srgb, var(--bg-surface0) 76%, transparent); overflow: visible; }
+.metric-hover-host { position: relative; }
+.metric-hover-panel {
+  position: fixed;
+  z-index: 12020;
   padding: 10px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  background: var(--bg-base, #1e1e2e);
-  color: var(--text, #cdd6f4);
-  font-family: 'Inter', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
-  font-size: calc(0.75rem + var(--ui-font-size-offset));
-  line-height: 1.45;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-base) 94%, transparent);
+  box-shadow: 0 18px 34px color-mix(in srgb, var(--bg-base) 78%, transparent);
 }
-
-.status-monitor-empty {
-  background: var(--bg-surface0, #313244);
-}
-
-.panel-title {
-  margin: 0 0 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border, #45475a);
-  font-size: calc(16px + var(--ui-font-size-offset));
-  font-weight: 600;
-  letter-spacing: 0.2px;
-}
-
-.panel-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.panel-title-action {
-  flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  margin-bottom: 8px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-dim, #6c7086);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.panel-title-action:hover {
-  color: var(--text, #cdd6f4);
-  background: color-mix(in srgb, var(--bg-surface0, #313244) 70%, transparent);
-}
-
-.placeholder-state {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 10px;
-  color: var(--text-dim, #6c7086);
-  text-align: center;
-}
-
-.placeholder-state i {
-  font-size: calc(2.2em + var(--ui-font-size-offset));
-}
-
-.error-state {
-  color: #fda4af;
-}
-
-.status-content {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  min-width: 0;
-  gap: 8px;
-  min-height: 0;
-}
-
-.info-grid {
-  display: grid;
-  gap: 5px;
-}
-
-.status-item {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.item-label,
-.metric-label {
-  color: var(--text-sub, #a6adc8);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.item-value {
-  min-width: 0;
-  color: var(--text, #cdd6f4);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.item-link {
-  color: var(--blue, #89b4fa);
-  cursor: pointer;
-  transition: color 0.15s ease;
-}
-
-.item-link:hover {
-  color: #b4d4ff;
-}
-
-.item-link.disabled {
-  color: var(--text-dim, #6c7086);
-  cursor: default;
-}
-
-.metrics-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 2px;
-}
-
-.metric-row {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-}
-
-.disk-details {
-  margin-left: 40px;
-  padding: 6px 8px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--border, #45475a) 78%, transparent);
-  background: color-mix(in srgb, var(--bg-surface0, #313244) 60%, transparent);
-}
-
-.disk-summary {
-  cursor: pointer;
-  color: var(--text-sub, #a6adc8);
-  font-weight: 600;
-  font-size: calc(0.72rem + var(--ui-font-size-offset));
-}
-
-.disk-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.disk-list-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 8px;
-  align-items: center;
-  font-size: calc(0.72rem + var(--ui-font-size-offset));
-}
-
-.disk-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.disk-size {
-  color: var(--text, #cdd6f4);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.disk-percent {
-  color: var(--text-sub, #a6adc8);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.metric-main {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-
-.metric-main-with-detail {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-}
-
-.progress-track {
-  position: relative;
-  width: auto;
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 1rem;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border, #d1d5db) 82%, #ffffff 18%);
-  background: color-mix(in srgb, var(--border, #d1d5db) 70%, #f8fafc 30%);
-  overflow: hidden;
-}
-
-.progress-fill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  transition: width 0.28s ease;
-}
-
-.progress-fill.has-value {
-  min-width: 2.4em;
-}
-
-.progress-fill.cpu {
-  background: #3b82f6;
-}
-
-.progress-fill.memory {
-  background: #22c55e;
-}
-
-.progress-fill.disk {
-  background: #a855f7;
-}
-
-.progress-text {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #f8fafc;
-  font-size: calc(0.6875rem + var(--ui-font-size-offset));
-  font-weight: 700;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
-  letter-spacing: 0.1px;
-  line-height: 1;
-}
-
-.metric-detail {
-  flex-shrink: 0;
-  min-width: max-content;
-  color: var(--text, #cdd6f4);
-  font-size: calc(0.6875rem + var(--ui-font-size-offset));
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-  white-space: nowrap;
-}
-
-.network-row {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 10px;
-  margin-top: 2px;
-  min-width: 0;
-}
-
-.network-values {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.network-rate {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-  font-size: calc(0.6875rem + var(--ui-font-size-offset));
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-  white-space: nowrap;
-}
-
-.network-down {
-  color: #66d08f;
-}
-
-.network-up {
-  color: #ff9f59;
-}
-
-.network-rate i {
-  font-size: calc(0.95em + var(--ui-font-size-offset));
-  line-height: 1;
-}
-
-@container (max-width: 270px) {
-  .metric-main-with-detail {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 4px;
-  }
-
-  .metric-detail {
-    justify-self: end;
-  }
-
-  .network-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 4px;
-  }
-
-  .network-values {
-    flex-wrap: wrap;
-    gap: 8px 12px;
-  }
+.network-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: color-mix(in srgb, var(--bg-surface0) 76%, transparent); flex-wrap: wrap; }
+.network-values { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.network-rate { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.network-down { color: #22c55e; }
+.network-up { color: #38bdf8; }
+@media (max-width: 860px) {
+  .status-monitor { max-width: none; margin: 0; }
 }
 </style>
-

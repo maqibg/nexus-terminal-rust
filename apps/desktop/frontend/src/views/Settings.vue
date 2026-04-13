@@ -283,6 +283,56 @@
                   <p v-if="feedback.statusMonitorInterval?.message" :class="['feedback-msg', feedback.statusMonitorInterval.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.statusMonitorInterval.message }}</p>
                 </div>
               </form>
+              <form class="section-form" @submit.prevent="saveWorkspaceBoolean('statusMonitorInlineSummaryEnabled', workspaceForm.statusMonitorInlineSummaryEnabled, 'statusMonitorInlineSummary', '终端内联监控设置已保存')">
+                <div class="checkbox-row">
+                  <input id="workspace-status-monitor-inline" v-model="workspaceForm.statusMonitorInlineSummaryEnabled" class="checkbox-input" type="checkbox">
+                  <label for="workspace-status-monitor-inline">启用终端内联监控摘要</label>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">保存</button>
+                  <p v-if="feedback.statusMonitorInlineSummary?.message" :class="['feedback-msg', feedback.statusMonitorInlineSummary.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.statusMonitorInlineSummary.message }}</p>
+                </div>
+              </form>
+              <form class="section-form" @submit.prevent="saveWorkspaceBoolean('statusMonitorShowPerCoreCpu', workspaceForm.statusMonitorShowPerCoreCpu, 'statusMonitorPerCore', 'CPU 核心详情设置已保存')">
+                <div class="checkbox-row">
+                  <input id="workspace-status-monitor-per-core" v-model="workspaceForm.statusMonitorShowPerCoreCpu" class="checkbox-input" type="checkbox">
+                  <label for="workspace-status-monitor-per-core">显示每核心 CPU 使用率</label>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">保存</button>
+                  <p v-if="feedback.statusMonitorPerCore?.message" :class="['feedback-msg', feedback.statusMonitorPerCore.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.statusMonitorPerCore.message }}</p>
+                </div>
+              </form>
+              <form class="section-form" @submit.prevent="saveWorkspaceBoolean('statusMonitorShowTopProcesses', workspaceForm.statusMonitorShowTopProcesses, 'statusMonitorProcesses', '进程详情设置已保存')">
+                <div class="checkbox-row">
+                  <input id="workspace-status-monitor-processes" v-model="workspaceForm.statusMonitorShowTopProcesses" class="checkbox-input" type="checkbox">
+                  <label for="workspace-status-monitor-processes">显示内存占用前十进程</label>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">保存</button>
+                  <p v-if="feedback.statusMonitorProcesses?.message" :class="['feedback-msg', feedback.statusMonitorProcesses.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.statusMonitorProcesses.message }}</p>
+                </div>
+              </form>
+              <form class="section-form" @submit.prevent="saveWorkspaceBoolean('statusMonitorShowInterfaceDetails', workspaceForm.statusMonitorShowInterfaceDetails, 'statusMonitorInterfaces', '网络接口详情设置已保存')">
+                <div class="checkbox-row">
+                  <input id="workspace-status-monitor-interfaces" v-model="workspaceForm.statusMonitorShowInterfaceDetails" class="checkbox-input" type="checkbox">
+                  <label for="workspace-status-monitor-interfaces">显示网络接口详情</label>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">保存</button>
+                  <p v-if="feedback.statusMonitorInterfaces?.message" :class="['feedback-msg', feedback.statusMonitorInterfaces.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.statusMonitorInterfaces.message }}</p>
+                </div>
+              </form>
+              <form class="section-form" @submit.prevent="saveWorkspaceBoolean('statusMonitorFailureBackoffEnabled', workspaceForm.statusMonitorFailureBackoffEnabled, 'statusMonitorBackoff', '失败降级策略设置已保存')">
+                <div class="checkbox-row">
+                  <input id="workspace-status-monitor-backoff" v-model="workspaceForm.statusMonitorFailureBackoffEnabled" class="checkbox-input" type="checkbox">
+                  <label for="workspace-status-monitor-backoff">启用失败后慢轮询降级</label>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">保存</button>
+                  <p v-if="feedback.statusMonitorBackoff?.message" :class="['feedback-msg', feedback.statusMonitorBackoff.success ? 'feedback-ok' : 'feedback-error']">{{ feedback.statusMonitorBackoff.message }}</p>
+                </div>
+              </form>
             </div>
 
             <hr class="section-divider">
@@ -737,6 +787,11 @@ const workspaceForm = reactive({
   showStatusMonitorIpAddress: false,
   statusMonitorEnabled: true,
   statusMonitorIntervalSeconds: 3,
+  statusMonitorInlineSummaryEnabled: false,
+  statusMonitorShowPerCoreCpu: true,
+  statusMonitorShowTopProcesses: true,
+  statusMonitorShowInterfaceDetails: true,
+  statusMonitorFailureBackoffEnabled: true,
   dockerStatusIntervalSeconds: 5,
   dockerDefaultExpand: false,
   dockerUseSudo: false,
@@ -1039,6 +1094,11 @@ function hydrateFormsFromSettings() {
   workspaceForm.showStatusMonitorIpAddress = toBool(map.showStatusMonitorIpAddress, false);
   workspaceForm.statusMonitorEnabled = toBool(map.statusMonitorEnabled, true);
   workspaceForm.statusMonitorIntervalSeconds = toInt(map.statusMonitorIntervalSeconds, 3);
+  workspaceForm.statusMonitorInlineSummaryEnabled = toBool(map.statusMonitorInlineSummaryEnabled, false);
+  workspaceForm.statusMonitorShowPerCoreCpu = toBool(map.statusMonitorShowPerCoreCpu, true);
+  workspaceForm.statusMonitorShowTopProcesses = toBool(map.statusMonitorShowTopProcesses, true);
+  workspaceForm.statusMonitorShowInterfaceDetails = toBool(map.statusMonitorShowInterfaceDetails, true);
+  workspaceForm.statusMonitorFailureBackoffEnabled = toBool(map.statusMonitorFailureBackoffEnabled, true);
   workspaceForm.dockerStatusIntervalSeconds = toInt(map.dockerStatusIntervalSeconds, 5);
   workspaceForm.dockerDefaultExpand = toBool(map.dockerDefaultExpand, false);
   workspaceForm.dockerUseSudo = toBool(map.dockerUseSudo, false);

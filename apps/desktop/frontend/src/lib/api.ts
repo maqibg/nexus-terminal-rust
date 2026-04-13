@@ -19,7 +19,14 @@ export type { OpenRdpPayload, OpenVncPayload, RdpSessionStatus, VncSessionInfo }
 export { transferApi } from './api-transfer';
 export type { TransferTask, TransferTaskDto } from './api-transfer';
 export { statusApi } from './api-status';
-export type { BackendHealth, RuntimePaths } from './api-status';
+export type {
+  BackendHealth,
+  RuntimePaths,
+  RuntimeStatusSnapshot,
+  DiskUsageEntry,
+  StatusProcessEntry,
+  NetInterfaceEntry,
+} from './api-status';
 export { settingsApi } from './api-settings';
 export type { Setting, TerminalTheme, NotificationChannel } from './api-settings';
 export { databaseApi } from './api-database';

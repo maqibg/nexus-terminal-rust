@@ -4,7 +4,6 @@ use api_contract::error::{AppError, CmdResult};
 use connection_core::model::AuthMethod;
 use connection_core::repository::ConnectionRepository;
 use serde::{Deserialize, Serialize};
-use settings_core::repository::SettingsRepository;
 use ssh_core::host_key::{HostKeyEntry, HostKeyStore};
 use std::sync::Arc;
 use tauri::State;
@@ -142,37 +141,6 @@ pub async fn ssh_connect(
         )
         .await
         .map_err(AppError::Ssh)?;
-
-    let status_monitor_enabled = match state
-        .settings_repo
-        .get_setting("statusMonitorEnabled")
-        .await
-        .map_err(AppError::from)?
-    {
-        Some(raw) => raw.trim().eq_ignore_ascii_case("true") || raw.trim() == "1",
-        None => true,
-    };
-
-    if status_monitor_enabled {
-        let status_monitor_interval = state
-            .settings_repo
-            .get_setting("statusMonitorIntervalSeconds")
-            .await
-            .map_err(AppError::from)?
-            .and_then(|raw| raw.trim().parse::<u64>().ok())
-            .filter(|seconds| *seconds >= 1)
-            .map(Duration::from_secs);
-
-        state
-            .status_monitor
-            .start_session(
-                session_id.clone(),
-                state.ssh_manager.clone(),
-                app_handle,
-                status_monitor_interval,
-            )
-            .await;
-    }
 
     Ok(session_id)
 }

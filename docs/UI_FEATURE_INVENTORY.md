@@ -91,7 +91,8 @@
 | F090 | 终端 | Inline Suggestion | 行内幽灵提示 | `apps/desktop/frontend/src/components/SessionTerminalView.vue` + `apps/desktop/frontend/src/utils/inline-suggest.ts` |  |
 | F091 | 终端 | VncSessionView | VNC 会话视图 | `apps/desktop/frontend/src/components/VncSessionView.vue` + `apps/desktop/frontend/src/lib/api-desktop.ts` | 文档标注“排除项” |
 | F092 | 工作区 | CommandInputBar | 发送命令/历史/清屏/搜索/焦点配置/弹窗入口/输入同步 | `apps/desktop/frontend/src/components/CommandInputBar.vue` |  |
-| F093 | 工作区 | StatusMonitor | 状态监视器（CPU/内存/磁盘/网速等） | `apps/desktop/frontend/src/components/StatusMonitor.vue` + `apps/desktop/frontend/src/lib/api-status.ts` |  |
+| F093 | 工作区 | StatusMonitor | 状态监视器（CPU/内存/Swap/磁盘/网速/每核心/进程/接口/图表） | `apps/desktop/frontend/src/components/StatusMonitor.vue` + `apps/desktop/frontend/src/composables/useStatusMonitor.ts` + `apps/desktop/frontend/src/lib/api-status.ts` |  |
+| F093A | 终端 | StatusInlineSummary | 终端内联监控摘要（CPU/内存/磁盘/网速 + 详情展开） | `apps/desktop/frontend/src/components/status/StatusInlineSummary.vue` + `apps/desktop/frontend/src/components/SessionTerminalView.vue` |  |
 | F094 | 工作区 | CommandHistoryPanel | 命令历史面板（列表/搜索/删除/清空） | `apps/desktop/frontend/src/components/CommandHistoryPanel.vue` + `apps/desktop/frontend/src/lib/api-auxiliary.ts` |  |
 | F095 | 工作区 | QuickCommandsPanel | 快捷指令面板（列表/搜索/执行/编辑/标签） | `apps/desktop/frontend/src/components/QuickCommandsPanel.vue` + `apps/desktop/frontend/src/lib/api-auxiliary.ts` |  |
 | F096 | 工作区 | FileEditorContainer | 文件编辑器容器（tabs/保存） | `apps/desktop/frontend/src/components/FileEditorContainer.vue` + `apps/desktop/frontend/src/stores/fileEditor.ts` |  |
@@ -123,7 +124,7 @@
 | F141 | 设置·工作区 | 文件删除确认 | 文件管理器删除前确认 | `apps/desktop/frontend/src/views/Settings.vue` + `apps/desktop/frontend/src/components/SftpBrowser.vue` |  |
 | F142 | 设置·工作区 | 终端右键粘贴 | 开关右键粘贴 | `apps/desktop/frontend/src/views/Settings.vue` + `apps/desktop/frontend/src/components/SessionTerminalView.vue` |  |
 | F143 | 设置·工作区 | 状态监视器显示 IP | 开关 IP 显示 | `apps/desktop/frontend/src/views/Settings.vue` + `apps/desktop/frontend/src/components/StatusMonitor.vue` |  |
-| F144 | 设置·工作区 | 状态监控设置 | 频率/指标开关等 | `apps/desktop/frontend/src/views/Settings.vue` + `apps/desktop/frontend/src/composables/useStatusMonitor.ts` |  |
+| F144 | 设置·工作区 | 状态监控设置 | 频率、内联摘要、每核心、进程、接口、失败降级等开关 | `apps/desktop/frontend/src/views/Settings.vue` + `apps/desktop/frontend/src/composables/useStatusMonitor.ts` |  |
 | F145 | 设置·工作区 | Docker 管理器设置 | Docker 相关设置项 | `apps/desktop/frontend/src/views/Settings.vue` | 文档标注“排除项” |
 | F146 | 设置·AI | AISettingsPanel | 渠道/模型/参数等配置 | `apps/desktop/frontend/src/views/Settings.vue` + `apps/desktop/frontend/src/components/AI/AISettingsPanel.vue` |  |
 | F147 | 设置·系统 | 时区设置 | 设置时区 | `apps/desktop/frontend/src/views/Settings.vue` |  |

@@ -97,7 +97,6 @@ pub async fn get_connection_runtime_status(
 
 #[tauri::command]
 pub async fn set_status_monitor_enabled(
-    app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
     enabled: bool,
 ) -> Result<(), AppError> {
@@ -105,31 +104,57 @@ pub async fn set_status_monitor_enabled(
 
     if !enabled {
         state.status_monitor.stop_all().await;
-        return Ok(());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn status_subscribe(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+    consumer_id: String,
+) -> Result<(), AppError> {
+    state.auth.require_auth().await?;
+
+    if consumer_id.trim().is_empty() {
+        return Err(AppError::Validation("consumer_id is required".into()));
+    }
+    if !read_bool_setting(&state, "statusMonitorEnabled", true).await? {
+        return Err(AppError::Validation("status monitor is disabled".into()));
+    }
+    if !state.ssh_manager.has_session(&session_id).await {
+        return Err(AppError::Validation("no active SSH session for the specified session".into()));
     }
 
-    let poll_interval_override = state
-        .settings_repo
-        .get_setting("statusMonitorIntervalSeconds")
-        .await
-        .map_err(AppError::from)?
-        .and_then(|raw| raw.trim().parse::<u64>().ok())
-        .filter(|seconds| *seconds >= 1)
-        .map(Duration::from_secs);
+    state
+        .status_monitor
+        .subscribe(
+            session_id,
+            consumer_id,
+            state.ssh_manager.clone(),
+            app_handle,
+            read_duration_setting(&state, "statusMonitorIntervalSeconds", 3).await?,
+            read_bool_setting(&state, "statusMonitorFailureBackoffEnabled", true).await?,
+        )
+        .await;
 
-    let sessions = state.ssh_manager.list_sessions().await;
-    for (session_id, _, _) in sessions {
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn status_unsubscribe(
+    state: State<'_, AppState>,
+    session_id: String,
+    consumer_id: String,
+) -> Result<(), AppError> {
+    state.auth.require_auth().await?;
+    if !consumer_id.trim().is_empty() {
         state
             .status_monitor
-            .start_session(
-                session_id,
-                state.ssh_manager.clone(),
-                app_handle.clone(),
-                poll_interval_override,
-            )
+            .unsubscribe(&session_id, &consumer_id)
             .await;
     }
-
     Ok(())
 }
 
@@ -145,4 +170,36 @@ pub async fn get_runtime_paths(state: State<'_, AppState>) -> Result<RuntimePath
             .to_string(),
         temp_dir: state.runtime_paths.temp_dir.to_string_lossy().to_string(),
     })
+}
+
+async fn read_bool_setting(
+    state: &State<'_, AppState>,
+    key: &str,
+    fallback: bool,
+) -> Result<bool, AppError> {
+    Ok(match state
+        .settings_repo
+        .get_setting(key)
+        .await
+        .map_err(AppError::from)?
+    {
+        Some(raw) => raw.trim().eq_ignore_ascii_case("true") || raw.trim() == "1",
+        None => fallback,
+    })
+}
+
+async fn read_duration_setting(
+    state: &State<'_, AppState>,
+    key: &str,
+    fallback_seconds: u64,
+) -> Result<Option<Duration>, AppError> {
+    Ok(state
+        .settings_repo
+        .get_setting(key)
+        .await
+        .map_err(AppError::from)?
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .filter(|seconds| *seconds >= 1)
+        .or(Some(fallback_seconds))
+        .map(Duration::from_secs))
 }
