@@ -740,15 +740,16 @@ onUnmounted(() => {
 }
 
 .ctrl-btn.add-btn {
-  background: var(--mauve, #cba6f7);
-  color: #f5f1ff;
-  border-color: var(--mauve, #cba6f7);
-  box-shadow: 0 2px 10px rgba(203, 166, 247, 0.25);
+  background: var(--blue);
+  color: var(--button-text-color);
+  border-color: var(--blue);
+  box-shadow: none;
 }
 
 .ctrl-btn.add-btn:hover {
-  background: var(--mauve, #cba6f7);
-  filter: brightness(1.04);
+  background: var(--blue);
+  filter: brightness(1.05);
+  color: var(--button-text-color);
 }
 
 .commands-list {
