@@ -232,11 +232,45 @@ impl ConnectionRepository for SqliteConnectionRepo {
     }
 
     async fn delete_connection(&self, id: i64) -> Result<bool, StorageError> {
-        let result = sqlx::query("DELETE FROM connections WHERE id = ?")
-            .bind(id)
-            .execute(&self.pool)
+        let mut tx = self
+            .pool
+            .begin()
             .await
             .map_err(|e| StorageError(e.to_string()))?;
+
+        // connection_tags has ON DELETE CASCADE, but clean up explicitly for safety
+        sqlx::query("DELETE FROM connection_tags WHERE connection_id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| StorageError(e.to_string()))?;
+
+        // These tables have no foreign key constraint on connection_id
+        sqlx::query("DELETE FROM command_history WHERE connection_id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| StorageError(e.to_string()))?;
+
+        sqlx::query("DELETE FROM path_history WHERE connection_id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| StorageError(e.to_string()))?;
+
+        sqlx::query("DELETE FROM favorite_paths WHERE connection_id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| StorageError(e.to_string()))?;
+
+        let result = sqlx::query("DELETE FROM connections WHERE id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| StorageError(e.to_string()))?;
+
+        tx.commit().await.map_err(|e| StorageError(e.to_string()))?;
         Ok(result.rows_affected() > 0)
     }
 

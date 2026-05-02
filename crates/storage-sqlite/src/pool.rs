@@ -136,6 +136,7 @@ pub async fn init_pool(db_path: &Path) -> Result<SqliteStorage, sqlx::Error> {
     let options = SqliteConnectOptions::from_str(&db_url)?
         .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
         .busy_timeout(std::time::Duration::from_secs(30))
+        .foreign_keys(true)
         .create_if_missing(true);
 
     let pool = SqlitePoolOptions::new()

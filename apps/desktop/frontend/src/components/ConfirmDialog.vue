@@ -29,7 +29,7 @@ function cancel() { emit('cancel'); }
 
 <style scoped>
 .dialog-backdrop {
-  position: fixed; inset: 0; z-index: 9000;
+  position: fixed; inset: 0; z-index: 10000;
   background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
 }
 .dialog-card {
