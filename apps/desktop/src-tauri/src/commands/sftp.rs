@@ -22,6 +22,36 @@ const TRANSFER_BUFFER_SIZE: usize = 1024 * 1024;
 /// Upper bound for files pulled into the editor. Larger files must be
 /// downloaded instead, otherwise they are held in memory several times over.
 const EDITOR_READ_LIMIT: u64 = 32 * 1024 * 1024;
+
+/// Throttles transfer progress events. Emitting once per 1 MiB block floods the
+/// IPC bridge on fast links (hundreds of events per second), which shows up as
+/// UI stutter and wasted JSON serialisation.
+pub(crate) struct ProgressEmitter {
+    last: std::time::Instant,
+    emitted: bool,
+}
+
+impl ProgressEmitter {
+    pub(crate) fn new() -> Self {
+        Self {
+            last: std::time::Instant::now(),
+            emitted: false,
+        }
+    }
+
+    pub(crate) fn should_emit(&mut self, percent: u32) -> bool {
+        let now = std::time::Instant::now();
+        if !self.emitted
+            || percent >= 100
+            || now.duration_since(self.last) >= std::time::Duration::from_millis(100)
+        {
+            self.emitted = true;
+            self.last = now;
+            return true;
+        }
+        false
+    }
+}
 const DIRECTORY_UPLOAD_CONCURRENCY: usize = 4;
 const SCP_FILE_MODE: u32 = 0o644;
 
@@ -593,12 +623,16 @@ pub async fn sftp_download_to_disk(
                 .open(&req.remote_path)
                 .await
                 .map_err(|e| format!("open failed: {e}"))?;
-            let mut local = tokio::fs::File::create(&local_path)
+            // Write into a sidecar file first: an interrupted transfer must never
+            // leave a half-written file that looks complete to the user.
+            let partial_path = format!("{local_path}.part");
+            let mut local = tokio::fs::File::create(&partial_path)
                 .await
                 .map_err(|e| format!("create local file failed: {e}"))?;
 
             let mut buf = vec![0u8; TRANSFER_BUFFER_SIZE];
             let mut transferred: u64 = 0;
+            let mut progress = ProgressEmitter::new();
 
             loop {
                 if *cancel_rx.borrow() {
@@ -626,15 +660,32 @@ pub async fn sftp_download_to_disk(
                 } else {
                     0
                 };
-                let _ = ah.emit(
-                    "transfers/progress",
-                    serde_json::json!({
-                        "task_id": tid, "file_name": file_name,
-                        "kind": "download",
-                        "bytes_transferred": transferred, "total_bytes": total, "percent": pct,
-                    }),
-                );
+                if progress.should_emit(pct) {
+                    let _ = ah.emit(
+                        "transfers/progress",
+                        serde_json::json!({
+                            "task_id": tid, "file_name": file_name,
+                            "kind": "download",
+                            "bytes_transferred": transferred, "total_bytes": total, "percent": pct,
+                        }),
+                    );
+                }
             }
+
+            use tokio::io::AsyncWriteExt;
+            local
+                .flush()
+                .await
+                .map_err(|e| format!("flush local file failed: {e}"))?;
+            local
+                .sync_all()
+                .await
+                .map_err(|e| format!("sync local file failed: {e}"))?;
+            drop(local);
+            tokio::fs::rename(&partial_path, &local_path)
+                .await
+                .map_err(|e| format!("finalize local file failed: {e}"))?;
+
             Ok(())
         }
         .await;
@@ -1106,6 +1157,7 @@ async fn upload_local_file_with_progress(
         .await
         .map_err(|error| format!("open local failed: {error}"))?;
     let mut buffer = vec![0u8; TRANSFER_BUFFER_SIZE];
+    let mut progress = ProgressEmitter::new();
 
     loop {
         if *cancel_rx.borrow() {
@@ -1133,17 +1185,19 @@ async fn upload_local_file_with_progress(
         } else {
             0
         };
-        let _ = app_handle.emit(
-            "transfers/progress",
-            serde_json::json!({
-                "task_id": task_id,
-                "file_name": file_name,
-                "kind": "upload",
-                "bytes_transferred": total_transferred,
-                "total_bytes": total,
-                "percent": percent,
-            }),
-        );
+        if progress.should_emit(percent) {
+            let _ = app_handle.emit(
+                "transfers/progress",
+                serde_json::json!({
+                    "task_id": task_id,
+                    "file_name": file_name,
+                    "kind": "upload",
+                    "bytes_transferred": total_transferred,
+                    "total_bytes": total,
+                    "percent": percent,
+                }),
+            );
+        }
     }
 
     writer
@@ -1572,6 +1626,7 @@ pub async fn sftp_download_directory_to_disk(
                 .map_err(|e| format!("create temp dir failed: {e}"))?;
 
             let mut transferred = 0u64;
+            let mut progress = ProgressEmitter::new();
             let mut stack: Vec<(String, PathBuf)> = vec![(remote_root.clone(), temp_dir.clone())];
 
             while let Some((remote_dir, local_dir)) = stack.pop() {
@@ -1621,17 +1676,19 @@ pub async fn sftp_download_directory_to_disk(
                     } else {
                         0
                     };
-                    let _ = ah.emit(
-                        "transfers/progress",
-                        serde_json::json!({
-                            "task_id": tid,
-                            "file_name": format!("{file_name}.zip"),
-                            "kind": "download",
-                            "bytes_transferred": transferred,
-                            "total_bytes": total_bytes,
-                            "percent": pct,
-                        }),
-                    );
+                    if progress.should_emit(pct) {
+                        let _ = ah.emit(
+                            "transfers/progress",
+                            serde_json::json!({
+                                "task_id": tid,
+                                "file_name": format!("{file_name}.zip"),
+                                "kind": "download",
+                                "bytes_transferred": transferred,
+                                "total_bytes": total_bytes,
+                                "percent": pct,
+                            }),
+                        );
+                    }
                 }
             }
 

@@ -150,6 +150,7 @@ pub async fn transfer_send(
 
             let mut buf = vec![0u8; TRANSFER_BUFFER_SIZE];
             let mut transferred = 0u64;
+            let mut progress = super::sftp::ProgressEmitter::new();
 
             loop {
                 if *cancel_rx.borrow() {
@@ -179,17 +180,19 @@ pub async fn transfer_send(
                     0
                 };
 
-                let _ = ah.emit(
-                    "transfers/progress",
-                    serde_json::json!({
-                        "task_id": task_id,
-                        "file_name": file_name,
-                        "kind": "upload",
-                        "bytes_transferred": transferred,
-                        "total_bytes": total,
-                        "percent": percent,
-                    }),
-                );
+                if progress.should_emit(percent) {
+                    let _ = ah.emit(
+                        "transfers/progress",
+                        serde_json::json!({
+                            "task_id": task_id,
+                            "file_name": file_name,
+                            "kind": "upload",
+                            "bytes_transferred": transferred,
+                            "total_bytes": total,
+                            "percent": percent,
+                        }),
+                    );
+                }
             }
 
             target
