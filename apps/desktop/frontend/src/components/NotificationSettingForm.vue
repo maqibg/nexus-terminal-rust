@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-backdrop" @click.self="$emit('cancel')">
+    <div v-if="visible" class="dialog-backdrop">
       <div class="form-card">
         <div class="form-title">{{ channel ? '编辑通知渠道' : '新建通知渠道' }}</div>
         <div class="form-body">

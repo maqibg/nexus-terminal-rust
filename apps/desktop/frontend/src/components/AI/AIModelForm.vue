@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-backdrop" @click.self="closeDialog">
+    <div v-if="visible" class="dialog-backdrop">
       <div class="dialog-card">
         <div class="dialog-header">
           <h3 class="dialog-title">手动添加 AI 模型</h3>

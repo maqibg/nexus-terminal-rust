@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-backdrop" @click.self="$emit('cancel')">
+    <div v-if="visible" class="dialog-backdrop">
       <div class="form-card">
         <div class="form-title">{{ proxy ? '编辑代理' : '新建代理' }}</div>
         <div class="form-body">

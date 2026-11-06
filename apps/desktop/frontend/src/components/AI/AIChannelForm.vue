@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-backdrop" @click.self="closeDialog">
+    <div v-if="visible" class="dialog-backdrop">
       <div class="dialog-card">
         <div class="dialog-header">
           <h3 class="dialog-title">{{ isEditing ? '编辑 AI 渠道' : '添加 AI 渠道' }}</h3>

@@ -1,10 +1,6 @@
 <template>
   <Teleport to="body">
-    <div
-      v-if="visible"
-      class="favorite-dialog-overlay"
-      @click.self="handleClose"
-    >
+    <div v-if="visible" class="favorite-dialog-overlay">
       <div class="favorite-dialog">
         <h2 class="dialog-title">{{ isEditMode ? '编辑收藏路径' : '添加新收藏路径' }}</h2>
 

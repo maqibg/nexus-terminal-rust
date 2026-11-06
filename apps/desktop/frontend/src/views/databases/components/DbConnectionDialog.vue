@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="db-dialog-backdrop" @click.self="emit('close')">
+    <div v-if="visible" class="db-dialog-backdrop">
       <div class="db-dialog-panel db-dialog-scope">
         <h3 class="db-dialog-title">{{ title }}</h3>
 

@@ -1,10 +1,6 @@
 <template>
   <Teleport to="body">
-    <div
-      v-if="visible"
-      class="quick-command-form-overlay"
-      @click.self="emit('close')"
-    >
+    <div v-if="visible" class="quick-command-form-overlay">
       <div class="quick-command-form-card">
         <h2 class="form-title">{{ isEditing ? '编辑快捷指令' : '添加快捷指令' }}</h2>
 

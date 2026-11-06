@@ -42,7 +42,7 @@ const handleAdvancedConnectionModeUpdate = (newMode: 'proxy' | 'jump') => {
 
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-backdrop" @click.self="emit('close')">
+    <div v-if="visible" class="dialog-backdrop">
       <div class="dialog-panel">
         <h3 class="dialog-title">{{ form.formTitle.value }}</h3>
 

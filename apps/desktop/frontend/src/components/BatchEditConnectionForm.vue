@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-backdrop" @click.self="$emit('cancel')">
+    <div v-if="visible" class="dialog-backdrop">
       <div class="form-card">
         <div class="form-title">批量编辑连接 ({{ connectionIds.length }} 个)</div>
         <div class="form-body">
