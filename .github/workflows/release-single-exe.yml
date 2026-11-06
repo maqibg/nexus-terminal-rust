@@ -42,10 +42,6 @@ jobs:
           workspaces: |
             . -> target
 
-      - name: Install Tauri CLI
-        shell: pwsh
-        run: cargo install tauri-cli --version "^2" --locked
-
       - name: Install frontend dependencies
         working-directory: apps/desktop/frontend
         shell: pwsh
@@ -71,7 +67,12 @@ jobs:
       - name: Build single exe
         working-directory: apps/desktop
         shell: pwsh
-        run: cargo tauri build -c src-tauri/tauri.ci.single-exe.json
+        # 预编译 CLI 免去每次发版都从源码编译 tauri-cli；
+        # 发版产物用 thin LTO 换取明显的链接阶段提速。
+        env:
+          CARGO_PROFILE_RELEASE_LTO: thin
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+        run: pnpm dlx @tauri-apps/cli@2 build -c src-tauri/tauri.ci.single-exe.json
 
       - name: Verify output
         shell: pwsh
