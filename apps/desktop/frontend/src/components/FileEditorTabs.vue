@@ -11,7 +11,7 @@
     >
       <span class="tab-filename">{{ tab.filename || fileName(tab.path) }}</span>
       <span v-if="tab.isDirty" class="modified-indicator">*</span>
-      <button class="close-tab-btn" title="关闭标签页" @click.stop="store.closeFile(tab.id)">×</button>
+      <button class="close-tab-btn" title="关闭标签页" @click.stop="requestClose(tab.id)">×</button>
     </div>
 
     <div v-if="!fileList.length" class="no-tabs-placeholder"></div>
@@ -38,8 +38,10 @@
 import { computed, nextTick, reactive, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useFileEditorStore } from '@/stores/fileEditor';
+import { useConfirmDialog } from '@/composables/useConfirmDialog';
 
 const store = useFileEditorStore();
+const { confirm } = useConfirmDialog();
 const { fileList, activeFileId } = storeToRefs(store);
 
 const contextMenuVisible = ref(false);
@@ -89,37 +91,75 @@ function closeContextMenu() {
   contextMenuTargetId.value = null;
 }
 
-function handleContextAction(action: 'close' | 'close-others' | 'close-right' | 'close-left') {
+function dirtyCount(ids: string[]): number {
+  return ids.filter((id) => fileList.value.find((item) => item.id === id)?.isDirty).length;
+}
+
+/** Closing a tab drops its buffer, so ask before throwing away unsaved edits. */
+async function confirmDiscard(ids: string[], label: string): Promise<boolean> {
+  const dirty = dirtyCount(ids);
+  if (dirty === 0) {
+    return true;
+  }
+  return confirm('未保存的修改', `${label}包含 ${dirty} 个未保存的文件，关闭后会丢失。`);
+}
+
+async function requestClose(id: string) {
+  const tab = fileList.value.find((item) => item.id === id);
+  const label = `「${tab?.filename ?? tab?.path ?? id}」`;
+  if (!(await confirmDiscard([id], label))) {
+    return;
+  }
+  store.closeFile(id);
+}
+
+async function handleContextAction(action: 'close' | 'close-others' | 'close-right' | 'close-left') {
   const targetId = contextMenuTargetId.value;
   if (!targetId) {
     closeContextMenu();
     return;
   }
 
+  const index = fileList.value.findIndex((item) => item.id === targetId);
+  closeContextMenu();
+
   switch (action) {
     case 'close':
-      store.closeFile(targetId);
-      break;
-    case 'close-others':
-      if (canCloseOthers.value) {
+      await requestClose(targetId);
+      return;
+    case 'close-others': {
+      if (!canCloseOthers.value) {
+        return;
+      }
+      const others = fileList.value.filter((item) => item.id !== targetId).map((item) => item.id);
+      if (await confirmDiscard(others, '关闭其他标签')) {
         store.closeOtherFiles(targetId);
       }
-      break;
-    case 'close-right':
-      if (canCloseRight.value) {
+      return;
+    }
+    case 'close-right': {
+      if (!canCloseRight.value) {
+        return;
+      }
+      const right = fileList.value.slice(index + 1).map((item) => item.id);
+      if (await confirmDiscard(right, '关闭右侧标签')) {
         store.closeFilesToRight(targetId);
       }
-      break;
-    case 'close-left':
-      if (canCloseLeft.value) {
+      return;
+    }
+    case 'close-left': {
+      if (!canCloseLeft.value) {
+        return;
+      }
+      const left = fileList.value.slice(0, index).map((item) => item.id);
+      if (await confirmDiscard(left, '关闭左侧标签')) {
         store.closeFilesToLeft(targetId);
       }
-      break;
+      return;
+    }
     default:
       break;
   }
-
-  closeContextMenu();
 }
 </script>
 

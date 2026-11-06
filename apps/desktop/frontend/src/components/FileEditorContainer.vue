@@ -363,10 +363,10 @@ async function save() {
   store.setSaveStatus(file.id, 'saving');
 
   try {
-    const encoded = await encodeContentToBase64(file.content, file.selectedEncoding || 'utf-8');
+    const savedContent = file.content;
+    const encoded = await encodeContentToBase64(savedContent, file.selectedEncoding || 'utf-8');
     await sftpApi.writeFile(file.sessionId, file.path, encoded);
-    store.setRawContentBase64(file.id, encoded);
-    store.markSaved(file.id);
+    store.markSaved(file.id, savedContent, encoded);
     notify.addNotification('success', '文件已保存');
 
     if (clearSaveStatusTimer) {

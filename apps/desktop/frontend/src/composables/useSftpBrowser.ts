@@ -16,9 +16,19 @@ const VIEWPORT_PADDING = 8;
 const CONTEXT_SUBMENU_MIN_WIDTH = 190;
 const SUPPORTED_ARCHIVE_EXTENSIONS = ['.zip', '.tar.gz', '.tgz', '.tar.bz2', '.tbz2'];
 
-function decodeUtf8Base64(base64: string): string {
-  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
-  return new TextDecoder('utf-8').decode(bytes);
+/** Files above this size are not opened in the editor: decoding them would need
+ *  several full-size copies in memory and freeze the UI. */
+const EDITOR_SIZE_LIMIT = 5 * 1024 * 1024;
+
+/** Strict UTF-8 decode: rejects invalid byte sequences instead of silently
+ *  substituting replacement characters, which would destroy the file on save. */
+function decodeUtf8Base64Strict(base64: string): string {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 }
 
 type SftpSortKey = 'type' | 'name' | 'size' | 'modified';
@@ -72,13 +82,17 @@ export function useSftpBrowser(
   const isSearchActive = ref(false);
 
   const entries = ref<FileEntry[]>([]);
+  const showHiddenFiles = ref(true);
   const sortKey = ref<SftpSortKey>('name');
   const sortDirection = ref<SftpSortDirection>('asc');
   const filteredEntries = computed(() => {
     const query = searchQuery.value.trim().toLowerCase();
+    const visibleEntries = showHiddenFiles.value
+      ? entries.value
+      : entries.value.filter((entry) => !entry.name.startsWith('.'));
     const baseEntries = query
-      ? entries.value.filter((entry) => entry.name.toLowerCase().includes(query))
-      : entries.value;
+      ? visibleEntries.filter((entry) => entry.name.toLowerCase().includes(query))
+      : visibleEntries;
 
     const compareText = (left: string, right: string) => {
       const lowerLeft = left.toLowerCase();
@@ -500,34 +514,45 @@ export function useSftpBrowser(
     pathHistorySelectedIndex.value = -1;
   }
 
+  // Monotonic token: only the newest navigation may write to the view state.
+  // Without it, a slow earlier listing can overwrite the directory the user
+  // already navigated to.
+  let navigationSeq = 0;
+
   async function navigateTo(path: string) {
     const sid = sftpSessionId.value;
     if (!sid) return;
 
+    const sshSid = sshSessionId.value;
     const targetPath = normalizePath(path);
     const previousPath = currentPath.value;
+    const requestSeq = ++navigationSeq;
 
     loading.value = true;
     error.value = '';
     try {
       const list = await sftpApi.listDir(sid, targetPath);
+      if (requestSeq !== navigationSeq) return;
       entries.value = list;
       clearSelection();
       closeCtxMenu();
       currentPath.value = targetPath;
       pathInput.value = targetPath;
 
-      if (sshSessionId.value) {
-        sessionStore.setCurrentPath(sshSessionId.value, targetPath);
+      if (sshSid) {
+        sessionStore.setCurrentPath(sshSid, targetPath);
       }
 
       if (targetPath !== previousPath) {
         void addPathToHistory(targetPath);
       }
     } catch (e: unknown) {
+      if (requestSeq !== navigationSeq) return;
       error.value = toAppError(e).message || '加载失败';
     } finally {
-      loading.value = false;
+      if (requestSeq === navigationSeq) {
+        loading.value = false;
+      }
     }
   }
 
@@ -1682,6 +1707,14 @@ export function useSftpBrowser(
     const sid = sftpSessionId.value;
     if (!sid) return;
 
+    if (entry.size > EDITOR_SIZE_LIMIT) {
+      notify.addNotification(
+        'warning',
+        `${entry.name} 超过 ${Math.round(EDITOR_SIZE_LIMIT / 1024 / 1024)}MB，请下载后在本地编辑`,
+      );
+      return;
+    }
+
     const popupEditorEnabled = settingsStore.getBoolean('showPopupFileEditor', false);
     const shareFileEditorTabs = settingsStore.getBoolean('shareFileEditorTabs', true);
     const tabScope = connectionId.value != null ? String(connectionId.value) : 'global';
@@ -1699,7 +1732,16 @@ export function useSftpBrowser(
 
     try {
       const base64 = await sftpApi.readFile(sid, entry.path);
-      const content = decodeUtf8Base64(base64);
+      let content: string;
+      try {
+        content = decodeUtf8Base64Strict(base64);
+      } catch {
+        notify.addNotification(
+          'error',
+          `${entry.name} 不是 UTF-8 文本，已阻止打开以避免保存时破坏原文件；请下载后在本地编辑`,
+        );
+        return;
+      }
       const ext = entry.name.split('.').pop()?.toLowerCase() ?? '';
       const langMap: Record<string, string> = {
         js: 'javascript',
@@ -2043,6 +2085,7 @@ export function useSftpBrowser(
     loading,
     error,
     searchQuery,
+    showHiddenFiles,
     selectedEntryPaths,
     lastSelectedPath,
     clipboardState,

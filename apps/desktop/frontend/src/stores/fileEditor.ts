@@ -205,17 +205,23 @@ export const useFileEditorStore = defineStore('fileEditor', () => {
     });
   }
 
-  function markSaved(id: string) {
+  function markSaved(id: string, savedContent?: string, savedBase64?: string | null) {
     const tab = openFiles.value.get(id);
     if (!tab) {
       return;
     }
 
+    // Saving is asynchronous: the buffer may have changed while the write was
+    // in flight. Only the snapshot that actually reached the server can be
+    // treated as saved, otherwise new keystrokes would be silently discarded.
+    const stillMatches = savedContent === undefined || tab.content === savedContent;
+
     patchFile(id, {
-      originalContent: tab.content,
-      isDirty: false,
+      originalContent: savedContent ?? tab.content,
+      ...(savedBase64 !== undefined ? { rawContentBase64: savedBase64 } : {}),
+      isDirty: !stillMatches,
       isSaving: false,
-      saveStatus: 'success',
+      saveStatus: stillMatches ? 'success' : 'idle',
       saveError: null,
     });
   }

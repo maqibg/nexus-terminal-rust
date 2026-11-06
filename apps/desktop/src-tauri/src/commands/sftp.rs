@@ -18,6 +18,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use crate::state::AppState;
 
 const TRANSFER_BUFFER_SIZE: usize = 1024 * 1024;
+
+/// Upper bound for files pulled into the editor. Larger files must be
+/// downloaded instead, otherwise they are held in memory several times over.
+const EDITOR_READ_LIMIT: u64 = 32 * 1024 * 1024;
 const DIRECTORY_UPLOAD_CONCURRENCY: usize = 4;
 const SCP_FILE_MODE: u32 = 0o644;
 
@@ -316,7 +320,7 @@ pub async fn sftp_read_file(state: State<'_, AppState>, req: SftpPathRequest) ->
         .get_sftp(&req.session_id)
         .await
         .map_err(AppError::Ssh)?;
-    let bytes = sftp_core::service::read_file(&sftp, &req.path)
+    let bytes = sftp_core::service::read_file_limited(&sftp, &req.path, EDITOR_READ_LIMIT)
         .await
         .map_err(AppError::Ssh)?;
     Ok(B64.encode(&bytes))

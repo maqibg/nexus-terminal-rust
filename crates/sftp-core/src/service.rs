@@ -58,6 +58,40 @@ pub async fn read_file(sftp: &SftpSession, path: &str) -> Result<Vec<u8>, String
     Ok(buf)
 }
 
+/// Read a file for the editor, refusing anything larger than `max_bytes`.
+/// Without the guard a stray multi-gigabyte file would be materialised in
+/// memory several times over (bytes, base64, IPC payload).
+pub async fn read_file_limited(
+    sftp: &SftpSession,
+    path: &str,
+    max_bytes: u64,
+) -> Result<Vec<u8>, String> {
+    let attrs = sftp
+        .metadata(path)
+        .await
+        .map_err(|e| format!("stat failed: {e}"))?;
+    if let Some(size) = attrs.size {
+        if size > max_bytes {
+            return Err(format!(
+                "file is {size} bytes, above the {max_bytes} byte editor limit"
+            ));
+        }
+    }
+
+    use tokio::io::AsyncReadExt;
+    let file = sftp
+        .open(path)
+        .await
+        .map_err(|e| format!("open failed: {e}"))?;
+    let mut limited = file.take(max_bytes);
+    let mut buf = Vec::new();
+    limited
+        .read_to_end(&mut buf)
+        .await
+        .map_err(|e| format!("read failed: {e}"))?;
+    Ok(buf)
+}
+
 /// Write bytes to a file (create/overwrite).
 pub async fn write_file(sftp: &SftpSession, path: &str, data: &[u8]) -> Result<(), String> {
     let mut file = sftp
@@ -95,17 +129,55 @@ pub async fn rmdir(sftp: &SftpSession, path: &str) -> Result<(), String> {
         .map_err(|e| format!("rmdir failed: {e}"))
 }
 
+const MAX_RECURSIVE_DEPTH: usize = 64;
+
+/// Reject paths that make a recursive walk unsafe: the filesystem root, empty
+/// or relative paths, and any `..` segment. Interactive callers must never be
+/// able to hand us something that walks upwards or spans the whole tree.
+fn validate_recursive_target(path: &str) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() || !trimmed.starts_with('/') {
+        return Err(format!("refusing non-absolute path: '{path}'"));
+    }
+
+    let normalized = trimmed.trim_end_matches('/');
+    if normalized.is_empty() {
+        return Err(format!("refusing to operate on the filesystem root: '{path}'"));
+    }
+
+    if normalized
+        .split('/')
+        .any(|segment| segment == "." || segment == "..")
+    {
+        return Err(format!("refusing path containing dot segments: '{path}'"));
+    }
+
+    Ok(())
+}
+
 /// Recursively remove a directory and all of its children.
 pub async fn rmdir_recursive(sftp: &SftpSession, path: &str) -> Result<(), String> {
-    let mut directory_stack = vec![path.to_string()];
-    let mut removal_order = Vec::new();
+    validate_recursive_target(path)?;
 
-    while let Some(current_dir) = directory_stack.pop() {
+    let mut directory_stack = vec![(path.to_string(), 0usize)];
+    let mut removal_order = Vec::new();
+    // A server that reports a symbolic link as a directory would otherwise
+    // keep the walk alive forever.
+    let mut visited = std::collections::HashSet::new();
+
+    while let Some((current_dir, depth)) = directory_stack.pop() {
+        if depth > MAX_RECURSIVE_DEPTH {
+            return Err(format!("directory tree too deep at: {current_dir}"));
+        }
+        if !visited.insert(current_dir.clone()) {
+            continue;
+        }
+
         removal_order.push(current_dir.clone());
         let entries = list_dir(sftp, &current_dir).await?;
         for entry in entries {
             if entry.is_dir {
-                directory_stack.push(entry.path);
+                directory_stack.push((entry.path, depth + 1));
             } else {
                 remove_file(sftp, &entry.path).await?;
             }
