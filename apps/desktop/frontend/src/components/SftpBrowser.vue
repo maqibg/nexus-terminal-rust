@@ -29,6 +29,15 @@
             </button>
             <button
               class="icon-btn"
+              :class="{ active: !showHiddenFiles }"
+              @click="showHiddenFiles = !showHiddenFiles"
+              :disabled="!activeSftpSessionId"
+              :title="showHiddenFiles ? '隐藏以点开头的文件' : '显示隐藏文件'"
+            >
+              <i class="fas" :class="showHiddenFiles ? 'fa-eye' : 'fa-eye-slash'"></i>
+            </button>
+            <button
+              class="icon-btn"
               @click="refresh"
               :disabled="!activeSftpSessionId || isEditingPath"
               title="刷新"
@@ -244,11 +253,11 @@
             </button>
           </div>
 
-          <div class="file-body">
+          <div class="file-body" tabindex="0" @keydown="handleListKeydown">
             <div
               v-if="currentPath !== '/'"
               class="file-row up-row"
-              :class="{ 'drop-target': dragOverTarget === '..' }"
+              :class="{ 'drop-target': dragOverTarget === '..', 'kbd-active': keyboardIndex === 0 }"
               :style="{ gridTemplateColumns: gridTemplate }"
               data-drop-row=".."
               @click.stop="goUp"
@@ -266,13 +275,14 @@
             </div>
 
             <div
-              v-for="entry in filteredEntries"
+              v-for="(entry, index) in filteredEntries"
               :key="entry.path"
               class="file-row"
               :class="{
                 dir: entry.is_dir,
                 selected: isEntrySelected(entry),
                 'drop-target': entry.is_dir && dragOverTarget === entry.path,
+                'kbd-active': keyboardIndex === index + (hasParentRow ? 1 : 0),
               }"
               :style="{ gridTemplateColumns: gridTemplate }"
               :data-drop-row="entry.path"
@@ -452,7 +462,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useSessionStore } from '@/stores/session';
 import FavoritePaths from '@/components/FavoritePaths.vue';
@@ -471,7 +481,7 @@ const fileListContainerRef = ref<HTMLDivElement | null>(null);
 
 const {
   // state
-  currentPath, pathInput, entries, filteredEntries, loading, error, searchQuery,
+  currentPath, pathInput, entries, filteredEntries, loading, error, searchQuery, showHiddenFiles,
   selectedEntryPaths, clipboardState,
   rootModeEnabled, rootModeSwitching, showRootModeDialog, rootModeUsername, rootModePassword,
   pathHistoryItems, pathHistoryLoading, filteredPathHistory, pathHistorySelectedIndex,
@@ -499,6 +509,52 @@ const {
 } = useSftpBrowser(activeSftpSessionId, sshSessionId, connectionId);
 
 const { gridTemplate, startResize } = useSftpFileListColumns();
+
+// Keyboard navigation over the visible rows: the parent row (when present)
+// occupies index 0, entries follow.
+const keyboardIndex = ref(-1);
+const hasParentRow = computed(() => currentPath.value !== '/');
+const rowCount = computed(() => filteredEntries.value.length + (hasParentRow.value ? 1 : 0));
+
+async function handleListKeydown(event: KeyboardEvent) {
+  const total = rowCount.value;
+  if (total === 0) {
+    return;
+  }
+  const container = event.currentTarget as HTMLElement;
+
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    const delta = event.key === 'ArrowDown' ? 1 : -1;
+    keyboardIndex.value = (keyboardIndex.value + delta + total) % total;
+  } else if (event.key === 'Enter') {
+    const index = keyboardIndex.value;
+    if (index < 0) {
+      return;
+    }
+    event.preventDefault();
+    if (hasParentRow.value && index === 0) {
+      void goUp();
+    } else {
+      const entry = filteredEntries.value[index - (hasParentRow.value ? 1 : 0)];
+      if (entry) {
+        void handleEntryClick(entry, event as unknown as MouseEvent);
+      }
+    }
+  } else if (event.key === 'Escape') {
+    keyboardIndex.value = -1;
+  } else {
+    return;
+  }
+
+  await nextTick();
+  const rows = container.querySelectorAll('.file-row');
+  (rows[keyboardIndex.value] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' });
+}
+
+watch([currentPath, searchQuery, sortKey, sortDirection], () => {
+  keyboardIndex.value = -1;
+});
 const {
   showExternalDropOverlay,
   dragOverTarget,
@@ -1024,6 +1080,11 @@ function handleUploadTasksCreated(taskIds: string[]): void {
 
 .file-row.selected {
   background: rgba(137, 180, 250, 0.24);
+}
+
+.file-row.kbd-active {
+  outline: 2px solid var(--blue, #89b4fa);
+  outline-offset: -2px;
 }
 
 .file-row.selected:hover {
