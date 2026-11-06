@@ -520,7 +520,7 @@
             </div>
 
             <Teleport to="body">
-              <div v-if="resetPickerVisible" class="dialog-backdrop" @click.self="closeResetPicker">
+              <div v-if="resetPickerVisible" class="dialog-backdrop">
                 <div class="modal-card reset-picker-modal" role="dialog" aria-modal="true">
                   <div class="modal-header">
                     <span>选择要清除的数据</span>

@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-backdrop" @click.self="$emit('close')">
+    <div v-if="visible" class="dialog-backdrop">
       <div class="transfer-card">
         <div class="transfer-title">传输进度</div>
         <div v-if="!tasks.length" class="empty">无活跃传输</div>

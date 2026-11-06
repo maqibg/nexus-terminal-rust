@@ -492,7 +492,7 @@ const filteredRemoteHtmlPresets = computed(() => {
       </div>
     </div>
 
-    <div v-if="showPresetEditor" class="editor-mask" @click.self="showPresetEditor = false">
+    <div v-if="showPresetEditor" class="editor-mask">
       <div class="editor-dialog">
         <div class="editor-field">
           <label for="presetName" class="field-label">主题名称</label>

@@ -110,16 +110,21 @@
     </div>
 
     <Teleport to="body">
-      <div v-if="showConnList" class="dialog-backdrop" @click.self="showConnList = false">
+      <div v-if="showConnList" class="dialog-backdrop">
         <div class="conn-popup">
-          <div class="popup-title">选择连接</div>
+          <div class="popup-title">
+            <span>选择连接</span>
+            <button class="workspace-modal-close" title="关闭" @click="showConnList = false">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
           <WorkspaceConnectionList @select="handleConnect" />
         </div>
       </div>
     </Teleport>
 
     <Teleport to="body">
-      <div v-if="showFileManagerPopup" class="dialog-backdrop" @click.self="showFileManagerPopup = false">
+      <div v-if="showFileManagerPopup" class="dialog-backdrop">
         <div class="workspace-modal-popup">
           <div class="workspace-modal-header">
             <div class="workspace-modal-title">弹窗文件管理器</div>
@@ -840,6 +845,10 @@ onUnmounted(() => {
   font-weight: 600;
   color: var(--text);
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .workspace-modal-popup {

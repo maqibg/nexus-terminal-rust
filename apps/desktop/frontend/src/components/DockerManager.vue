@@ -221,7 +221,7 @@ async function submitSudoPassword() {
       </table>
     </div>
 
-    <div v-if="showSudoPasswordDialog" class="dialog-backdrop" @click.self="closeSudoPasswordDialog">
+    <div v-if="showSudoPasswordDialog" class="dialog-backdrop">
       <div class="sudo-dialog">
         <div class="sudo-dialog-title">
           <i class="fas fa-user-shield"></i>

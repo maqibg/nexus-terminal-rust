@@ -101,7 +101,7 @@
     />
 
     <Teleport to="body">
-      <div v-if="showVariableDialog" class="variable-dialog-backdrop" @click.self="closeVariableDialog">
+      <div v-if="showVariableDialog" class="variable-dialog-backdrop">
         <div class="variable-dialog">
           <h3>执行快捷指令</h3>
           <p class="dialog-hint">请填写命令变量</p>

@@ -22,7 +22,7 @@
     </div>
 
     <!-- Add/Edit dialog -->
-    <div v-if="showAdd" class="mini-backdrop" @click.self="closeForm">
+    <div v-if="showAdd" class="mini-backdrop">
       <div class="mini-dialog">
         <h4>{{ editingCmd ? '编辑' : '新建' }}快捷命令</h4>
         <label>名称 <input v-model="form.name" /></label>
@@ -38,7 +38,7 @@
     </div>
 
     <!-- Variable input dialog -->
-    <div v-if="showVarDialog" class="mini-backdrop" @click.self="showVarDialog = false">
+    <div v-if="showVarDialog" class="mini-backdrop">
       <div class="mini-dialog">
         <h4>填写变量</h4>
         <label v-for="v in varNames" :key="v">{{ v }} <input v-model="varValues[v]" /></label>

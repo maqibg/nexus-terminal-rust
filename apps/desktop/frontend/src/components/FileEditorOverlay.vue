@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="isVisible" class="overlay-backdrop" @click.self="closeOverlay">
+    <div v-if="isVisible" class="overlay-backdrop">
       <div class="overlay-card">
         <div class="overlay-header">
           <span class="overlay-title">文件编辑器</span>

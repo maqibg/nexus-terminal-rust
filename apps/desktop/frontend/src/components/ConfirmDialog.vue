@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-backdrop" @click.self="cancel">
+    <div v-if="visible" class="dialog-backdrop">
       <div class="dialog-card">
         <div class="dialog-title">{{ title }}</div>
         <div class="dialog-message">{{ message }}</div>

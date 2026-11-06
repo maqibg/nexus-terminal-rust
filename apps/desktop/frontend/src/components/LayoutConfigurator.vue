@@ -427,7 +427,6 @@ function handleAvailablePaneDragEnd(event: any) {
   <div
     v-if="visible"
     class="layout-configurator-mask"
-    @click.self="closeDialog"
   >
     <div class="layout-configurator-dialog">
       <header class="dialog-header">

@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-backdrop" @click.self="$emit('cancel')">
+    <div v-if="visible" class="dialog-backdrop">
       <div class="form-card">
         <div class="form-title">发送文件到远程服务器</div>
         <div class="form-body">

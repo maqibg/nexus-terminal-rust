@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-backdrop" @click.self="$emit('close')">
+    <div v-if="visible" class="dialog-backdrop">
       <div class="modal-card">
         <div class="modal-header">
           <span>标签-连接管理</span>

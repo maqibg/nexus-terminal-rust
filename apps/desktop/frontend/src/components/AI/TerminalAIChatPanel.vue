@@ -158,7 +158,7 @@
   </div>
 
   <Teleport to="body">
-    <div v-if="showModelDialog" class="dialog-backdrop" @click.self="showModelDialog = false">
+    <div v-if="showModelDialog" class="dialog-backdrop">
       <div class="model-dialog">
         <div class="dialog-header">
           <h3>选择 AI 模型</h3>

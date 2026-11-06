@@ -46,7 +46,7 @@ const resetUiTheme = async () => {
 
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="style-customizer-mask" @click.self="closeCustomizer">
+    <div v-if="visible" class="style-customizer-mask">
       <div class="style-customizer-dialog">
         <header class="style-customizer-header">
           <h2>外观自定义</h2>

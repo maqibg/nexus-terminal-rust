@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-backdrop" @click.self="cancel">
+    <div v-if="visible" class="dialog-backdrop">
       <div class="upload-card">
         <div class="upload-title">上传文件 / 文件夹</div>
         <div

@@ -173,7 +173,7 @@
       </section>
     </div>
 
-    <div v-if="showSettingsDialog" class="dialog-mask" @click.self="showSettingsDialog = false">
+    <div v-if="showSettingsDialog" class="dialog-mask">
       <div class="dialog-card">
         <h3>统计组件显示设置</h3>
         <p class="hint">选择要显示的统计组件</p>
@@ -188,6 +188,7 @@
         <label class="toggle-row"><span>到期提醒</span><input v-model="visibleComponents.expiringSoon" type="checkbox"></label>
         <label class="toggle-row"><span>连接详情表格</span><input v-model="visibleComponents.detailedTable" type="checkbox"></label>
         <div class="dialog-actions">
+          <button class="btn" @click="showSettingsDialog = false">取消</button>
           <button class="btn" @click="resetVisibility">全部显示</button>
           <button class="btn btn-primary" @click="saveVisibilitySettings">保存</button>
         </div>

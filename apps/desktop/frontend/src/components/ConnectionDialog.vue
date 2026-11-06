@@ -1,5 +1,5 @@
 <template>
-  <div class="overlay" @click.self="$emit('close')">
+  <div class="overlay">
     <div class="dialog">
       <h3>{{ editing ? '编辑连接' : '新建连接' }}</h3>
       <div v-if="error" class="error">{{ error }}</div>

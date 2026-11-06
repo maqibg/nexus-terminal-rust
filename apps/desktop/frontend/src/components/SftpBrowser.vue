@@ -346,7 +346,7 @@
         </div>
       </Teleport>
 
-      <div v-if="showMkdir" class="mini-dialog-backdrop" @click.self="showMkdir = false">
+      <div v-if="showMkdir" class="mini-dialog-backdrop">
         <div class="mini-dialog">
           <div class="mini-dialog-title">
             <i class="fas fa-folder-plus"></i>
@@ -360,7 +360,7 @@
         </div>
       </div>
 
-      <div v-if="showRename" class="mini-dialog-backdrop" @click.self="() => closeRenameDialog()">
+      <div v-if="showRename" class="mini-dialog-backdrop">
         <div class="mini-dialog rename-dialog">
           <div class="mini-dialog-title">
             <i :class="renameTargetEntry?.is_dir ? 'fas fa-folder' : 'far fa-file-alt'"></i>
@@ -386,7 +386,7 @@
         </div>
       </div>
 
-      <div v-if="showRootModeDialog" class="mini-dialog-backdrop" @click.self="closeRootModeDialog">
+      <div v-if="showRootModeDialog" class="mini-dialog-backdrop">
         <div class="mini-dialog">
           <div class="mini-dialog-title">
             <i class="fas fa-user-shield"></i>
@@ -418,7 +418,7 @@
         </div>
       </div>
 
-      <div v-if="showNewFile" class="mini-dialog-backdrop" @click.self="showNewFile = false">
+      <div v-if="showNewFile" class="mini-dialog-backdrop">
         <div class="mini-dialog">
           <div class="mini-dialog-title">
             <i class="far fa-file-alt"></i>

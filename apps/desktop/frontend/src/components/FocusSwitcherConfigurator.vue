@@ -3,7 +3,6 @@
     <div
       v-if="visible"
       class="focus-switcher-overlay"
-      @click.self="requestClose"
       @keydown.esc.prevent="requestClose"
     >
       <section class="focus-switcher-dialog" role="dialog" aria-modal="true">
