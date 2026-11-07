@@ -759,16 +759,23 @@ pub async fn sftp_download_to_disk(
             let mut buf = vec![0u8; TRANSFER_BUFFER_SIZE];
             let mut transferred: u64 = 0;
             let mut progress = ProgressEmitter::new();
+            let mut cancel_watch = cancel_rx.clone();
 
             loop {
                 if *cancel_rx.borrow() {
                     return Err("cancelled".into());
                 }
 
-                let n = remote
-                    .read(&mut buf)
-                    .await
-                    .map_err(|e| format!("read: {e}"))?;
+                // Race the read against cancellation: a stalled connection must
+                // still abort instead of waiting for the next block boundary.
+                let n = tokio::select! {
+                    _ = cancel_watch.changed() => {
+                        return Err("cancelled".into());
+                    }
+                    result = remote.read(&mut buf) => {
+                        result.map_err(|e| format!("read: {e}"))?
+                    }
+                };
                 if n == 0 {
                     break;
                 }
@@ -1204,6 +1211,7 @@ async fn upload_local_file_with_progress(
 
     let mut buffer = vec![0u8; TRANSFER_BUFFER_SIZE];
     let mut progress = ProgressEmitter::new();
+    let mut cancel_watch = cancel_rx.clone();
 
     loop {
         if *cancel_rx.borrow() {
@@ -1211,10 +1219,14 @@ async fn upload_local_file_with_progress(
         }
         wait_if_paused(tm, task_id, cancel_rx).await?;
 
-        let read = local
-            .read(&mut buffer)
-            .await
-            .map_err(|error| format!("read local failed: {error}"))?;
+        let read = tokio::select! {
+            _ = cancel_watch.changed() => {
+                return Err("cancelled".into());
+            }
+            result = local.read(&mut buffer) => {
+                result.map_err(|error| format!("read local failed: {error}"))?
+            }
+        };
         if read == 0 {
             break;
         }
@@ -1619,6 +1631,7 @@ pub async fn sftp_download_directory_to_disk(
 
             let mut transferred = 0u64;
             let mut progress = ProgressEmitter::new();
+            let mut cancel_watch = cancel_rx.clone();
             let mut stack: Vec<(String, PathBuf)> = vec![(remote_root.clone(), temp_dir.clone())];
 
             while let Some((remote_dir, local_dir)) = stack.pop() {
@@ -1652,9 +1665,14 @@ pub async fn sftp_download_directory_to_disk(
                         continue;
                     }
 
-                    let bytes = sftp_core::service::read_file(&sftp, &entry.path)
-                        .await
-                        .map_err(|e| format!("read remote file failed: {e}"))?;
+                    let bytes = tokio::select! {
+                        _ = cancel_watch.changed() => {
+                            return Err("cancelled".into());
+                        }
+                        result = sftp_core::service::read_file(&sftp, &entry.path) => {
+                            result.map_err(|e| format!("read remote file failed: {e}"))?
+                        }
+                    };
 
                     tokio::fs::write(&local_path, &bytes)
                         .await

@@ -151,6 +151,7 @@ pub async fn transfer_send(
             let mut buf = vec![0u8; TRANSFER_BUFFER_SIZE];
             let mut transferred = 0u64;
             let mut progress = super::sftp::ProgressEmitter::new();
+            let mut cancel_watch = cancel_rx.clone();
 
             loop {
                 if *cancel_rx.borrow() {
@@ -158,10 +159,15 @@ pub async fn transfer_send(
                 }
                 wait_if_paused(&tm, &task_id, &cancel_rx).await?;
 
-                let n = source
-                    .read(&mut buf)
-                    .await
-                    .map_err(|e| format!("read source failed: {e}"))?;
+                // Abort even while the source read is stalled.
+                let n = tokio::select! {
+                    _ = cancel_watch.changed() => {
+                        return Err("cancelled".into());
+                    }
+                    result = source.read(&mut buf) => {
+                        result.map_err(|e| format!("read source failed: {e}"))?
+                    }
+                };
                 if n == 0 {
                     break;
                 }
