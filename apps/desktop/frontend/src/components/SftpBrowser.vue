@@ -220,6 +220,7 @@
         v-else
         ref="fileListContainerRef"
         class="file-list"
+        @scroll.passive="handleListScroll"
         @click.self="clearSelection"
         @contextmenu.prevent="showCtx($event, null)"
         @dragenter.prevent="handleDragEnter"
@@ -269,56 +270,45 @@
           </div>
 
           <div class="file-body" tabindex="0" @keydown="handleListKeydown">
-            <div
-              v-if="currentPath !== '/'"
-              class="file-row up-row"
-              :class="{ 'drop-target': dragOverTarget === '..', 'kbd-active': keyboardIndex === 0 }"
-              :style="{ gridTemplateColumns: gridTemplate }"
-              data-drop-row=".."
-              @click.stop="goUp"
-              @dragover.prevent="handleDragOverRow('..', $event)"
-              @dragleave="handleDragLeaveRow('..')"
-              @drop.prevent="handleDropOnRow('..', $event)"
-            >
-              <span class="file-cell file-icon">
-                <i class="fas fa-level-up-alt folder-color"></i>
-              </span>
-              <span class="file-cell file-name">..</span>
-              <span class="file-cell file-size"></span>
-              <span class="file-cell file-perms"></span>
-              <span class="file-cell file-modified"></span>
-            </div>
+            <div class="virtual-pad" :style="{ height: `${topPad}px` }"></div>
 
             <div
-              v-for="(row, index) in displayRows"
-              :key="row.entry.path"
+              v-for="item in visibleRows"
+              :key="item.row.isParent ? '__parent__' : item.row.entry.path"
               class="file-row"
               :class="{
-                dir: row.entry.is_dir,
-                selected: isEntrySelected(row.entry),
-                'drop-target': row.entry.is_dir && dragOverTarget === row.entry.path,
-                'kbd-active': keyboardIndex === index + (hasParentRow ? 1 : 0),
+                'up-row': item.row.isParent,
+                dir: !item.row.isParent && item.row.entry.is_dir,
+                selected: !item.row.isParent && isEntrySelected(item.row.entry),
+                'drop-target':
+                  item.row.isParent
+                    ? dragOverTarget === '..'
+                    : item.row.entry.is_dir && dragOverTarget === item.row.entry.path,
+                'kbd-active': keyboardIndex === item.index,
               }"
               :style="{ gridTemplateColumns: gridTemplate }"
-              :data-drop-row="row.entry.path"
-              draggable="true"
-              @dragstart="handleDragStart(row.entry)"
+              :data-drop-row="item.row.isParent ? '..' : item.row.entry.path"
+              :draggable="!item.row.isParent"
+              @dragstart="!item.row.isParent && handleDragStart(item.row.entry)"
               @dragend="handleDragEnd"
-              @dragover.prevent="handleDragOverRow(row.entry, $event)"
-              @dragleave="handleDragLeaveRow(row.entry)"
-              @drop.prevent="handleDropOnRow(row.entry, $event)"
-              @click.stop="handleEntryClick(row.entry, $event)"
-              @contextmenu.prevent.stop="handleEntryContextMenu($event, row.entry)"
+              @dragover.prevent="handleDragOverRow(item.row.isParent ? '..' : item.row.entry, $event)"
+              @dragleave="handleDragLeaveRow(item.row.isParent ? '..' : item.row.entry)"
+              @drop.prevent="handleDropOnRow(item.row.isParent ? '..' : item.row.entry, $event)"
+              @click.stop="item.row.isParent ? goUp() : handleEntryClick(item.row.entry, $event)"
+              @contextmenu.prevent.stop="!item.row.isParent && handleEntryContextMenu($event, item.row.entry)"
             >
               <span class="file-cell file-icon">
-                <i v-if="row.entry.is_dir" class="fas fa-folder folder-color"></i>
+                <i v-if="item.row.isParent" class="fas fa-level-up-alt folder-color"></i>
+                <i v-else-if="item.row.entry.is_dir" class="fas fa-folder folder-color"></i>
                 <i v-else class="fas fa-file file-color"></i>
               </span>
-              <span class="file-cell file-name">{{ row.entry.name }}</span>
-              <span class="file-cell file-size">{{ row.sizeText }}</span>
-              <span class="file-cell file-perms">{{ row.permsText }}</span>
-              <span class="file-cell file-modified">{{ row.timeText }}</span>
+              <span class="file-cell file-name">{{ item.row.isParent ? '..' : item.row.entry.name }}</span>
+              <span class="file-cell file-size">{{ item.row.sizeText }}</span>
+              <span class="file-cell file-perms">{{ item.row.permsText }}</span>
+              <span class="file-cell file-modified">{{ item.row.timeText }}</span>
             </div>
+
+            <div class="virtual-pad" :style="{ height: `${bottomPad}px` }"></div>
           </div>
         </div>
         <div v-if="!filteredEntries.length" class="empty-dir">
@@ -486,9 +476,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useSessionStore } from '@/stores/session';
+import type { FileEntry } from '@/lib/api';
 import FavoritePaths from '@/components/FavoritePaths.vue';
 import PermissionEditor from '@/components/PermissionEditor.vue';
 import FileUploadPopup from '@/components/FileUploadPopup.vue';
@@ -566,12 +557,93 @@ const pathSegments = computed(() => {
   return items;
 });
 
+// ── Virtual list ─────────────────────────────────────────────────────────────
+// Rendering every row of a 50k-entry directory freezes the UI, so only the
+// visible window (plus a small overscan) is mounted. Rows are a fixed 37px tall;
+// .file-row enforces that height so the offsets stay exact.
+interface VirtualRow {
+  isParent: boolean;
+  entry: FileEntry;
+  sizeText: string;
+  permsText: string;
+  timeText: string;
+}
+
+const ROW_HEIGHT = 37;
+const OVERSCAN = 10;
+
+const scrollTop = ref(0);
+const viewportHeight = ref(800);
+
+const PARENT_ROW: VirtualRow = {
+  isParent: true,
+  entry: { name: '..', path: '..', is_dir: true, size: 0 },
+  sizeText: '',
+  permsText: '',
+  timeText: '',
+};
+
+const virtualRows = computed<VirtualRow[]>(() => {
+  const rows: VirtualRow[] = [];
+  if (hasParentRow.value) {
+    rows.push(PARENT_ROW);
+  }
+  for (const row of displayRows.value) {
+    rows.push({ isParent: false, ...row });
+  }
+  return rows;
+});
+
+const rangeStart = computed(() =>
+  Math.max(0, Math.floor(scrollTop.value / ROW_HEIGHT) - OVERSCAN),
+);
+const rangeEnd = computed(() =>
+  Math.min(
+    virtualRows.value.length,
+    Math.ceil((scrollTop.value + viewportHeight.value) / ROW_HEIGHT) + OVERSCAN,
+  ),
+);
+const visibleRows = computed(() =>
+  virtualRows.value
+    .slice(rangeStart.value, rangeEnd.value)
+    .map((row, offset) => ({ row, index: rangeStart.value + offset })),
+);
+const topPad = computed(() => rangeStart.value * ROW_HEIGHT);
+const bottomPad = computed(() =>
+  Math.max(0, (virtualRows.value.length - rangeEnd.value) * ROW_HEIGHT),
+);
+
+let scrollFrame = 0;
+function handleListScroll(event: Event) {
+  const element = event.currentTarget as HTMLElement;
+  if (scrollFrame) {
+    return;
+  }
+  scrollFrame = requestAnimationFrame(() => {
+    scrollFrame = 0;
+    scrollTop.value = element.scrollTop;
+    viewportHeight.value = element.clientHeight || viewportHeight.value;
+  });
+}
+
+watch(currentPath, () => {
+  scrollTop.value = 0;
+  if (fileListContainerRef.value) {
+    fileListContainerRef.value.scrollTop = 0;
+  }
+});
+
+onMounted(() => {
+  if (fileListContainerRef.value) {
+    viewportHeight.value = fileListContainerRef.value.clientHeight || 800;
+  }
+});
+
 async function handleListKeydown(event: KeyboardEvent) {
   const total = rowCount.value;
   if (total === 0) {
     return;
   }
-  const container = event.currentTarget as HTMLElement;
 
   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
     event.preventDefault();
@@ -598,8 +670,29 @@ async function handleListKeydown(event: KeyboardEvent) {
   }
 
   await nextTick();
-  const rows = container.querySelectorAll('.file-row');
-  (rows[keyboardIndex.value] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' });
+  scrollToRow(keyboardIndex.value);
+}
+
+// Keeps the active row inside the viewport without relying on DOM nodes that
+// may not be mounted (the virtual list only renders the visible window).
+function scrollToRow(index: number) {
+  const scroller = fileListContainerRef.value;
+  if (!scroller || index < 0) {
+    return;
+  }
+
+  const rowTop = index * ROW_HEIGHT;
+  const rowBottom = rowTop + ROW_HEIGHT;
+  const viewTop = scroller.scrollTop;
+  const viewBottom = viewTop + scroller.clientHeight;
+
+  if (rowTop < viewTop) {
+    scroller.scrollTop = rowTop;
+  } else if (rowBottom > viewBottom) {
+    scroller.scrollTop = rowBottom - scroller.clientHeight;
+  }
+
+  scrollTop.value = scroller.scrollTop;
 }
 
 watch([currentPath, searchQuery, sortKey, sortDirection], () => {
@@ -1145,7 +1238,8 @@ function handleUploadTasksCreated(taskIds: string[]): void {
   display: grid;
   align-items: center;
   min-width: max-content;
-  min-height: 36px;
+  height: 37px;
+  box-sizing: border-box;
   padding: 0 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--border, #d1d5db) 78%, transparent);
   transition: background 0.12s, outline-color 0.12s;
