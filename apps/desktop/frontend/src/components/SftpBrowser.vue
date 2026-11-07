@@ -94,9 +94,24 @@
             class="path-wrapper"
             :class="{ 'path-wrapper-expanded': isEditingPath || showPathHistoryDropdown }"
           >
-            <span v-show="!isEditingPath && !showPathHistoryDropdown" class="path-label" @click="startPathEdit">
-              <strong title="编辑当前路径">{{ currentPath }}</strong>
-            </span>
+            <nav
+              v-show="!isEditingPath && !showPathHistoryDropdown"
+              class="path-breadcrumbs"
+              title="点击跳转，双击编辑完整路径"
+            >
+              <template v-for="(segment, index) in pathSegments" :key="segment.path">
+                <span v-if="index > 0" class="path-sep">/</span>
+                <button
+                  class="path-crumb"
+                  :class="{ 'is-last': index === pathSegments.length - 1 }"
+                  :title="segment.path"
+                  @click="navigateTo(segment.path)"
+                  @dblclick="startPathEdit"
+                >
+                  {{ segment.label }}
+                </button>
+              </template>
+            </nav>
             <input
               v-show="isEditingPath || showPathHistoryDropdown"
               ref="pathInputRef"
@@ -275,34 +290,34 @@
             </div>
 
             <div
-              v-for="(entry, index) in filteredEntries"
-              :key="entry.path"
+              v-for="(row, index) in displayRows"
+              :key="row.entry.path"
               class="file-row"
               :class="{
-                dir: entry.is_dir,
-                selected: isEntrySelected(entry),
-                'drop-target': entry.is_dir && dragOverTarget === entry.path,
+                dir: row.entry.is_dir,
+                selected: isEntrySelected(row.entry),
+                'drop-target': row.entry.is_dir && dragOverTarget === row.entry.path,
                 'kbd-active': keyboardIndex === index + (hasParentRow ? 1 : 0),
               }"
               :style="{ gridTemplateColumns: gridTemplate }"
-              :data-drop-row="entry.path"
+              :data-drop-row="row.entry.path"
               draggable="true"
-              @dragstart="handleDragStart(entry)"
+              @dragstart="handleDragStart(row.entry)"
               @dragend="handleDragEnd"
-              @dragover.prevent="handleDragOverRow(entry, $event)"
-              @dragleave="handleDragLeaveRow(entry)"
-              @drop.prevent="handleDropOnRow(entry, $event)"
-              @click.stop="handleEntryClick(entry, $event)"
-              @contextmenu.prevent.stop="handleEntryContextMenu($event, entry)"
+              @dragover.prevent="handleDragOverRow(row.entry, $event)"
+              @dragleave="handleDragLeaveRow(row.entry)"
+              @drop.prevent="handleDropOnRow(row.entry, $event)"
+              @click.stop="handleEntryClick(row.entry, $event)"
+              @contextmenu.prevent.stop="handleEntryContextMenu($event, row.entry)"
             >
               <span class="file-cell file-icon">
-                <i v-if="entry.is_dir" class="fas fa-folder folder-color"></i>
+                <i v-if="row.entry.is_dir" class="fas fa-folder folder-color"></i>
                 <i v-else class="fas fa-file file-color"></i>
               </span>
-              <span class="file-cell file-name">{{ entry.name }}</span>
-              <span class="file-cell file-size">{{ entry.is_dir ? '' : formatSize(entry.size) }}</span>
-              <span class="file-cell file-perms">{{ entry.permissions != null ? formatPerms(entry.permissions) : '' }}</span>
-              <span class="file-cell file-modified">{{ formatModifiedTime(entry.modified) }}</span>
+              <span class="file-cell file-name">{{ row.entry.name }}</span>
+              <span class="file-cell file-size">{{ row.sizeText }}</span>
+              <span class="file-cell file-perms">{{ row.permsText }}</span>
+              <span class="file-cell file-modified">{{ row.timeText }}</span>
             </div>
           </div>
         </div>
@@ -515,6 +530,29 @@ const { gridTemplate, startResize } = useSftpFileListColumns();
 const keyboardIndex = ref(-1);
 const hasParentRow = computed(() => currentPath.value !== '/');
 const rowCount = computed(() => filteredEntries.value.length + (hasParentRow.value ? 1 : 0));
+
+// Pre-format the display columns once per data change. Formatting inside the
+// template rebuilt an Intl formatter for every row on every render, which is
+// what made large directories feel heavy while scrolling.
+const displayRows = computed(() =>
+  filteredEntries.value.map((entry) => ({
+    entry,
+    sizeText: entry.is_dir ? '' : formatSize(entry.size),
+    permsText: entry.permissions != null ? formatPerms(entry.permissions) : '',
+    timeText: formatModifiedTime(entry.modified),
+  })),
+);
+
+// Breadcrumb segments, each carrying the absolute path it navigates to.
+const pathSegments = computed(() => {
+  const items = [{ label: '/', path: '/' }];
+  let accumulated = '';
+  for (const segment of currentPath.value.split('/').filter(Boolean)) {
+    accumulated += `/${segment}`;
+    items.push({ label: segment, path: accumulated });
+  }
+  return items;
+});
 
 async function handleListKeydown(event: KeyboardEvent) {
   const total = rowCount.value;
@@ -759,6 +797,45 @@ function handleUploadTasksCreated(taskIds: string[]): void {
 
 .path-wrapper-expanded {
   flex: 1;
+}
+
+.path-breadcrumbs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  padding-right: 8px;
+}
+
+.path-crumb {
+  border: none;
+  background: transparent;
+  color: var(--text-sub, #a6adc8);
+  font: inherit;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.path-crumb:hover {
+  background: rgba(137, 180, 250, 0.16);
+  color: var(--text, #cdd6f4);
+}
+
+.path-crumb.is-last {
+  color: var(--text, #cdd6f4);
+  font-weight: 600;
+}
+
+.path-sep {
+  color: var(--text-sub, #6c7086);
 }
 
 .path-label {
