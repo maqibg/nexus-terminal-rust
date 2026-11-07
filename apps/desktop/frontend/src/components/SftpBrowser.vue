@@ -29,6 +29,15 @@
             </button>
             <button
               class="icon-btn"
+              :class="{ active: showDirectoryTree }"
+              @click="showDirectoryTree = !showDirectoryTree"
+              :disabled="!activeSftpSessionId"
+              :title="showDirectoryTree ? '关闭快速跳转' : '打开快速跳转'"
+            >
+              <i class="fas fa-sitemap"></i>
+            </button>
+            <button
+              class="icon-btn"
               :class="{ active: !showHiddenFiles }"
               @click="showHiddenFiles = !showHiddenFiles"
               :disabled="!activeSftpSessionId"
@@ -317,6 +326,38 @@
         </div>
       </div>
 
+      <aside v-if="showDirectoryTree" class="dir-tree-panel">
+        <div class="dir-tree-header">
+          <span>快速跳转</span>
+          <button class="dir-tree-close" type="button" title="关闭" @click="showDirectoryTree = false">×</button>
+        </div>
+
+        <div class="dir-tree-group">上级目录</div>
+        <button
+          v-for="segment in ancestorSegments"
+          :key="`anc-${segment.path}`"
+          class="dir-tree-item"
+          :title="segment.path"
+          @click="navigateTo(segment.path)"
+        >
+          <i class="fas fa-level-up-alt"></i>
+          <span>{{ segment.label === '/' ? '根目录' : segment.label }}</span>
+        </button>
+
+        <div class="dir-tree-group">当前目录的子文件夹</div>
+        <button
+          v-for="row in directoryRows"
+          :key="`dir-${row.entry.path}`"
+          class="dir-tree-item"
+          :title="row.entry.path"
+          @click="navigateTo(row.entry.path)"
+        >
+          <i class="fas fa-folder folder-color"></i>
+          <span>{{ row.entry.name }}</span>
+        </button>
+        <div v-if="!directoryRows.length" class="dir-tree-empty">没有子文件夹</div>
+      </aside>
+
       <Teleport to="body">
         <div
           v-if="ctxVisible"
@@ -530,6 +571,7 @@ const { gridTemplate, startResize } = useSftpFileListColumns();
 
 // Keyboard navigation over the visible rows: the parent row (when present)
 // occupies index 0, entries follow.
+const showDirectoryTree = ref(false);
 const keyboardIndex = ref(-1);
 const hasParentRow = computed(() => currentPath.value !== '/');
 const rowCount = computed(() => filteredEntries.value.length + (hasParentRow.value ? 1 : 0));
@@ -611,6 +653,13 @@ const visibleRows = computed(() =>
 const topPad = computed(() => rangeStart.value * ROW_HEIGHT);
 const bottomPad = computed(() =>
   Math.max(0, (virtualRows.value.length - rangeEnd.value) * ROW_HEIGHT),
+);
+
+// Quick jump panel: ancestors of the current path plus its direct subfolders.
+// Both come from data already in memory, so opening it costs no extra requests.
+const ancestorSegments = computed(() => pathSegments.value.slice(0, -1));
+const directoryRows = computed(() =>
+  displayRows.value.filter((row) => row.entry.is_dir),
 );
 
 let scrollFrame = 0;
