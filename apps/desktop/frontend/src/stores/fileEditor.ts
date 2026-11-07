@@ -25,6 +25,10 @@ export interface FileTab {
   saveError?: string | null;
   scrollTop?: number;
   scrollLeft?: number;
+  /** Metadata observed when the file was opened or last saved; a mismatch means
+   *  someone changed the file outside this editor. */
+  remoteMtime?: number | null;
+  remoteSize?: number | null;
 }
 
 export const useFileEditorStore = defineStore('fileEditor', () => {
@@ -53,6 +57,8 @@ export const useFileEditorStore = defineStore('fileEditor', () => {
       saveError: tab.saveError ?? null,
       scrollTop: tab.scrollTop ?? 0,
       scrollLeft: tab.scrollLeft ?? 0,
+      remoteMtime: tab.remoteMtime ?? null,
+      remoteSize: tab.remoteSize ?? null,
       isDirty: tab.isDirty ?? tab.content !== tab.originalContent,
     };
   }
@@ -240,6 +246,10 @@ export const useFileEditorStore = defineStore('fileEditor', () => {
     });
   }
 
+  function setRemoteMeta(id: string, mtime: number | null, size: number | null) {
+    patchFile(id, { remoteMtime: mtime, remoteSize: size });
+  }
+
   function triggerPopup(filePath: string, sessionId: string) {
     popupFileInfo.value = { filePath, sessionId };
     popupTrigger.value += 1;
@@ -265,6 +275,7 @@ export const useFileEditorStore = defineStore('fileEditor', () => {
     setSaveStatus,
     clearSaveStatus,
     markSaved,
+    setRemoteMeta,
     setLoadingState,
     updateScrollPosition,
     triggerPopup,

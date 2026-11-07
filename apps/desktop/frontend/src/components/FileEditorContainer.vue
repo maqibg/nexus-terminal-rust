@@ -84,11 +84,13 @@ import { useFileEditorStore } from '@/stores/fileEditor';
 import { useFocusSwitcherStore } from '@/stores/focusSwitcher';
 import { useSessionStore } from '@/stores/session';
 import { useUINotificationStore } from '@/stores/uiNotifications';
+import { useConfirmDialog } from '@/composables/useConfirmDialog';
 
 const MonacoEditor = defineAsyncComponent(() => import('./MonacoEditor.vue'));
 
 const store = useFileEditorStore();
 const notify = useUINotificationStore();
+const { confirm } = useConfirmDialog();
 const focusSwitcherStore = useFocusSwitcherStore();
 const sessionStore = useSessionStore();
 const appearanceStore = useAppearanceStore();
@@ -363,10 +365,33 @@ async function save() {
   store.setSaveStatus(file.id, 'saving');
 
   try {
+    // Detect edits made outside this editor before overwriting the remote file.
+    const remote = await sftpApi.stat(file.sessionId, file.path).catch(() => null);
+    if (
+      remote
+      && file.remoteMtime != null
+      && remote.modified != null
+      && remote.modified !== file.remoteMtime
+    ) {
+      const overwrite = await confirm(
+        '文件已在服务器上修改',
+        `「${file.filename ?? file.path}」在编辑器之外被改动过，覆盖会丢失那些改动。`,
+      );
+      if (!overwrite) {
+        store.setSaveStatus(file.id, 'idle');
+        return;
+      }
+    }
+
     const savedContent = file.content;
     const encoded = await encodeContentToBase64(savedContent, file.selectedEncoding || 'utf-8');
     await sftpApi.writeFile(file.sessionId, file.path, encoded);
     store.markSaved(file.id, savedContent, encoded);
+
+    const after = await sftpApi.stat(file.sessionId, file.path).catch(() => null);
+    if (after) {
+      store.setRemoteMeta(file.id, after.modified ?? null, after.size ?? null);
+    }
     notify.addNotification('success', '文件已保存');
 
     if (clearSaveStatusTimer) {

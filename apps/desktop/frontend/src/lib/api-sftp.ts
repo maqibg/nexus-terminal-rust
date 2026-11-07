@@ -95,6 +95,16 @@ export const sftpApi = {
       req: { session_id: sessionId, path, mode },
     }),
 
+  compress: (sessionId: string, path: string, format: 'zip' | 'tar.gz' | 'tar.bz2') =>
+    tauriInvoke<string>('sftp_compress', {
+      req: { session_id: sessionId, path, format },
+    }),
+
+  decompress: (sessionId: string, path: string) =>
+    tauriInvoke<void>('sftp_decompress', {
+      req: { session_id: sessionId, path },
+    }),
+
   uploadChunk: (sessionId: string, path: string, chunkIndex: number, dataBase64: string) =>
     tauriInvoke<void>('sftp_upload_chunk', {
       req: { session_id: sessionId, path, chunk_index: chunkIndex, data_base64: dataBase64 },

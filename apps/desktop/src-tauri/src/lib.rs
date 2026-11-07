@@ -253,6 +253,8 @@ pub fn run() {
             commands::sftp::sftp_copy_entry,
             commands::sftp::sftp_stat,
             commands::sftp::sftp_chmod,
+    commands::sftp::sftp_compress,
+    commands::sftp::sftp_decompress,
             commands::sftp::sftp_upload_chunk,
             commands::sftp::sftp_download_file,
             commands::sftp::sftp_download_to_disk,

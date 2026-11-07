@@ -496,6 +496,133 @@ pub async fn sftp_stat(
         .map_err(AppError::Ssh)
 }
 
+// ── Archive (compress / decompress via the remote shell) ──
+
+const ARCHIVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(600);
+
+#[derive(Deserialize)]
+pub struct SftpArchiveRequest {
+    pub session_id: String,
+    pub path: String,
+    #[serde(default)]
+    pub format: String,
+}
+
+async fn run_remote_shell(
+    state: &AppState,
+    session_id: &str,
+    command: &str,
+    action: &str,
+) -> Result<(), String> {
+    let output = state
+        .ssh_manager
+        .exec_command(session_id, command, None, false, ARCHIVE_TIMEOUT)
+        .await?;
+
+    if output.exit_code == 0 {
+        return Ok(());
+    }
+
+    let detail = output.stderr.trim();
+    let detail = if detail.is_empty() {
+        output.stdout.trim()
+    } else {
+        detail
+    };
+    let hint = if output.exit_code == 127 || detail.contains("not found") {
+        "（服务器上缺少对应的压缩命令）"
+    } else {
+        ""
+    };
+    Err(format!("{action}失败{hint}: {detail}"))
+}
+
+fn archive_target_name(name: &str, format: &str) -> Result<String, String> {
+    match format {
+        "zip" => Ok(format!("{name}.zip")),
+        "tar.gz" => Ok(format!("{name}.tar.gz")),
+        "tar.bz2" => Ok(format!("{name}.tar.bz2")),
+        other => Err(format!("unsupported archive format: {other}")),
+    }
+}
+
+/// Compress a remote entry next to itself using the server's zip/tar binaries.
+/// Returns the archive path that was created.
+#[tauri::command]
+pub async fn sftp_compress(
+    state: State<'_, AppState>,
+    req: SftpArchiveRequest,
+) -> CmdResult<String> {
+    state.auth.require_auth().await?;
+    let (parent, name) = split_remote_parent_and_name(&req.path).map_err(AppError::Validation)?;
+    if name == "." || name == ".." {
+        return Err(AppError::Validation(format!("refusing to archive '{name}'")));
+    }
+
+    let target_name = archive_target_name(&name, &req.format).map_err(AppError::Validation)?;
+    let parent_arg = shell_escape_posix(&parent);
+    let name_arg = shell_escape_posix(&name);
+    let target_arg = shell_escape_posix(&target_name);
+
+    let command = match req.format.as_str() {
+        "zip" => format!("cd {parent_arg} && zip -r -q {target_arg} {name_arg}"),
+        "tar.gz" => format!("cd {parent_arg} && tar -czf {target_arg} {name_arg}"),
+        "tar.bz2" => format!("cd {parent_arg} && tar -cjf {target_arg} {name_arg}"),
+        other => {
+            return Err(AppError::Validation(format!(
+                "unsupported archive format: {other}"
+            )))
+        }
+    };
+
+    run_remote_shell(state.inner(), &req.session_id, &command, "压缩")
+        .await
+        .map_err(AppError::Ssh)?;
+
+    let target_path = if parent == "/" {
+        format!("/{target_name}")
+    } else {
+        format!("{parent}/{target_name}")
+    };
+    Ok(target_path)
+}
+
+/// Extract a remote archive into the directory that contains it.
+#[tauri::command]
+pub async fn sftp_decompress(
+    state: State<'_, AppState>,
+    req: SftpArchiveRequest,
+) -> CmdResult<()> {
+    state.auth.require_auth().await?;
+    let (parent, name) = split_remote_parent_and_name(&req.path).map_err(AppError::Validation)?;
+    if name == "." || name == ".." {
+        return Err(AppError::Validation(format!("refusing to extract '{name}'")));
+    }
+
+    let parent_arg = shell_escape_posix(&parent);
+    let name_arg = shell_escape_posix(&name);
+    let lower = name.to_lowercase();
+
+    let command = if lower.ends_with(".zip") {
+        format!("cd {parent_arg} && unzip -o -q {name_arg}")
+    } else if lower.ends_with(".tar.gz") || lower.ends_with(".tgz") {
+        format!("cd {parent_arg} && tar -xzf {name_arg}")
+    } else if lower.ends_with(".tar.bz2") || lower.ends_with(".tbz2") {
+        format!("cd {parent_arg} && tar -xjf {name_arg}")
+    } else if lower.ends_with(".tar") {
+        format!("cd {parent_arg} && tar -xf {name_arg}")
+    } else {
+        return Err(AppError::Validation(format!(
+            "unsupported archive type: {name}"
+        )));
+    };
+
+    run_remote_shell(state.inner(), &req.session_id, &command, "解压")
+        .await
+        .map_err(AppError::Ssh)?;
+    Ok(())
+}
+
 // ── SFTP Extensions (chmod, upload_chunk, download_file) ──
 
 #[derive(Deserialize)]

@@ -915,19 +915,25 @@ export function useSftpBrowser(
         key: `${prefix}-zip`,
         label: '压缩为 ZIP',
         disabled,
-        onClick: () => triggerCompress('zip', targets),
+        onClick: () => {
+          void triggerCompress('zip', targets);
+        },
       },
       {
         key: `${prefix}-targz`,
         label: '压缩为 TAR.GZ',
         disabled,
-        onClick: () => triggerCompress('tar.gz', targets),
+        onClick: () => {
+          void triggerCompress('tar.gz', targets);
+        },
       },
       {
         key: `${prefix}-tarbz2`,
         label: '压缩为 TAR.BZ2',
         disabled,
-        onClick: () => triggerCompress('tar.bz2', targets),
+        onClick: () => {
+          void triggerCompress('tar.bz2', targets);
+        },
       },
     ];
   }
@@ -1088,7 +1094,9 @@ export function useSftpBrowser(
           label: '解压',
           icon: 'fas fa-box-open',
           disabled: !canUseSftp,
-          onClick: () => triggerDecompress(entry),
+          onClick: () => {
+            void triggerDecompress(entry);
+          },
         });
       }
 
@@ -1342,18 +1350,48 @@ export function useSftpBrowser(
     }
   }
 
-  function triggerCompress(format: 'zip' | 'tar.gz' | 'tar.bz2', targetEntries: FileEntry[] = getContextEntries()): void {
-    if (!targetEntries.length) {
+  async function triggerCompress(
+    format: 'zip' | 'tar.gz' | 'tar.bz2',
+    targetEntries: FileEntry[] = getContextEntries(),
+  ): Promise<void> {
+    const sid = sftpSessionId.value;
+    if (!sid || !targetEntries.length) {
       return;
     }
 
     const formatLabel = format.toUpperCase();
-    const label = targetEntries.length === 1 ? targetEntries[0].name : `${targetEntries.length} 项`;
-    notify.addNotification('info', `${label} 的 ${formatLabel} 压缩能力即将接入，当前可先使用下载功能`);
+    try {
+      if (targetEntries.length === 1) {
+        const archivePath = await sftpApi.compress(sid, targetEntries[0].path, format);
+        const archiveName = archivePath.split('/').pop() ?? formatLabel;
+        notify.addNotification('success', `已创建 ${archiveName}`);
+      } else {
+        // The remote side archives one entry per call; run them in sequence so a
+        // large selection does not spawn a burst of zip/tar processes.
+        for (const entry of targetEntries) {
+          await sftpApi.compress(sid, entry.path, format);
+        }
+        notify.addNotification('success', `已创建 ${targetEntries.length} 个 ${formatLabel} 压缩包`);
+      }
+      await navigateTo(currentPath.value);
+    } catch (e: unknown) {
+      notify.addNotification('error', `压缩失败: ${toAppError(e).message}`);
+    }
   }
 
-  function triggerDecompress(entry: FileEntry): void {
-    notify.addNotification('info', `${entry.name} 的解压能力即将接入，当前可先下载后在本地解压`);
+  async function triggerDecompress(entry: FileEntry): Promise<void> {
+    const sid = sftpSessionId.value;
+    if (!sid) {
+      return;
+    }
+
+    try {
+      await sftpApi.decompress(sid, entry.path);
+      notify.addNotification('success', `${entry.name} 已解压`);
+      await navigateTo(currentPath.value);
+    } catch (e: unknown) {
+      notify.addNotification('error', `解压失败: ${toAppError(e).message}`);
+    }
   }
 
   async function downloadMultipleFiles(targetEntries: FileEntry[]): Promise<void> {
@@ -1772,6 +1810,8 @@ export function useSftpBrowser(
         originalContent: content,
         rawContentBase64: base64,
         selectedEncoding: 'utf-8',
+        remoteMtime: entry.modified ?? null,
+        remoteSize: entry.size ?? null,
         isDirty: false,
         isLoading: false,
         loadingError: null,
