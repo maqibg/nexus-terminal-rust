@@ -1,7 +1,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, type ComputedRef, type Ref } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { pathHistoryApi, sftpApi, sshApi, statusApi, type FileEntry, type PathHistory } from '@/lib/api';
-import { save } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import { toAppError } from '@/lib/errors';
 import { createUploadTasksFromLocalPaths } from '@/lib/local-upload';
 import { useFileEditorStore } from '@/stores/fileEditor';
@@ -1395,14 +1395,41 @@ export function useSftpBrowser(
   }
 
   async function downloadMultipleFiles(targetEntries: FileEntry[]): Promise<void> {
+    const sid = sftpSessionId.value;
+    if (!sid) {
+      return;
+    }
+
     const fileEntries = targetEntries.filter((entry) => !entry.is_dir);
     if (!fileEntries.length) {
       notify.addNotification('warning', '批量下载仅支持文件');
       return;
     }
 
+    // Ask for the destination folder once instead of prompting per file.
+    const directory = await open({ directory: true, multiple: false });
+    if (typeof directory !== 'string' || !directory) {
+      return;
+    }
+
+    let started = 0;
+    const failures: string[] = [];
     for (const fileEntry of fileEntries) {
-      await downloadFile(fileEntry);
+      try {
+        const targetPath = joinLocalPath(directory, fileEntry.name || 'file');
+        const taskId = await sftpApi.downloadToDisk(sid, fileEntry.path, targetPath);
+        announceTransfer(taskId);
+        started += 1;
+      } catch (e: unknown) {
+        failures.push(`${fileEntry.name}: ${toAppError(e).message}`);
+      }
+    }
+
+    if (started > 0) {
+      notify.addNotification('success', `已开始下载 ${started} 个文件`);
+    }
+    if (failures.length) {
+      notify.addNotification('error', `${failures.length} 个文件未能开始下载：${failures[0]}`);
     }
   }
 
