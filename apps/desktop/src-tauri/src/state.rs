@@ -13,7 +13,7 @@ use ssh_core::{host_key::HostKeyRepository, manager::SshSessionManager};
 use ssh_suspend_core::SuspendManager;
 use storage_sqlite::{
     SqliteAuditRepo, SqliteAuthRepo, SqliteConnectionRepo, SqliteHistoryRepo, SqliteHostKeyRepo,
-    SqliteQuickCommandRepo, SqliteSettingsRepo, SqliteStorage,
+    SqliteQuickCommandRepo, SqliteSettingsRepo, SqliteStorage, SqliteTransferRepo,
 };
 use tokio::sync::{Mutex, Semaphore};
 use transfer_core::TransferManager;
@@ -70,6 +70,7 @@ pub struct AppState {
     pub telnet_manager: TelnetSessionManager,
     pub local_terminal_manager: LocalTerminalManager,
     pub transfer_manager: TransferManager,
+    pub transfer_repo: Arc<SqliteTransferRepo>,
     pub status_monitor: StatusMonitorService,
     pub suspend_manager: SuspendManager,
     pub crypto: CryptoService,
@@ -95,6 +96,7 @@ impl AppState {
             host_key_repo: Arc::new(SqliteHostKeyRepo::new(pool.clone())),
             audit_repo: Arc::new(SqliteAuditRepo::new(pool.clone())),
             history_repo: Arc::new(SqliteHistoryRepo::new(pool.clone())),
+            transfer_repo: Arc::new(SqliteTransferRepo::new(pool.clone())),
             qc_repo: Arc::new(SqliteQuickCommandRepo::new(pool)),
             ssh_manager: SshSessionManager::new(),
             telnet_manager: TelnetSessionManager::new(),

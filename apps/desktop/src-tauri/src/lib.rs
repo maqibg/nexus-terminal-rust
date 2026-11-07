@@ -67,6 +67,36 @@ pub fn run() {
                 let app_state = AppState::new(storage, crypto, runtime_paths);
                 tauri::async_runtime::block_on(app_state.init_auth_state());
 
+                // Bring back interrupted transfers so they can be retried after
+                // a restart instead of silently disappearing.
+                tauri::async_runtime::block_on(async {
+                    match app_state.transfer_repo.list_resumable().await {
+                        Ok(rows) => {
+                            let restored: Vec<transfer_core::TransferTask> = rows
+                                .into_iter()
+                                .map(|row| transfer_core::TransferTask {
+                                    id: row.id,
+                                    kind: if row.kind.eq_ignore_ascii_case("download") {
+                                        transfer_core::TransferKind::Download
+                                    } else {
+                                        transfer_core::TransferKind::Upload
+                                    },
+                                    file_name: row.file_name,
+                                    total_bytes: row.total_bytes.max(0) as u64,
+                                    transferred_bytes: row.transferred_bytes.max(0) as u64,
+                                    status: transfer_core::TransferStatus::Failed,
+                                    error: row.error,
+                                    session_id: row.session_id,
+                                    source_path: row.source_path,
+                                    target_path: row.target_path,
+                                })
+                                .collect();
+                            app_state.transfer_manager.restore(restored);
+                        }
+                        Err(error) => tracing::warn!("failed to restore transfer tasks: {error}"),
+                    }
+                });
+
                 app.manage(app_state);
                 Ok(())
             },

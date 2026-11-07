@@ -126,6 +126,14 @@ impl TransferManager {
         Some(rx)
     }
 
+    /// Re-insert tasks loaded from storage. They come back in the state they
+    /// were interrupted in, so the UI can offer an explicit retry.
+    pub fn restore(&self, tasks: Vec<TransferTask>) {
+        for task in tasks {
+            self.tasks.insert(task.id.clone(), task);
+        }
+    }
+
     /// 更新传输进度
     pub fn update_progress(&self, id: &str, transferred: u64) {
         if let Some(mut task) = self.tasks.get_mut(id) {

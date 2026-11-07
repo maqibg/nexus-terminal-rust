@@ -1125,6 +1125,37 @@ pub async fn sftp_collect_local_upload_entries(
     Ok(uploads)
 }
 
+/// Write the current state of a task to storage. Best-effort: a failed write
+/// must never abort the transfer itself.
+async fn persist_transfer_task(
+    repo: &storage_sqlite::SqliteTransferRepo,
+    tm: &transfer_core::TransferManager,
+    task_id: &str,
+) {
+    let Some(task) = tm.get_task(task_id) else {
+        return;
+    };
+
+    let dto = storage_sqlite::StoredTransferTask {
+        id: task.id,
+        kind: match task.kind {
+            transfer_core::TransferKind::Upload => "upload",
+            transfer_core::TransferKind::Download => "download",
+        }
+        .to_string(),
+        file_name: task.file_name,
+        total_bytes: task.total_bytes as i64,
+        transferred_bytes: task.transferred_bytes as i64,
+        status: format!("{:?}", task.status).to_lowercase(),
+        error: task.error,
+        session_id: task.session_id,
+        source_path: task.source_path,
+        target_path: task.target_path,
+    };
+
+    let _ = repo.upsert(&dto).await;
+}
+
 /// Create the remote parent directory chain over SFTP (no shell involved), so
 /// uploads do not need a second SSH connection per file.
 async fn ensure_remote_dirs_sftp(
@@ -1168,6 +1199,7 @@ async fn upload_local_file_with_progress(
     app_handle: &tauri::AppHandle,
     cancel_rx: &tokio::sync::watch::Receiver<bool>,
     upload_limiter: &Arc<tokio::sync::Semaphore>,
+    repo: &storage_sqlite::SqliteTransferRepo,
 ) -> Result<(), String> {
     use russh_sftp::protocol::OpenFlags;
     use tauri::Emitter;
@@ -1212,6 +1244,7 @@ async fn upload_local_file_with_progress(
     let mut buffer = vec![0u8; TRANSFER_BUFFER_SIZE];
     let mut progress = ProgressEmitter::new();
     let mut cancel_watch = cancel_rx.clone();
+    let mut last_persist = std::time::Instant::now();
 
     loop {
         if *cancel_rx.borrow() {
@@ -1256,6 +1289,12 @@ async fn upload_local_file_with_progress(
                 }),
             );
         }
+
+        // Persist occasionally so a crash loses seconds, not the whole offset.
+        if last_persist.elapsed() >= std::time::Duration::from_secs(3) {
+            last_persist = std::time::Instant::now();
+            persist_transfer_task(repo, tm, task_id).await;
+        }
     }
 
     remote
@@ -1294,6 +1333,12 @@ pub async fn sftp_upload_from_disk(
     let (task_id, cancel_rx) =
         tm.create_task(transfer_core::TransferKind::Upload, &file_name, total);
     tm.set_transfer_context(&task_id, &req.session_id, &req.local_path, &req.remote_path);
+    persist_transfer_task(
+        state.transfer_repo.as_ref(),
+        &state.transfer_manager,
+        &task_id,
+    )
+    .await;
 
     let tid = task_id.clone();
     let tm2 = tm.clone();
@@ -1301,6 +1346,7 @@ pub async fn sftp_upload_from_disk(
     let local_path = PathBuf::from(req.local_path.clone());
     let remote_path = req.remote_path.clone();
     let upload_limiter = state.sftp_upload_limiter.clone();
+    let repo = state.transfer_repo.clone();
     let sftp = state
         .ssh_manager
         .get_sftp(&req.session_id)
@@ -1332,6 +1378,7 @@ pub async fn sftp_upload_from_disk(
             &ah,
             &cancel_rx,
             &upload_limiter,
+            &repo,
         )
         .await;
 
@@ -1349,6 +1396,9 @@ pub async fn sftp_upload_from_disk(
                 ("failed", Some(error))
             }
         };
+
+        // Record the terminal state so a restart does not resurrect finished work.
+        persist_transfer_task(&repo, &tm2, &tid).await;
 
         let _ = ah.emit(
             "transfers/status",
@@ -1411,10 +1461,13 @@ pub async fn sftp_resume_upload(
         .restart(&req.task_id)
         .ok_or_else(|| AppError::NotFound(req.task_id.clone()))?;
 
+    persist_transfer_task(state.transfer_repo.as_ref(), tm, &req.task_id).await;
+
     let tid = req.task_id.clone();
     let tm2 = tm.clone();
     let ah = app_handle.clone();
     let upload_limiter = state.sftp_upload_limiter.clone();
+    let repo = state.transfer_repo.clone();
     let total = task.total_bytes;
     let file_name = task.file_name.clone();
     let local_path = PathBuf::from(source);
@@ -1447,6 +1500,7 @@ pub async fn sftp_resume_upload(
             &ah,
             &cancel_rx,
             &upload_limiter,
+            &repo,
         )
         .await;
 
@@ -1464,6 +1518,9 @@ pub async fn sftp_resume_upload(
                 ("failed", Some(error))
             }
         };
+
+        // Record the terminal state so a restart does not resurrect finished work.
+        persist_transfer_task(&repo, &tm2, &tid).await;
 
         let _ = ah.emit(
             "transfers/status",
@@ -1502,12 +1559,20 @@ pub async fn sftp_upload_entry_from_disk(
     let tm = &state.transfer_manager;
     let (task_id, cancel_rx) =
         tm.create_task(transfer_core::TransferKind::Upload, &entry_name, total);
+    tm.set_transfer_context(&task_id, &req.session_id, &req.local_path, &req.remote_path);
+    persist_transfer_task(
+        state.transfer_repo.as_ref(),
+        &state.transfer_manager,
+        &task_id,
+    )
+    .await;
 
     let tid = task_id.clone();
     let tm2 = tm.clone();
     let ah = app_handle.clone();
     let remote_root = req.remote_path.clone();
     let upload_limiter = state.sftp_upload_limiter.clone();
+    let repo = state.transfer_repo.clone();
     let sftp = state
         .ssh_manager
         .get_sftp(&req.session_id)
@@ -1553,6 +1618,7 @@ pub async fn sftp_upload_entry_from_disk(
                     &ah,
                     &cancel_rx,
                     &upload_limiter,
+                    &repo,
                 )
                 .await?;
                 return Ok(());
@@ -1575,6 +1641,7 @@ pub async fn sftp_upload_entry_from_disk(
                     let local_path = child_local_path.clone();
                     let remote_path = child_remote_path.clone();
                     let upload_limiter = upload_limiter.clone();
+                    let repo = repo.clone();
 
                     async move {
                         upload_local_file_with_progress(
@@ -1590,6 +1657,7 @@ pub async fn sftp_upload_entry_from_disk(
                             &app_handle,
                             &cancel_rx,
                             &upload_limiter,
+                            &repo,
                         )
                         .await
                     }
@@ -1616,6 +1684,9 @@ pub async fn sftp_upload_entry_from_disk(
                 ("failed", Some(error))
             }
         };
+
+        // Record the terminal state so a restart does not resurrect finished work.
+        persist_transfer_task(&repo, &tm2, &tid).await;
 
         let _ = ah.emit(
             "transfers/status",

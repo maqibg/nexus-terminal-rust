@@ -56,6 +56,11 @@ pub async fn run(pool: &SqlitePool) -> Result<(), sqlx::Error> {
             "add_server_management_fields",
             include_str!("sql/006_add_server_management_fields.sql"),
         ),
+        (
+            9,
+            "create_transfer_tasks",
+            include_str!("sql/009_create_transfer_tasks.sql"),
+        ),
     ];
 
     for (version, name, sql) in &migrations {

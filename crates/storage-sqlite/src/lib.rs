@@ -7,6 +7,7 @@ pub mod repo_auxiliary;
 pub mod repo_connection;
 pub mod repo_host_key;
 pub mod repo_settings;
+pub mod repo_transfer;
 
 pub use pool::{init_pool, SqliteStorage};
 pub use repo_auth::SqliteAuthRepo;
@@ -14,3 +15,4 @@ pub use repo_auxiliary::{SqliteAuditRepo, SqliteHistoryRepo, SqliteQuickCommandR
 pub use repo_connection::SqliteConnectionRepo;
 pub use repo_host_key::SqliteHostKeyRepo;
 pub use repo_settings::SqliteSettingsRepo;
+pub use repo_transfer::{SqliteTransferRepo, StoredTransferTask};
