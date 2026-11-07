@@ -59,7 +59,7 @@ const SFTP_KIND_LABELS: Record<string, string> = {
  * SFTP failures arrive as "<token>: <operation> failed at '<path>': <detail>".
  * Translating the token here keeps the classification out of every call site.
  */
-function prettifySftpMessage(message: string): string {
+export function prettifySftpMessage(message: string): string {
   const match =
     /^(not-found|permission-denied|connection|protocol|too-large|other): (.+?) failed at '(.+?)': ([\s\S]*)$/.exec(
       message,

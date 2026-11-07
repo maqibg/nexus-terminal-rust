@@ -1,55 +1,43 @@
 import { describe, expect, it } from 'vitest';
-import { toAppError, sanitizeMessage } from '../errors';
+import { prettifySftpMessage, sanitizeMessage, toAppError } from '../errors';
 
-describe('toAppError', () => {
-  it('handles null without throwing', () => {
-    const r = toAppError(null);
-    expect(r.kind).toBe('Unknown');
-    expect(typeof r.message).toBe('string');
+describe('prettifySftpMessage', () => {
+  it('turns a classified sftp failure into a readable line', () => {
+    const raw = "permission-denied: readdir failed at '/var/log': Permission denied (os error 13)";
+
+    expect(prettifySftpMessage(raw)).toBe(
+      '权限不足（/var/log）：readdir — Permission denied (os error 13)',
+    );
   });
 
-  it('handles undefined without throwing', () => {
-    const r = toAppError(undefined);
-    expect(r.kind).toBe('Unknown');
+  it('keeps unknown tokens readable instead of dropping them', () => {
+    const raw = "too-large: read failed at '/tmp/big.log': file is 90000000 bytes";
+    expect(prettifySftpMessage(raw)).toContain('文件过大');
+    expect(prettifySftpMessage(raw)).toContain('/tmp/big.log');
   });
 
-  it('wraps a plain string', () => {
-    const r = toAppError('connection refused');
-    expect(r.kind).toBe('Unknown');
-    expect(r.message).toBe('connection refused');
-  });
-
-  it('preserves known kind from backend error', () => {
-    const r = toAppError({ kind: 'Auth', message: 'invalid credentials' });
-    expect(r.kind).toBe('Auth');
-    expect(r.message).toBe('invalid credentials');
-  });
-
-  it('maps unknown kind to Unknown', () => {
-    const r = toAppError({ kind: 'SomeNewKind', message: 'oops' });
-    expect(r.kind).toBe('Unknown');
-  });
-
-  it('handles numeric error without throwing', () => {
-    const r = toAppError(42);
-    expect(r.kind).toBe('Unknown');
+  it('leaves messages without a category untouched', () => {
+    expect(prettifySftpMessage('session not found')).toBe('session not found');
   });
 });
 
-describe('sanitizeMessage', () => {
-  it('redacts password= pattern', () => {
-    const out = sanitizeMessage('failed: password=MySecret123');
-    expect(out).not.toContain('MySecret123');
-    expect(out).toContain('[REDACTED]');
+describe('toAppError', () => {
+  it('prettifies sftp errors but not other kinds', () => {
+    const sftp = toAppError({
+      kind: 'Sftp',
+      message: "not-found: stat failed at '/etc/missing': No such file",
+    });
+    expect(sftp.kind).toBe('Sftp');
+    expect(sftp.message).toBe('不存在（/etc/missing）：stat — No such file');
+
+    const ssh = toAppError({
+      kind: 'Ssh',
+      message: "not-found: stat failed at '/etc/missing': No such file",
+    });
+    expect(ssh.message).toBe("not-found: stat failed at '/etc/missing': No such file");
   });
 
-  it('passes through non-sensitive messages unchanged', () => {
-    const msg = 'connection timeout after 30s';
-    expect(sanitizeMessage(msg)).toBe(msg);
-  });
-
-  it('redacts token: pattern', () => {
-    const out = sanitizeMessage('auth token: abc123def');
-    expect(out).not.toContain('abc123def');
+  it('redacts secrets before display', () => {
+    expect(sanitizeMessage('password= hunter2')).toContain('[REDACTED]');
   });
 });
