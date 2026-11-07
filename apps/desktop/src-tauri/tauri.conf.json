@@ -1,6 +1,6 @@
 {
   "productName": "Nexus Terminal",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "identifier": "com.nexus-terminal.desktop",
   "build": {
     "beforeDevCommand": "pnpm --dir ../frontend dev",
