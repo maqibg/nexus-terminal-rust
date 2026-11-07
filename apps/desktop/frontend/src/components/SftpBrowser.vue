@@ -457,6 +457,15 @@
         </div>
       </div>
 
+      <PermissionEditor
+        v-if="showPermissionEditor"
+        visible
+        v-model:mode="permissionMode"
+        :target-name="permissionTarget?.name ?? ''"
+        @cancel="closePermissionEditor"
+        @save="savePermission"
+      />
+
       <FileUploadPopup
         :visible="showUpload"
         :session-id="activeSftpSessionId || ''"
@@ -481,6 +490,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useSessionStore } from '@/stores/session';
 import FavoritePaths from '@/components/FavoritePaths.vue';
+import PermissionEditor from '@/components/PermissionEditor.vue';
 import FileUploadPopup from '@/components/FileUploadPopup.vue';
 import SendFilesModal from '@/components/SendFilesModal.vue';
 import { useSftpBrowser } from '@/composables/useSftpBrowser';
@@ -497,6 +507,7 @@ const fileListContainerRef = ref<HTMLDivElement | null>(null);
 const {
   // state
   currentPath, pathInput, entries, filteredEntries, loading, error, searchQuery, showHiddenFiles,
+  showPermissionEditor, permissionTarget, permissionMode,
   selectedEntryPaths, clipboardState,
   rootModeEnabled, rootModeSwitching, showRootModeDialog, rootModeUsername, rootModePassword,
   pathHistoryItems, pathHistoryLoading, filteredPathHistory, pathHistorySelectedIndex,
@@ -518,6 +529,7 @@ const {
   registerUploadTasksForRefresh,
   toggleSort, uploadLocalPaths, moveEntriesToDirectory,
   doMkdir, closeRenameDialog, submitRename, doCreateFile, openPopupEditor, sendCdCommandToTerminal,
+  closePermissionEditor, savePermission,
   isEntrySelected, clearSelection,
   formatSize, formatModifiedTime, formatPerms,
   getPathDir,

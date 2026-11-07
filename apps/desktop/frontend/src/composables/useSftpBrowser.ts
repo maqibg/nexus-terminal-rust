@@ -83,6 +83,9 @@ export function useSftpBrowser(
 
   const entries = ref<FileEntry[]>([]);
   const showHiddenFiles = ref(true);
+  const showPermissionEditor = ref(false);
+  const permissionTarget = ref<FileEntry | null>(null);
+  const permissionMode = ref(0o644);
   const sortKey = ref<SftpSortKey>('name');
   const sortDirection = ref<SftpSortDirection>('asc');
   const filteredEntries = computed(() => {
@@ -1720,41 +1723,32 @@ export function useSftpBrowser(
   }
 
   async function handleChmod(entry: FileEntry) {
+    if (!sftpSessionId.value) return;
+
+    permissionTarget.value = entry;
+    permissionMode.value = entry.permissions != null ? entry.permissions & 0o7777 : 0o644;
+    showPermissionEditor.value = true;
+  }
+
+  function closePermissionEditor() {
+    showPermissionEditor.value = false;
+    permissionTarget.value = null;
+  }
+
+  async function savePermission(mode: number) {
     const sid = sftpSessionId.value;
-    if (!sid) return;
-
-    const current = entry.permissions != null ? (entry.permissions & 0o7777).toString(8) : '644';
-    const input = await prompt({
-      title: `修改${entry.is_dir ? '文件夹' : '文件'}权限`,
-      message: `正在修改 “${entry.name}” 的八进制权限值`,
-      initialValue: current,
-      placeholder: '例如 644 或 0755',
-      confirmText: '保存',
-      validate: (value) => {
-        const trimmed = value.trim();
-        if (!trimmed) {
-          return '请输入权限值';
-        }
-        if (!/^[0-7]{3,4}$/.test(trimmed)) {
-          return '请输入 3 到 4 位八进制权限值';
-        }
-        return null;
-      },
-    });
-    if (!input) return;
-
-    const mode = parseInt(input.trim(), 8);
-    if (Number.isNaN(mode)) {
-      notify.addNotification('error', '无效的权限值');
+    const target = permissionTarget.value;
+    if (!sid || !target) {
       return;
     }
 
     try {
-      await sftpApi.chmod(sid, entry.path, mode);
-      notify.addNotification('success', '权限已修改');
-      refresh();
+      await sftpApi.chmod(sid, target.path, mode);
+      notify.addNotification('success', `${target.name} 权限已更新为 ${mode.toString(8)}`);
+      closePermissionEditor();
+      await navigateTo(currentPath.value);
     } catch (e: unknown) {
-      notify.addNotification('error', toAppError(e).message);
+      notify.addNotification('error', `修改权限失败: ${toAppError(e).message}`);
     }
   }
 
@@ -2153,6 +2147,9 @@ export function useSftpBrowser(
     error,
     searchQuery,
     showHiddenFiles,
+    showPermissionEditor,
+    permissionTarget,
+    permissionMode,
     selectedEntryPaths,
     lastSelectedPath,
     clipboardState,
@@ -2275,6 +2272,8 @@ export function useSftpBrowser(
     closeRenameDialog,
     submitRename,
     handleChmod,
+    closePermissionEditor,
+    savePermission,
     openPopupEditor,
     openEditor,
     announceTransfer,
