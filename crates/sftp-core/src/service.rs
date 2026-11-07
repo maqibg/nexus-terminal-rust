@@ -1,4 +1,9 @@
 //! SFTP operations wrapping russh-sftp.
+//!
+//! Every failure is described through [`describe`], which prefixes a stable
+//! category token and the affected path. The frontend branches on that token to
+//! tell "permission denied" apart from "connection lost" without parsing the
+//! server's natural-language message.
 
 use russh_sftp::client::SftpSession;
 use serde::Serialize;
@@ -14,12 +19,87 @@ pub struct FileEntry {
     pub permissions: Option<u32>,
 }
 
+/// Coarse category for an SFTP failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SftpErrorKind {
+    NotFound,
+    PermissionDenied,
+    Connection,
+    Protocol,
+    TooLarge,
+    Other,
+}
+
+impl SftpErrorKind {
+    pub fn as_token(self) -> &'static str {
+        match self {
+            Self::NotFound => "not-found",
+            Self::PermissionDenied => "permission-denied",
+            Self::Connection => "connection",
+            Self::Protocol => "protocol",
+            Self::TooLarge => "too-large",
+            Self::Other => "other",
+        }
+    }
+}
+
+/// Map a raw server message onto a category.
+pub fn classify(error: &str) -> SftpErrorKind {
+    let lower = error.to_lowercase();
+
+    if lower.contains("no such file")
+        || lower.contains("not found")
+        || lower.contains("does not exist")
+        || lower.contains("nosuchfile")
+    {
+        SftpErrorKind::NotFound
+    } else if lower.contains("permission denied") || lower.contains("access denied") {
+        SftpErrorKind::PermissionDenied
+    } else if lower.contains("connection")
+        || lower.contains("broken pipe")
+        || lower.contains("not connected")
+        || lower.contains("channel closed")
+        || lower.contains("unexpected eof")
+    {
+        SftpErrorKind::Connection
+    } else if lower.contains("unsupported")
+        || lower.contains("bad message")
+        || lower.contains("failure")
+        || lower.contains("protocol")
+    {
+        SftpErrorKind::Protocol
+    } else {
+        SftpErrorKind::Other
+    }
+}
+
+/// `<token>: <operation> failed at '<path>': <detail>`
+pub fn describe_kind(
+    kind: SftpErrorKind,
+    operation: &str,
+    path: &str,
+    detail: &str,
+) -> String {
+    format!(
+        "{}: {} failed at '{}': {}",
+        kind.as_token(),
+        operation,
+        path,
+        detail
+    )
+}
+
+/// Describe an error while deriving its category from the message itself.
+pub fn describe(operation: &str, path: &str, error: &str) -> String {
+    describe_kind(classify(error), operation, path, error)
+}
+
 /// List directory contents.
 pub async fn list_dir(sftp: &SftpSession, path: &str) -> Result<Vec<FileEntry>, String> {
     let entries = sftp
         .read_dir(path)
         .await
-        .map_err(|e| format!("readdir failed: {e}"))?;
+        .map_err(|e| describe("readdir", path, &e.to_string()))?;
     let mut result = Vec::new();
     for entry in entries {
         let name = entry.file_name();
@@ -49,12 +129,12 @@ pub async fn read_file(sftp: &SftpSession, path: &str) -> Result<Vec<u8>, String
     let mut file = sftp
         .open(path)
         .await
-        .map_err(|e| format!("open failed: {e}"))?;
+        .map_err(|e| describe("open", path, &e.to_string()))?;
     use tokio::io::AsyncReadExt;
     let mut buf = Vec::new();
     file.read_to_end(&mut buf)
         .await
-        .map_err(|e| format!("read failed: {e}"))?;
+        .map_err(|e| describe("read", path, &e.to_string()))?;
     Ok(buf)
 }
 
@@ -69,11 +149,14 @@ pub async fn read_file_limited(
     let attrs = sftp
         .metadata(path)
         .await
-        .map_err(|e| format!("stat failed: {e}"))?;
+        .map_err(|e| describe("stat", path, &e.to_string()))?;
     if let Some(size) = attrs.size {
         if size > max_bytes {
-            return Err(format!(
-                "file is {size} bytes, above the {max_bytes} byte editor limit"
+            return Err(describe_kind(
+                SftpErrorKind::TooLarge,
+                "read",
+                path,
+                &format!("file is {size} bytes, above the {max_bytes} byte editor limit"),
             ));
         }
     }
@@ -82,13 +165,13 @@ pub async fn read_file_limited(
     let file = sftp
         .open(path)
         .await
-        .map_err(|e| format!("open failed: {e}"))?;
+        .map_err(|e| describe("open", path, &e.to_string()))?;
     let mut limited = file.take(max_bytes);
     let mut buf = Vec::new();
     limited
         .read_to_end(&mut buf)
         .await
-        .map_err(|e| format!("read failed: {e}"))?;
+        .map_err(|e| describe("read", path, &e.to_string()))?;
     Ok(buf)
 }
 
@@ -97,14 +180,14 @@ pub async fn write_file(sftp: &SftpSession, path: &str, data: &[u8]) -> Result<(
     let mut file = sftp
         .create(path)
         .await
-        .map_err(|e| format!("create failed: {e}"))?;
+        .map_err(|e| describe("create", path, &e.to_string()))?;
     use tokio::io::AsyncWriteExt;
     file.write_all(data)
         .await
-        .map_err(|e| format!("write failed: {e}"))?;
+        .map_err(|e| describe("write", path, &e.to_string()))?;
     file.shutdown()
         .await
-        .map_err(|e| format!("flush failed: {e}"))?;
+        .map_err(|e| describe("flush", path, &e.to_string()))?;
     Ok(())
 }
 
@@ -112,21 +195,21 @@ pub async fn write_file(sftp: &SftpSession, path: &str, data: &[u8]) -> Result<(
 pub async fn remove_file(sftp: &SftpSession, path: &str) -> Result<(), String> {
     sftp.remove_file(path)
         .await
-        .map_err(|e| format!("remove failed: {e}"))
+        .map_err(|e| describe("remove", path, &e.to_string()))
 }
 
 /// Create a directory.
 pub async fn mkdir(sftp: &SftpSession, path: &str) -> Result<(), String> {
     sftp.create_dir(path)
         .await
-        .map_err(|e| format!("mkdir failed: {e}"))
+        .map_err(|e| describe("mkdir", path, &e.to_string()))
 }
 
 /// Remove a directory.
 pub async fn rmdir(sftp: &SftpSession, path: &str) -> Result<(), String> {
     sftp.remove_dir(path)
         .await
-        .map_err(|e| format!("rmdir failed: {e}"))
+        .map_err(|e| describe("rmdir", path, &e.to_string()))
 }
 
 const MAX_RECURSIVE_DEPTH: usize = 64;
@@ -137,19 +220,34 @@ const MAX_RECURSIVE_DEPTH: usize = 64;
 fn validate_recursive_target(path: &str) -> Result<(), String> {
     let trimmed = path.trim();
     if trimmed.is_empty() || !trimmed.starts_with('/') {
-        return Err(format!("refusing non-absolute path: '{path}'"));
+        return Err(describe_kind(
+            SftpErrorKind::Other,
+            "rmdir",
+            path,
+            "refusing non-absolute path",
+        ));
     }
 
     let normalized = trimmed.trim_end_matches('/');
     if normalized.is_empty() {
-        return Err(format!("refusing to operate on the filesystem root: '{path}'"));
+        return Err(describe_kind(
+            SftpErrorKind::Other,
+            "rmdir",
+            path,
+            "refusing to operate on the filesystem root",
+        ));
     }
 
     if normalized
         .split('/')
         .any(|segment| segment == "." || segment == "..")
     {
-        return Err(format!("refusing path containing dot segments: '{path}'"));
+        return Err(describe_kind(
+            SftpErrorKind::Other,
+            "rmdir",
+            path,
+            "refusing path containing dot segments",
+        ));
     }
 
     Ok(())
@@ -167,7 +265,12 @@ pub async fn rmdir_recursive(sftp: &SftpSession, path: &str) -> Result<(), Strin
 
     while let Some((current_dir, depth)) = directory_stack.pop() {
         if depth > MAX_RECURSIVE_DEPTH {
-            return Err(format!("directory tree too deep at: {current_dir}"));
+            return Err(describe_kind(
+                SftpErrorKind::Other,
+                "rmdir",
+                &current_dir,
+                "directory tree too deep",
+            ));
         }
         if !visited.insert(current_dir.clone()) {
             continue;
@@ -195,7 +298,7 @@ pub async fn rmdir_recursive(sftp: &SftpSession, path: &str) -> Result<(), Strin
 pub async fn rename(sftp: &SftpSession, old_path: &str, new_path: &str) -> Result<(), String> {
     sftp.rename(old_path, new_path)
         .await
-        .map_err(|e| format!("rename failed: {e}"))
+        .map_err(|e| describe("rename", old_path, &e.to_string()))
 }
 
 /// Get file/dir metadata.
@@ -203,7 +306,7 @@ pub async fn stat(sftp: &SftpSession, path: &str) -> Result<FileEntry, String> {
     let attrs = sftp
         .metadata(path)
         .await
-        .map_err(|e| format!("stat failed: {e}"))?;
+        .map_err(|e| describe("stat", path, &e.to_string()))?;
     let name = path.rsplit('/').next().unwrap_or(path).to_string();
     Ok(FileEntry {
         name,
@@ -224,7 +327,7 @@ pub async fn chmod(sftp: &SftpSession, path: &str, mode: u32) -> Result<(), Stri
     };
     sftp.set_metadata(path, attrs)
         .await
-        .map_err(|e| format!("chmod failed: {e}"))
+        .map_err(|e| describe("chmod", path, &e.to_string()))
 }
 
 /// Append bytes to an existing file.
@@ -234,13 +337,13 @@ pub async fn append_file(sftp: &SftpSession, path: &str, data: &[u8]) -> Result<
     let mut file = sftp
         .open_with_flags(path, OpenFlags::WRITE | OpenFlags::APPEND)
         .await
-        .map_err(|e| format!("open for append failed: {e}"))?;
+        .map_err(|e| describe("open", path, &e.to_string()))?;
     file.write_all(data)
         .await
-        .map_err(|e| format!("append failed: {e}"))?;
+        .map_err(|e| describe("append", path, &e.to_string()))?;
     file.shutdown()
         .await
-        .map_err(|e| format!("flush failed: {e}"))?;
+        .map_err(|e| describe("flush", path, &e.to_string()))?;
     Ok(())
 }
 
@@ -256,18 +359,18 @@ pub async fn copy_file_streaming(
     let mut source = sftp
         .open(source_path)
         .await
-        .map_err(|e| format!("open source failed: {e}"))?;
+        .map_err(|e| describe("open", source_path, &e.to_string()))?;
     let mut target = sftp
         .create(target_path)
         .await
-        .map_err(|e| format!("create target failed: {e}"))?;
+        .map_err(|e| describe("create", target_path, &e.to_string()))?;
 
     let mut buffer = vec![0u8; 64 * 1024];
     loop {
         let read = source
             .read(&mut buffer)
             .await
-            .map_err(|e| format!("read source failed: {e}"))?;
+            .map_err(|e| describe("read", source_path, &e.to_string()))?;
         if read == 0 {
             break;
         }
@@ -275,12 +378,12 @@ pub async fn copy_file_streaming(
         target
             .write_all(&buffer[..read])
             .await
-            .map_err(|e| format!("write target failed: {e}"))?;
+            .map_err(|e| describe("write", target_path, &e.to_string()))?;
     }
 
     target
         .shutdown()
         .await
-        .map_err(|e| format!("flush target failed: {e}"))?;
+        .map_err(|e| describe("flush", target_path, &e.to_string()))?;
     Ok(())
 }
