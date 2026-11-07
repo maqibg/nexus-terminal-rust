@@ -448,12 +448,10 @@ function handleAutocompleteKeydown(event: KeyboardEvent): boolean {
       resetAutocompleteState();
       return true;
     case 'Tab':
-      if (!hasSuggestions) {
-        return true;
-      }
-      if (triggerAutocompleteSelection()) {
-        return false;
-      }
+      // Tab belongs to the remote shell: `cd <Tab>` must reach the shell so it
+      // can complete directory names. Close our own panel and let the key
+      // through untouched.
+      resetAutocompleteState();
       return true;
     case 'ArrowDown':
       if (!hasSuggestions) {
