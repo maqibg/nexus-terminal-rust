@@ -13,7 +13,7 @@ use std::sync::{
     Arc,
 };
 use tauri::State;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 
 use crate::state::AppState;
 
@@ -53,7 +53,6 @@ impl ProgressEmitter {
     }
 }
 const DIRECTORY_UPLOAD_CONCURRENCY: usize = 4;
-const SCP_FILE_MODE: u32 = 0o644;
 
 #[derive(Deserialize)]
 pub struct SftpOpenRequest {
@@ -875,123 +874,6 @@ fn split_remote_parent_and_name(remote_path: &str) -> Result<(String, String), S
     Ok((parent, name.to_string()))
 }
 
-async fn open_exec_channel(
-    handle: Arc<russh::client::Handle<ssh_core::session::SshHandler>>,
-    command: &str,
-) -> Result<russh::Channel<russh::client::Msg>, String> {
-    let channel = handle
-        .channel_open_session()
-        .await
-        .map_err(|error| format!("open exec channel failed: {error}"))?;
-    channel
-        .exec(false, command)
-        .await
-        .map_err(|error| format!("exec '{command}' failed: {error}"))?;
-    Ok(channel)
-}
-
-async fn open_upload_exec_handle(
-    creds: &ssh_core::session::SshCredentials,
-    host_key_store: Arc<dyn HostKeyStore>,
-    app_handle: &tauri::AppHandle,
-) -> Result<Arc<russh::client::Handle<ssh_core::session::SshHandler>>, String> {
-    let handler = ssh_core::session::SshHandler::with_tofu(
-        creds.host.clone(),
-        creds.port,
-        host_key_store,
-        app_handle.clone(),
-    );
-    let handle = ssh_core::session::connect_and_authenticate(creds, handler).await?;
-    Ok(Arc::new(handle))
-}
-
-async fn read_exec_result(
-    mut channel: russh::Channel<russh::client::Msg>,
-) -> Result<(u32, String, String), String> {
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-    let mut exit_status = 0u32;
-
-    while let Some(message) = channel.wait().await {
-        match message {
-            russh::ChannelMsg::Data { data } => stdout.extend_from_slice(data.as_ref()),
-            russh::ChannelMsg::ExtendedData { data, .. } => stderr.extend_from_slice(data.as_ref()),
-            russh::ChannelMsg::ExitStatus { exit_status: status } => exit_status = status,
-            russh::ChannelMsg::Eof | russh::ChannelMsg::Close => break,
-            _ => {}
-        }
-    }
-
-    Ok((
-        exit_status,
-        String::from_utf8_lossy(&stdout).to_string(),
-        String::from_utf8_lossy(&stderr).to_string(),
-    ))
-}
-
-async fn ensure_remote_parent_dirs_with_exec(
-    handle: Arc<russh::client::Handle<ssh_core::session::SshHandler>>,
-    remote_path: &str,
-) -> Result<(), String> {
-    let normalized = remote_path.trim().replace('\\', "/");
-    let Some((parent_dir, _)) = normalized.rsplit_once('/') else {
-        return Ok(());
-    };
-    if parent_dir.is_empty() || parent_dir == "/" {
-        return Ok(());
-    }
-
-    let command = format!("mkdir -p -- {}", shell_escape_posix(parent_dir));
-    let channel = open_exec_channel(handle, &command).await?;
-    let (exit_status, _stdout, stderr) = read_exec_result(channel).await?;
-    if exit_status == 0 {
-        return Ok(());
-    }
-
-    let message = stderr.trim();
-    if message.is_empty() {
-        Err(format!("mkdir -p failed for {parent_dir} with exit status {exit_status}"))
-    } else {
-        Err(format!("mkdir -p failed for {parent_dir}: {message}"))
-    }
-}
-
-async fn scp_read_ack<R>(reader: &mut R) -> Result<(), String>
-where
-    R: tokio::io::AsyncRead + Unpin,
-{
-    let mut code = [0u8; 1];
-    reader
-        .read_exact(&mut code)
-        .await
-        .map_err(|error| format!("scp ack read failed: {error}"))?;
-
-    match code[0] {
-        0 => Ok(()),
-        1 | 2 => {
-            let mut message = Vec::new();
-            loop {
-                let mut byte = [0u8; 1];
-                reader
-                    .read_exact(&mut byte)
-                    .await
-                    .map_err(|error| format!("scp error read failed: {error}"))?;
-                if byte[0] == b'\n' {
-                    break;
-                }
-                message.push(byte[0]);
-            }
-            let text = String::from_utf8_lossy(&message).trim().to_string();
-            if text.is_empty() {
-                Err("scp remote error".to_string())
-            } else {
-                Err(text)
-            }
-        }
-        other => Err(format!("unexpected scp ack byte: {other}")),
-    }
-}
-
 fn join_remote_path(base: &str, name: &str) -> String {
     if base.ends_with('/') {
         format!("{base}{name}")
@@ -1236,10 +1118,41 @@ pub async fn sftp_collect_local_upload_entries(
     Ok(uploads)
 }
 
+/// Create the remote parent directory chain over SFTP (no shell involved), so
+/// uploads do not need a second SSH connection per file.
+async fn ensure_remote_dirs_sftp(
+    sftp: &russh_sftp::client::SftpSession,
+    remote_path: &str,
+) -> Result<(), String> {
+    let (parent, _) = split_remote_parent_and_name(remote_path)?;
+    if parent.is_empty() || parent == "/" {
+        return Ok(());
+    }
+
+    let mut current = String::new();
+    for segment in parent.split('/').filter(|segment| !segment.is_empty()) {
+        current.push('/');
+        current.push_str(segment);
+
+        if sftp.metadata(&current).await.is_ok() {
+            continue;
+        }
+
+        if let Err(error) = sftp.create_dir(&current).await {
+            // A sibling upload may have created it between the check and the call.
+            if sftp.metadata(&current).await.is_err() {
+                return Err(format!("create remote dir '{current}' failed: {error}"));
+            }
+        }
+    }
+    Ok(())
+}
+
 async fn upload_local_file_with_progress(
-    handle: Arc<russh::client::Handle<ssh_core::session::SshHandler>>,
+    sftp: Arc<russh_sftp::client::SftpSession>,
     local_path: &Path,
     remote_path: &str,
+    start_offset: u64,
     transferred: Arc<AtomicU64>,
     total: u64,
     task_id: &str,
@@ -1249,40 +1162,46 @@ async fn upload_local_file_with_progress(
     cancel_rx: &tokio::sync::watch::Receiver<bool>,
     upload_limiter: &Arc<tokio::sync::Semaphore>,
 ) -> Result<(), String> {
+    use russh_sftp::protocol::OpenFlags;
     use tauri::Emitter;
+    use tokio::io::{AsyncSeekExt, AsyncWriteExt};
+
     let _permit = upload_limiter
         .clone()
         .acquire_owned()
         .await
         .map_err(|_| "upload limiter closed".to_string())?;
-    let (remote_parent, remote_name) = split_remote_parent_and_name(remote_path)?;
-    ensure_remote_parent_dirs_with_exec(handle.clone(), remote_path).await?;
 
-    let command = format!("scp -t -- {}", shell_escape_posix(&remote_parent));
-    let channel = open_exec_channel(handle, &command).await?;
-    let stream = channel.into_stream();
-    let (mut reader, mut writer) = tokio::io::split(stream);
+    ensure_remote_dirs_sftp(&sftp, remote_path).await?;
 
-    scp_read_ack(&mut reader).await?;
-
-    let file_size = tokio::fs::metadata(local_path)
-        .await
-        .map_err(|error| format!("stat local failed: {error}"))?
-        .len();
-    let header = format!("C{:04o} {file_size} {remote_name}\n", SCP_FILE_MODE);
-    writer
-        .write_all(header.as_bytes())
-        .await
-        .map_err(|error| format!("send scp header failed: {error}"))?;
-    writer
-        .flush()
-        .await
-        .map_err(|error| format!("flush scp header failed: {error}"))?;
-    scp_read_ack(&mut reader).await?;
+    // Resume keeps the existing bytes; a fresh upload truncates the target.
+    let mut remote = if start_offset > 0 {
+        let mut file = sftp
+            .open_with_flags(remote_path, OpenFlags::WRITE | OpenFlags::CREATE)
+            .await
+            .map_err(|error| format!("open remote failed: {error}"))?;
+        file.seek(std::io::SeekFrom::Start(start_offset))
+            .await
+            .map_err(|error| format!("seek remote failed: {error}"))?;
+        file
+    } else {
+        sftp.create(remote_path)
+            .await
+            .map_err(|error| format!("create remote failed: {error}"))?
+    };
 
     let mut local = tokio::fs::File::open(local_path)
         .await
         .map_err(|error| format!("open local failed: {error}"))?;
+    if start_offset > 0 {
+        local
+            .seek(std::io::SeekFrom::Start(start_offset))
+            .await
+            .map_err(|error| format!("seek local failed: {error}"))?;
+    }
+
+    transferred.store(start_offset, Ordering::Relaxed);
+
     let mut buffer = vec![0u8; TRANSFER_BUFFER_SIZE];
     let mut progress = ProgressEmitter::new();
 
@@ -1300,7 +1219,7 @@ async fn upload_local_file_with_progress(
             break;
         }
 
-        writer
+        remote
             .write_all(&buffer[..read])
             .await
             .map_err(|error| format!("write remote failed: {error}"))?;
@@ -1327,29 +1246,14 @@ async fn upload_local_file_with_progress(
         }
     }
 
-    writer
-        .write_all(&[0])
-        .await
-        .map_err(|error| format!("send scp file terminator failed: {error}"))?;
-    writer
+    remote
         .flush()
         .await
-        .map_err(|error| format!("flush scp payload failed: {error}"))?;
-    scp_read_ack(&mut reader).await?;
-    writer
+        .map_err(|error| format!("flush remote failed: {error}"))?;
+    remote
         .shutdown()
         .await
-        .or_else(|error| {
-            if matches!(
-                error.kind(),
-                std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::ConnectionReset
-            ) {
-                Ok(())
-            } else {
-                Err(error)
-            }
-        })
-        .map_err(|error| format!("shutdown scp stream failed: {error}"))?;
+        .map_err(|error| format!("close remote failed: {error}"))?;
     Ok(())
 }
 
@@ -1384,14 +1288,11 @@ pub async fn sftp_upload_from_disk(
     let local_path = PathBuf::from(req.local_path.clone());
     let remote_path = req.remote_path.clone();
     let upload_limiter = state.sftp_upload_limiter.clone();
-    let creds = state
+    let sftp = state
         .ssh_manager
-        .get_sftp_credentials(&req.session_id)
+        .get_sftp(&req.session_id)
         .await
         .map_err(AppError::Ssh)?;
-    let host_key_store: Arc<dyn HostKeyStore> = Arc::new(super::SettingsHostKeyStore {
-        repo: state.host_key_repo.clone(),
-    });
 
     tokio::spawn(async move {
         let _ = ah.emit(
@@ -1404,29 +1305,12 @@ pub async fn sftp_upload_from_disk(
             }),
         );
 
-        let handle = match open_upload_exec_handle(&creds, host_key_store, &ah).await {
-            Ok(handle) => handle,
-            Err(error) => {
-                tm2.fail(&tid, &error);
-                let _ = ah.emit(
-                    "transfers/status",
-                    serde_json::json!({
-                        "task_id": tid,
-                        "file_name": file_name,
-                        "kind": "upload",
-                        "status": "failed",
-                        "error": error,
-                    }),
-                );
-                return;
-            }
-        };
-
         let transferred = Arc::new(AtomicU64::new(0));
         let result = upload_local_file_with_progress(
-            handle,
+            sftp,
             &local_path,
             &remote_path,
+            0,
             transferred,
             total,
             &tid,
@@ -1496,14 +1380,11 @@ pub async fn sftp_upload_entry_from_disk(
     let ah = app_handle.clone();
     let remote_root = req.remote_path.clone();
     let upload_limiter = state.sftp_upload_limiter.clone();
-    let creds = state
+    let sftp = state
         .ssh_manager
-        .get_sftp_credentials(&req.session_id)
+        .get_sftp(&req.session_id)
         .await
         .map_err(AppError::Ssh)?;
-    let host_key_store: Arc<dyn HostKeyStore> = Arc::new(super::SettingsHostKeyStore {
-        repo: state.host_key_repo.clone(),
-    });
 
     tokio::spawn(async move {
         use tauri::Emitter;
@@ -1517,24 +1398,6 @@ pub async fn sftp_upload_entry_from_disk(
                 "status": "active",
             }),
         );
-
-        let handle = match open_upload_exec_handle(&creds, host_key_store, &ah).await {
-            Ok(handle) => handle,
-            Err(error) => {
-                tm2.fail(&tid, &error);
-                let _ = ah.emit(
-                    "transfers/status",
-                    serde_json::json!({
-                        "task_id": tid,
-                        "file_name": entry_name,
-                        "kind": "upload",
-                        "status": "failed",
-                        "error": error,
-                    }),
-                );
-                return;
-            }
-        };
 
         let result: Result<(), String> = async {
             let metadata = tokio::fs::symlink_metadata(&local_path)
@@ -1550,9 +1413,10 @@ pub async fn sftp_upload_entry_from_disk(
             let transferred = Arc::new(AtomicU64::new(0));
             if metadata.is_file() {
                 upload_local_file_with_progress(
-                    handle.clone(),
+                    sftp.clone(),
                     &local_path,
                     &remote_root,
+                    0,
                     transferred.clone(),
                     total,
                     &tid,
@@ -1573,7 +1437,7 @@ pub async fn sftp_upload_entry_from_disk(
                 }
 
                 let futures = job_group.iter().map(|(child_local_path, child_remote_path)| {
-                    let handle = handle.clone();
+                    let sftp = sftp.clone();
                     let tm = tm2.clone();
                     let app_handle = ah.clone();
                     let cancel_rx = cancel_rx.clone();
@@ -1586,9 +1450,10 @@ pub async fn sftp_upload_entry_from_disk(
 
                     async move {
                         upload_local_file_with_progress(
-                            handle,
+                            sftp,
                             &local_path,
                             &remote_path,
+                            0,
                             transferred,
                             total,
                             &task_id,
