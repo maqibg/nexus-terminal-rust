@@ -146,6 +146,7 @@
       :tasks="taskList"
       @close="showTransferModal = false"
       @cancel="cancelTask"
+      @resume="handleResumeTransfer"
       @pause-all="pauseAll"
       @resume-all="resumeAll"
       @cancel-all="cancelAll"
@@ -219,7 +220,15 @@ interface TerminalAiPanelExpose {
   performAction: (text: string) => Promise<void>;
 }
 const terminalAiPanelRef = ref<TerminalAiPanelExpose | null>(null);
-const { taskList, startListening, cancelTask, pauseAll, resumeAll, cancelAll, clearCompleted, cleanup } = useTransferProgress();
+const { taskList, startListening, cancelTask, resumeTask, pauseAll, resumeAll, cancelAll, clearCompleted, cleanup } = useTransferProgress();
+
+async function handleResumeTransfer(id: string) {
+  try {
+    await resumeTask(id);
+  } catch (error) {
+    await alert('续传失败', error instanceof Error ? error.message : String(error));
+  }
+}
 const workspaceSidebarPersistent = computed(() => settingsStore.getBoolean('workspaceSidebarPersistent', false));
 
 let workspaceResizeDispatchRaf = 0;

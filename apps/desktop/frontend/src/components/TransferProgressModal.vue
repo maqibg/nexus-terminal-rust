@@ -15,6 +15,13 @@
           <div class="transfer-meta">
             <span>{{ t.percent }}%</span>
             <button v-if="t.status === 'active' || t.status === 'paused'" class="btn-cancel" @click="$emit('cancel', t.id)">取消</button>
+            <button
+              v-if="(t.status === 'failed' || t.status === 'cancelled') && t.kind === 'upload'"
+              class="btn-cancel"
+              @click="$emit('resume', t.id)"
+            >
+              重试
+            </button>
           </div>
         </div>
         <div class="transfer-actions">
@@ -38,6 +45,7 @@ const props = defineProps<{ visible: boolean; tasks: TransferTask[] }>();
 const emit = defineEmits<{
   close: [];
   cancel: [id: string];
+  resume: [id: string];
   'pause-all': [];
   'resume-all': [];
   'cancel-all': [];

@@ -1293,6 +1293,7 @@ pub async fn sftp_upload_from_disk(
     let tm = &state.transfer_manager;
     let (task_id, cancel_rx) =
         tm.create_task(transfer_core::TransferKind::Upload, &file_name, total);
+    tm.set_transfer_context(&task_id, &req.session_id, &req.local_path, &req.remote_path);
 
     let tid = task_id.clone();
     let tm2 = tm.clone();
@@ -1362,6 +1363,121 @@ pub async fn sftp_upload_from_disk(
     });
 
     Ok(task_id)
+}
+
+#[derive(Deserialize)]
+pub struct SftpTaskRequest {
+    pub task_id: String,
+}
+
+/// Restart a failed or cancelled upload from the byte it stopped at.
+#[tauri::command]
+pub async fn sftp_resume_upload(
+    state: State<'_, AppState>,
+    app_handle: tauri::AppHandle,
+    req: SftpTaskRequest,
+) -> CmdResult<()> {
+    state.auth.require_auth().await?;
+
+    let tm = &state.transfer_manager;
+    let task = tm.get_task(&req.task_id).ok_or_else(|| {
+        AppError::NotFound(format!("transfer task {}", req.task_id))
+    })?;
+
+    if !matches!(
+        task.status,
+        transfer_core::TransferStatus::Failed | transfer_core::TransferStatus::Cancelled
+    ) {
+        return Err(AppError::Validation(
+            "only failed or cancelled uploads can be resumed".into(),
+        ));
+    }
+
+    if task.total_bytes > 0 && task.transferred_bytes >= task.total_bytes {
+        return Err(AppError::Validation("upload already finished".into()));
+    }
+
+    let (session_id, source, target, offset) = tm
+        .transfer_context(&req.task_id)
+        .ok_or_else(|| AppError::Validation("task has no resumable context".into()))?;
+
+    let sftp = state
+        .ssh_manager
+        .get_sftp(&session_id)
+        .await
+        .map_err(AppError::Ssh)?;
+
+    let cancel_rx = tm
+        .restart(&req.task_id)
+        .ok_or_else(|| AppError::NotFound(req.task_id.clone()))?;
+
+    let tid = req.task_id.clone();
+    let tm2 = tm.clone();
+    let ah = app_handle.clone();
+    let upload_limiter = state.sftp_upload_limiter.clone();
+    let total = task.total_bytes;
+    let file_name = task.file_name.clone();
+    let local_path = PathBuf::from(source);
+    let remote_path = target;
+
+    tokio::spawn(async move {
+        use tauri::Emitter;
+
+        let _ = ah.emit(
+            "transfers/status",
+            serde_json::json!({
+                "task_id": tid,
+                "file_name": file_name,
+                "kind": "upload",
+                "status": "active",
+            }),
+        );
+
+        let transferred = Arc::new(AtomicU64::new(offset));
+        let result = upload_local_file_with_progress(
+            sftp,
+            &local_path,
+            &remote_path,
+            offset,
+            transferred,
+            total,
+            &tid,
+            &file_name,
+            &tm2,
+            &ah,
+            &cancel_rx,
+            &upload_limiter,
+        )
+        .await;
+
+        let (status, error) = match result {
+            Ok(()) => {
+                tm2.complete(&tid);
+                ("completed", None)
+            }
+            Err(error) if error == "cancelled" => {
+                let _ = tm2.cancel(&tid);
+                ("cancelled", None)
+            }
+            Err(error) => {
+                tm2.fail(&tid, &error);
+                ("failed", Some(error))
+            }
+        };
+
+        let _ = ah.emit(
+            "transfers/status",
+            serde_json::json!({
+                "task_id": tid,
+                "file_name": file_name,
+                "kind": "upload",
+                "status": status,
+                "error": error,
+            }),
+        );
+    });
+
+    Ok(())
 }
 
 #[tauri::command]

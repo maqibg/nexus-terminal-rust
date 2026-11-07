@@ -34,6 +34,10 @@ pub struct TransferTask {
     pub transferred_bytes: u64,
     pub status: TransferStatus,
     pub error: Option<String>,
+    /// Context needed to resume: which session, from where, to where.
+    pub session_id: Option<String>,
+    pub source_path: Option<String>,
+    pub target_path: Option<String>,
 }
 
 /// 传输管理器 — 管理上传/下载任务队列和进度追踪
@@ -69,6 +73,9 @@ impl TransferManager {
             transferred_bytes: 0,
             status: TransferStatus::Pending,
             error: None,
+            session_id: None,
+            source_path: None,
+            target_path: None,
         };
         self.tasks.insert(id.clone(), task);
         let (tx, rx) = watch::channel(false);
@@ -76,6 +83,47 @@ impl TransferManager {
         self.pause_flags
             .insert(id.clone(), Arc::new(AtomicBool::new(false)));
         (id, rx)
+    }
+
+    /// Record where a task came from and where it is going, so it can be
+    /// restarted after a failure without the caller having to remember.
+    pub fn set_transfer_context(&self, id: &str, session_id: &str, source: &str, target: &str) {
+        if let Some(mut task) = self.tasks.get_mut(id) {
+            task.session_id = Some(session_id.to_string());
+            task.source_path = Some(source.to_string());
+            task.target_path = Some(target.to_string());
+        }
+    }
+
+    /// Session, source, target and how many bytes already reached the server.
+    pub fn transfer_context(&self, id: &str) -> Option<(String, String, String, u64)> {
+        let task = self.tasks.get(id)?;
+        Some((
+            task.session_id.clone()?,
+            task.source_path.clone()?,
+            task.target_path.clone()?,
+            task.transferred_bytes,
+        ))
+    }
+
+    /// Put a failed task back to work: fresh cancel channel, paused flag reset,
+    /// status cleared. Returns the receiver the new worker must watch.
+    pub fn restart(&self, id: &str) -> Option<watch::Receiver<bool>> {
+        if !self.tasks.contains_key(id) {
+            return None;
+        }
+
+        let (tx, rx) = watch::channel(false);
+        self.cancel_tokens.insert(id.to_string(), tx);
+        self.pause_flags
+            .insert(id.to_string(), Arc::new(AtomicBool::new(false)));
+
+        if let Some(mut task) = self.tasks.get_mut(id) {
+            task.status = TransferStatus::InProgress;
+            task.error = None;
+        }
+
+        Some(rx)
     }
 
     /// 更新传输进度

@@ -146,7 +146,12 @@ export function useTransferProgress() {
     }
   }
 
-  async function cancelTask(taskId: string) {
+  async function resumeTask(taskId: string) {
+  await sftpApi.resumeUpload(taskId);
+  await syncFromBackend();
+}
+
+async function cancelTask(taskId: string) {
     try {
       await transferApi.cancel(taskId);
     } catch {
@@ -226,6 +231,7 @@ export function useTransferProgress() {
     taskList,
     startListening,
     cancelTask,
+    resumeTask,
     pauseAll,
     resumeAll,
     cancelAll,

@@ -262,6 +262,7 @@ pub fn run() {
             commands::sftp::sftp_upload_entry_from_disk,
             commands::sftp::sftp_collect_local_upload_entries,
             commands::sftp::sftp_cancel_task,
+    commands::sftp::sftp_resume_upload,
             commands::sftp::sftp_download_directory_to_disk,
             // Transfer
             commands::transfer::transfer_send,

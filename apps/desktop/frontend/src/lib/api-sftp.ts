@@ -144,4 +144,9 @@ export const sftpApi = {
     tauriInvoke<void>('sftp_cancel_task', {
       req: { task_id: taskId },
     }),
+
+  resumeUpload: (taskId: string) =>
+    tauriInvoke<void>('sftp_resume_upload', {
+      req: { task_id: taskId },
+    }),
 };
