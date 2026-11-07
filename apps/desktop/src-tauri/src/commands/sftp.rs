@@ -451,9 +451,14 @@ pub async fn sftp_copy_entry(
 
     let mut stack = vec![(req.source_path.clone(), req.target_path.clone())];
     while let Some((source_dir, target_dir)) = stack.pop() {
-        sftp_core::service::mkdir(&sftp, &target_dir)
-            .await
-            .map_err(AppError::Ssh)?;
+        // Reuse a directory that is already there. Copying into a folder that
+        // happens to contain a same-named child used to abort the whole copy,
+        // because create_dir fails on an existing path.
+        if sftp_core::service::stat(&sftp, &target_dir).await.is_err() {
+            sftp_core::service::mkdir(&sftp, &target_dir)
+                .await
+                .map_err(AppError::Ssh)?;
+        }
 
         let children = sftp_core::service::list_dir(&sftp, &source_dir)
             .await
